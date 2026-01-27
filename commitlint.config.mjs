@@ -21,7 +21,7 @@ export default {
     'scope-enum': [
       2,
       'always',
-      ['api', 'web', 'ui', 'shared', 'deps', 'config'],
+      ['api', 'web', 'ui', 'shared', 'eslint-config', 'jest-config', 'typescript-config', 'root'],
     ],
     'subject-case': [2, 'never', ['upper-case']],
     'subject-full-stop': [2, 'never', '.'],
