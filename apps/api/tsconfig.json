@@ -1,0 +1,17 @@
+{
+  "extends": "@repo/typescript-config/nest.json",
+  "compilerOptions": {
+    "baseUrl": "./",
+    "paths": {
+      "@common/*": ["src/common/*"],
+      "@config/*": ["src/config/*"],
+      "@core/*": ["src/core/*"],
+      "@database/*": ["src/database/*"],
+      "@modules/*": ["src/modules/*"],
+      "@shared/*": ["src/shared/*"],
+      "@logger/*": ["src/logger/*"]
+    }
+  },
+  "include": ["src/**/*", "test/**/*", "*.config.ts", "*.config.mjs"],
+  "exclude": ["node_modules", "dist"]
+}

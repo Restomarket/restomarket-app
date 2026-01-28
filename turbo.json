@@ -41,6 +41,31 @@
       "cache": false
     }
   },
-  "globalEnv": ["NODE_ENV", "CI"],
+  "globalEnv": [
+    "NODE_ENV",
+    "CI",
+    "PORT",
+    "DATABASE_URL",
+    "LOG_LEVEL",
+    "SWAGGER_TITLE",
+    "SWAGGER_DESCRIPTION",
+    "SWAGGER_VERSION",
+    "RATE_LIMIT_TTL",
+    "RATE_LIMIT_MAX",
+    "DATABASE_SSL_CA",
+    "DATABASE_IDLE_TIMEOUT",
+    "DATABASE_CONNECT_TIMEOUT",
+    "LOG_PRETTY",
+    "SWAGGER_ENABLED",
+    "CORS_ORIGINS",
+    "DATABASE_SSL",
+    "DATABASE_POOL_MAX",
+    "APP_NAME",
+    "APP_PORT",
+    "APP_HOST",
+    "API_PREFIX",
+    "API_VERSION",
+    "REQUEST_TIMEOUT"
+  ],
   "globalDependencies": ["tsconfig.json", "eslint.config.mjs", ".prettierrc"]
 }
