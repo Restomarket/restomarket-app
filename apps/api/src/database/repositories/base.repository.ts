@@ -14,7 +14,7 @@ import type * as schema from '../schema';
  * - No over-abstraction
  * - Child repositories implement their own query logic
  */
-export abstract class BaseRepository<TTable extends PgTableWithColumns<unknown>> {
+export abstract class BaseRepository<TTable extends PgTableWithColumns<any>> {
   protected readonly tableName: string;
 
   constructor(
@@ -23,7 +23,7 @@ export abstract class BaseRepository<TTable extends PgTableWithColumns<unknown>>
     protected readonly logger: PinoLogger,
   ) {
     this.tableName =
-      (table as unknown)[Symbol.for('drizzle:Name')] ?? (table as unknown)._?.name ?? 'unknown';
+      (table as any)[Symbol.for('drizzle:Name')] ?? (table as any)._?.name ?? 'unknown';
   }
 
   /**
