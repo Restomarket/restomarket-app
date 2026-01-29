@@ -9,11 +9,13 @@
     "start": "next start",
     "lint": "eslint --max-warnings 0",
     "type-check": "next typegen && tsc --noEmit",
-    "test": "jest"
+    "test": "jest",
+    "test:watch": "jest --watch",
+    "test:cov": "jest --coverage"
   },
   "dependencies": {
     "@repo/ui": "workspace:*",
-    "next": "16.1.0",
+    "next": "16.1.5",
     "react": "^19.2.0",
     "react-dom": "^19.2.0"
   },

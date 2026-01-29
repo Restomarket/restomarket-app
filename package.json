@@ -5,8 +5,8 @@
   "description": "RestoMarket Monorepo - Modern B2B Food Supply Platform",
   "packageManager": "pnpm@9.10.0",
   "engines": {
-    "node": ">=20.17.0",
-    "pnpm": ">=9.0.0"
+    "node": ">=20.18.1",
+    "pnpm": ">=9.10.0"
   },
   "scripts": {
     "dev": "turbo run dev",
@@ -42,7 +42,7 @@
     "typescript-eslint": "^8.54.0"
   },
   "volta": {
-    "node": "20.17.0",
+    "node": "20.18.1",
     "pnpm": "9.10.0"
   },
   "lint-staged": {
