@@ -16,11 +16,11 @@
 #   ./deploy.sh ghcr.io/owner/restomarket-api:main production
 #
 # Environment Variables (optional):
-#   HEALTH_CHECK_URL      - Health check endpoint (default: http://localhost:3001/health)
+#   HEALTH_CHECK_URL      - Health check endpoint (default: http://localhost:3000/health)
 #   HEALTH_CHECK_TIMEOUT  - Max seconds to wait for health (default: 60)
 #   HEALTH_CHECK_INTERVAL - Seconds between health checks (default: 5)
-#   CONTAINER_PORT        - Container port (default: 3001)
-#   HOST_PORT             - Host port (default: 3001)
+#   CONTAINER_PORT        - Container port (default: 3000)
+#   HOST_PORT             - Host port (default: 3000)
 #   STARTUP_WAIT          - Initial startup wait in seconds (default: 10)
 ################################################################################
 
@@ -34,11 +34,11 @@ BLUE='\033[0;34m'
 NC='\033[0m' # No Color
 
 # Configuration
-HEALTH_CHECK_URL="${HEALTH_CHECK_URL:-http://localhost:3001/health}"
+HEALTH_CHECK_URL="${HEALTH_CHECK_URL:-http://localhost:3000/health}"
 HEALTH_CHECK_TIMEOUT="${HEALTH_CHECK_TIMEOUT:-60}"
 HEALTH_CHECK_INTERVAL="${HEALTH_CHECK_INTERVAL:-5}"
-CONTAINER_PORT="${CONTAINER_PORT:-3001}"
-HOST_PORT="${HOST_PORT:-3001}"
+CONTAINER_PORT="${CONTAINER_PORT:-3000}"
+HOST_PORT="${HOST_PORT:-3000}"
 STARTUP_WAIT="${STARTUP_WAIT:-10}"
 
 # Logging functions
@@ -68,11 +68,11 @@ Arguments:
   environment   Deployment environment (dev, staging, production)
 
 Environment Variables:
-  HEALTH_CHECK_URL       Health check endpoint (default: http://localhost:3001/health)
+  HEALTH_CHECK_URL       Health check endpoint (default: http://localhost:3000/health)
   HEALTH_CHECK_TIMEOUT   Max seconds to wait for health (default: 60)
   HEALTH_CHECK_INTERVAL  Seconds between health checks (default: 5)
-  CONTAINER_PORT         Container port (default: 3001)
-  HOST_PORT              Host port (default: 3001)
+  CONTAINER_PORT         Container port (default: 3000)
+  HOST_PORT              Host port (default: 3000)
   STARTUP_WAIT           Initial startup wait in seconds (default: 10)
 
 Examples:
