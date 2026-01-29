@@ -1429,7 +1429,7 @@ shellcheck deploy.sh || echo "shellcheck not installed"
 
 **Category:** Deployment
 **Package:** root
-**Status:** not started
+**Status:** passing
 **Priority:** high
 **Risk Level:** medium
 **Estimated Iterations:** 1
@@ -1439,14 +1439,45 @@ Create script for one-command rollback to previous Docker image version.
 
 **Acceptance Criteria:**
 
-- [ ] Script created at `infrastructure/scripts/rollback.sh`
-- [ ] Accepts parameter: Git SHA or image tag
-- [ ] Lists recent images if no parameter provided
-- [ ] Pulls specified image
-- [ ] Deploys using zero-downtime strategy (calls deploy.sh)
-- [ ] Verifies rollback with health check
-- [ ] Logs rollback action
-- [ ] Documentation for usage
+- [x] Script created at `infrastructure/scripts/rollback.sh`
+- [x] Accepts parameter: Git SHA or image tag
+- [x] Lists recent images if no parameter provided (`--list` flag)
+- [x] Pulls specified image (with verification)
+- [x] Deploys using zero-downtime strategy (calls deploy.sh)
+- [x] Verifies rollback with health check (via deploy.sh)
+- [x] Logs rollback action (timestamped log files)
+- [x] Documentation for usage (comprehensive help message and comments)
+
+**Completion Notes:**
+
+- Completed on 2026-01-29
+- Created comprehensive rollback script (11KB, 300+ lines)
+- Script features:
+  - Interactive confirmation before rollback
+  - Image tag normalization (converts Git SHA to sha- prefix)
+  - Image verification before deployment
+  - Zero-downtime deployment via deploy.sh
+  - Comprehensive error handling
+  - Color-coded logging with timestamps
+  - Automatic log file creation (/var/log/rollback-\*.log)
+- List deployments functionality:
+  - Shows local Docker images with created date and size
+  - Shows currently running containers
+  - Provides usage examples
+- Rollback workflow:
+  1. Validates prerequisites (Docker, deploy.sh)
+  2. Normalizes image tag (abc1234 → sha-abc1234)
+  3. Verifies image exists (docker pull)
+  4. Requests user confirmation
+  5. Calls deploy.sh with rollback image
+  6. Verifies deployment success
+  7. Shows current running containers
+- Configuration via environment variables:
+  - REGISTRY_URL (default: ghcr.io)
+  - IMAGE_NAME (default: restomarket-api)
+  - REGISTRY_USERNAME (auto-detected from git or manual)
+  - GITHUB_TOKEN (for private repos)
+- All validation commands passed successfully
 
 **Usage:**
 
