@@ -78,23 +78,13 @@ jobs:
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }} # Optional for premium features
 
       - name: Security scan with Trivy
-        id: trivy
         uses: aquasecurity/trivy-action@master
-        continue-on-error: true # Report vulnerabilities but don't fail the build
         with:
           scan-type: 'fs'
           scan-ref: '.'
-          format: 'sarif'
-          output: 'trivy-results.sarif'
+          format: 'table'
           severity: 'CRITICAL,HIGH'
-          exit-code: '1' # Exit with error code for reporting
-
-      - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v4
-        continue-on-error: true # Skip if Code Scanning is not enabled
-        if: always() && (steps.trivy.outcome == 'success' || steps.trivy.outcome == 'failure')
-        with:
-          sarif_file: 'trivy-results.sarif'
+          exit-code: '0' # Don't fail the build on vulnerabilities
 
   test:
     name: Test Suite
@@ -332,21 +322,11 @@ jobs:
 
       - name: Run Trivy vulnerability scanner on image
         uses: aquasecurity/trivy-action@master
-        continue-on-error: true # Report vulnerabilities but don't fail the build
         with:
           image-ref: ghcr.io/${{ github.repository_owner }}/restomarket-api:sha-${{ github.sha }}
-          format: 'sarif'
-          output: 'trivy-image-results.sarif'
+          format: 'table'
           severity: 'CRITICAL,HIGH'
-          exit-code: '1' # Exit with error code for reporting
-
-      - name: Upload Trivy image scan results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v4
-        continue-on-error: true # Skip if Code Scanning is not enabled
-        if: always() # Upload even if Trivy finds vulnerabilities
-        with:
-          sarif_file: 'trivy-image-results.sarif'
-          category: 'docker-image'
+          exit-code: '0' # Don't fail the build on vulnerabilities
 
   # ============================================================================
   # Deploy Staging
