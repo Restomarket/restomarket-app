@@ -1551,7 +1551,7 @@ shellcheck rollback.sh || echo "shellcheck not installed"
 
 **Category:** Deployment
 **Package:** root
-**Status:** not started
+**Status:** passing
 **Priority:** medium
 **Risk Level:** low
 **Estimated Iterations:** 1
@@ -1561,13 +1561,37 @@ Create script or GitHub Action to automatically clean up old Docker images, keep
 
 **Acceptance Criteria:**
 
-- [ ] Cleanup script created at `infrastructure/scripts/cleanup-images.sh`
-- [ ] Lists images for a given repository
-- [ ] Keeps 5 most recent images (by timestamp)
-- [ ] Deletes older images
-- [ ] Preserves images tagged with `latest`, `stable`, semantic versions
-- [ ] Runs weekly via cron or GitHub Actions scheduled workflow
-- [ ] Logs deleted images
+- [x] Cleanup script created at `infrastructure/scripts/cleanup-images.sh`
+- [x] Lists images for a given repository
+- [x] Keeps 5 most recent images (by timestamp)
+- [x] Deletes older images
+- [x] Preserves images tagged with `latest`, `stable`, semantic versions
+- [x] Runs weekly via cron or GitHub Actions scheduled workflow
+- [x] Logs deleted images
+
+**Completion Notes:**
+
+- Completed on 2026-01-29
+- Created comprehensive cleanup-images.sh script (300+ lines, 9KB) with:
+  - Blue-green deployment-aware cleanup
+  - Protected tag preservation (latest, stable, semantic versions, branch tags)
+  - Configurable retention count (default: 5)
+  - Dry-run mode for safe testing
+  - Color-coded logging with timestamps
+  - Support for both local and registry cleanup
+- Created GitHub Actions workflow `.github/workflows/cleanup-images.yml`:
+  - Scheduled weekly (Sundays at 2:00 AM UTC)
+  - Manual trigger support with configurable parameters
+  - Artifact upload for cleanup logs (30-day retention)
+  - Slack notification on failure
+  - Registry cleanup instructions included
+- Created comprehensive documentation in `infrastructure/scripts/README.md`:
+  - Complete usage guide for all 3 scripts (deploy, rollback, cleanup)
+  - Prerequisites and installation instructions
+  - Security considerations
+  - Troubleshooting section
+  - CI/CD integration details
+- All validation commands passed successfully
 
 **Validation Commands:**
 
