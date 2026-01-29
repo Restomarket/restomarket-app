@@ -127,3 +127,48 @@
 **Note:** Actual Docker build testing should be performed when Docker daemon is available.
 
 ---
+
+## [2026-01-29 14:45] Task 4 Completed: Implement /health Endpoint in API
+
+**Task Completed:** Implement /health Endpoint in API
+
+**Files Modified:**
+
+- `apps/api/src/modules/health/health.service.ts` - Enhanced health service
+- `apps/api/src/modules/health/health.controller.ts` - Updated controller with proper status codes
+
+**Key Changes:**
+
+- Enhanced existing health endpoint (already existed, improved functionality):
+  - Added `services` field for quick summary: `{ database: "connected", redis: "connected" }`
+  - Made Redis checking optional and ready for integration
+  - Structured response to match DevOps spec requirements
+  - Added detailed diagnostics (memory, CPU, response times)
+- Controller improvements:
+  - Returns 200 (OK) when all services healthy
+  - Returns 503 (Service Unavailable) when any service unhealthy
+  - Proper HTTP semantics for load balancer health checks
+  - Enhanced Swagger documentation
+- Health checks implemented:
+  - **Database**: `SELECT 1` query with response time measurement
+  - **Redis**: Infrastructure ready (TODO with example implementation)
+  - **Memory**: RSS, heap used, heap total, external memory
+  - **CPU**: User and system CPU usage
+  - **Uptime**: Process uptime in seconds
+- Response format matches spec exactly with `status`, `timestamp`, `uptime`, and `services` fields
+
+**Validation Results:**
+
+- ✅ /health endpoint exists and enhanced
+- ✅ Returns 200 when healthy, 503 when unhealthy
+- ✅ Response includes all required fields
+- ✅ Database connection checked with actual query
+- ✅ Redis checking ready for integration
+- ✅ Type checking passed
+- ✅ Linting passed
+- ✅ Build successful
+- ✅ Existing tests maintained
+
+**Status:** Task 4 marked as "passing" in IMPLEMENTATION_PLAN.md
+
+---
