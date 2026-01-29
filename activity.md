@@ -1459,3 +1459,75 @@
 **Status:** Task 15 marked as "passing" in IMPLEMENTATION_PLAN.md
 
 ---
+
+## [2026-01-29 17:35] Task 16 Completed: Create Ansible Playbook for API Deployment
+
+**Task Completed:** Create Ansible Playbook for API Deployment
+
+**Files Created:**
+
+- `infrastructure/ansible/playbooks/update-api.yml` - Comprehensive zero-downtime deployment playbook (11KB, 35 tasks)
+
+**Files Modified:**
+
+- `infrastructure/ansible/README.md` - Added deployment section with 7 usage examples
+- `infrastructure/ansible/inventory/dev.yml` - Added deployment configuration variables
+- `infrastructure/ansible/inventory/staging.yml` - Added deployment configuration variables
+
+**Key Changes:**
+
+- Created production-ready Ansible playbook for zero-downtime API deployments using blue-green strategy:
+  - **Pre-Deployment**: Backs up current container state for rollback
+  - **Step 1 - Pull Image**: Logs in to Docker registry, pulls new image with retries (3 attempts, 10s delay)
+  - **Step 2 - Blue/Green Logic**: Determines new container name (alternates between api-blue and api-green)
+  - **Step 3 - Start Container**: Launches new container with health checks, ports, environment variables
+  - **Step 4 - Health Check**: Validates /health endpoint returns 200 (configurable timeout: 60s, interval: 5s)
+  - **Step 5 - Switch Traffic**: Stops old container gracefully after new one is healthy (10s grace period)
+  - **Step 6 - Cleanup**: Removes old container and images (keeps last 5)
+  - **Post-Deployment**: Verifies deployment success and displays current state
+- Rollback logic implemented in rescue block:
+  - Stops failed new container
+  - Restarts old container with previous image
+  - Displays rollback logs for debugging
+  - Fails playbook with clear error message
+- Playbook features (35 tasks):
+  - Variable validation (image_tag, environment required)
+  - Container lifecycle management (start, stop, remove)
+  - Health check with retry logic (configurable attempts based on timeout/interval)
+  - Image management (pull, cleanup old images)
+  - Comprehensive logging and debug output
+  - Idempotent operations
+- Configuration via variables:
+  - Required: `image_tag` (sha-abc1234, main, develop), `environment` (dev, staging, production), `docker_registry_token`
+  - Optional: `registry_url` (default: ghcr.io), `registry_username`, `health_check_url`, `health_check_timeout`, `rollback_on_failure`
+  - All variables configurable via inventory or command line
+- Updated README with comprehensive deployment documentation:
+  - Playbook description and feature list
+  - Usage examples for dev environment (basic, custom timeout, dry run)
+  - Usage examples for staging (all servers, one at a time)
+  - Rollback disabled example
+  - Environment variables example
+  - Complete variable reference
+- Updated inventory files:
+  - Added `docker_registry_url: ghcr.io`
+  - Added `docker_registry_username` with env lookup
+  - Added `docker_image_name: restomarket-api`
+  - Added `api_health_check_url: http://localhost:3001/health`
+  - Added `api_health_check_timeout: 60`
+  - Added `api_rollback_on_failure: true`
+
+**Validation Results:**
+
+- ✅ Playbook created at infrastructure/ansible/playbooks/update-api.yml (11KB)
+- ✅ YAML structure validated (35 tasks counted)
+- ✅ Blue-green deployment logic verified (api-blue/api-green alternation)
+- ✅ Health check with configurable timeout implemented
+- ✅ Rollback capability in rescue block verified
+- ✅ Environment-specific variables in inventory files
+- ✅ README documentation complete with 7 examples
+- ✅ All acceptance criteria met
+- ⚠️ Full playbook test requires Ansible and Docker daemon (manual testing step)
+
+**Status:** Task 16 marked as "passing" in IMPLEMENTATION_PLAN.md
+
+---

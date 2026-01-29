@@ -83,9 +83,31 @@ Configures fresh DigitalOcean droplets with:
 - **Secure**: Follows security best practices
 - **Production-ready**: Optimized system parameters
 
-### update-api.yml - API Deployment
+### update-api.yml - API Deployment (Zero-Downtime)
 
-Deploys and updates the API application with zero-downtime strategy (to be created in Task 16).
+Deploys and updates the API application using a blue-green deployment strategy for zero downtime.
+
+**Features:**
+
+- **Blue-Green Deployment**: Alternates between blue and green containers
+- **Health Checks**: Validates new deployment before switching traffic
+- **Automatic Rollback**: Reverts to previous version on health check failure
+- **Image Management**: Automatically cleans up old images (keeps last 5)
+- **Zero Downtime**: Old container continues serving traffic until new one is healthy
+
+**Required Variables:**
+
+- `image_tag`: Docker image tag to deploy (e.g., sha-abc1234, main, develop)
+- `environment`: Target environment (dev, staging, production)
+- `docker_registry_token`: Docker registry authentication token (from inventory or environment)
+
+**Optional Variables:**
+
+- `registry_url`: Docker registry URL (default: ghcr.io)
+- `registry_username`: Docker registry username (default: from inventory)
+- `health_check_url`: Health check endpoint (default: http://localhost:3001/health)
+- `health_check_timeout`: Max wait time for health check in seconds (default: 60)
+- `rollback_on_failure`: Rollback to previous version on failure (default: true)
 
 ## Usage
 
@@ -117,6 +139,74 @@ ansible -i inventory/dev.yml api_servers -m command -a "docker --version"
 ```bash
 # Setup both staging droplets
 ansible-playbook -i inventory/staging.yml playbooks/setup-api.yml
+```
+
+### API Deployment
+
+**Deploy to Development:**
+
+```bash
+cd infrastructure/ansible
+
+# Deploy specific image tag
+ansible-playbook -i inventory/dev.yml playbooks/update-api.yml \
+  -e "image_tag=sha-abc1234 environment=dev" \
+  -e "docker_registry_token=$GITHUB_TOKEN"
+
+# Deploy with custom health check timeout
+ansible-playbook -i inventory/dev.yml playbooks/update-api.yml \
+  -e "image_tag=main environment=dev" \
+  -e "docker_registry_token=$GITHUB_TOKEN" \
+  -e "health_check_timeout=120"
+
+# Dry run (check mode)
+ansible-playbook -i inventory/dev.yml playbooks/update-api.yml --check \
+  -e "image_tag=sha-abc1234 environment=dev"
+```
+
+**Deploy to Staging (Multiple Droplets):**
+
+```bash
+# Deploy to all staging servers
+ansible-playbook -i inventory/staging.yml playbooks/update-api.yml \
+  -e "image_tag=sha-abc1234 environment=staging" \
+  -e "docker_registry_token=$GITHUB_TOKEN"
+
+# Deploy to one droplet at a time (safer)
+ansible-playbook -i inventory/staging.yml playbooks/update-api.yml \
+  --limit api-staging-01 \
+  -e "image_tag=sha-abc1234 environment=staging" \
+  -e "docker_registry_token=$GITHUB_TOKEN"
+
+# Then deploy to the second droplet
+ansible-playbook -i inventory/staging.yml playbooks/update-api.yml \
+  --limit api-staging-02 \
+  -e "image_tag=sha-abc1234 environment=staging" \
+  -e "docker_registry_token=$GITHUB_TOKEN"
+```
+
+**Rollback Disabled:**
+
+```bash
+# Deploy without automatic rollback (for testing)
+ansible-playbook -i inventory/dev.yml playbooks/update-api.yml \
+  -e "image_tag=sha-abc1234 environment=dev" \
+  -e "docker_registry_token=$GITHUB_TOKEN" \
+  -e "rollback_on_failure=false"
+```
+
+**Using Environment Variables:**
+
+```bash
+# Set variables in environment
+export DOCKER_REGISTRY_TOKEN=$GITHUB_TOKEN
+export IMAGE_TAG=sha-abc1234
+export ENVIRONMENT=staging
+
+# Run playbook
+ansible-playbook -i inventory/staging.yml playbooks/update-api.yml \
+  -e "image_tag=$IMAGE_TAG environment=$ENVIRONMENT" \
+  -e "docker_registry_token=$DOCKER_REGISTRY_TOKEN"
 ```
 
 ### Targeting Specific Hosts

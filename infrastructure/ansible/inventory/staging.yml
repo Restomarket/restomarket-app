@@ -45,3 +45,11 @@ all:
         # Load balancer IPs (allowed to connect to API port)
         load_balancer_ips:
           - 10.20.0.100 # Replace with actual load balancer IP
+
+        # API Deployment configuration (update-api.yml)
+        docker_registry_url: ghcr.io
+        docker_registry_username: "{{ lookup('env', 'GITHUB_ACTOR') | default('your-github-username') }}"
+        docker_image_name: restomarket-api
+        api_health_check_url: 'http://localhost:3001/health'
+        api_health_check_timeout: 60
+        api_rollback_on_failure: true
