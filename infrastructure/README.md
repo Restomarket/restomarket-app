@@ -108,6 +108,34 @@ docker-compose logs -f api
 docker-compose down
 ```
 
+### Staging-like Local Testing
+
+**For detailed instructions, see [docker/STAGING.md](docker/STAGING.md)**
+
+Test production builds locally before deploying:
+
+```bash
+# 1. Copy staging environment variables
+cp .env.staging.example .env.staging
+
+# 2. Build production image
+docker-compose -f docker-compose.staging.yml build
+
+# 3. Start services (API, PostgreSQL, Redis, Adminer)
+docker-compose -f docker-compose.staging.yml up -d
+
+# 4. Verify production build
+docker-compose -f docker-compose.staging.yml ps
+curl http://localhost:3002/health
+
+# 5. Test production behavior (no hot reload, optimized image)
+# - API: http://localhost:3002
+# - Adminer (DB UI): http://localhost:8081
+
+# 6. Stop and cleanup
+docker-compose -f docker-compose.staging.yml down -v
+```
+
 ### Infrastructure Provisioning (Staging)
 
 ```bash

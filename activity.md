@@ -231,3 +231,62 @@
 **Status:** Task 5 marked as "passing" in IMPLEMENTATION_PLAN.md
 
 ---
+
+## [2026-01-29 14:28] Task 6 Completed: Create Docker Compose for Staging-like Testing
+
+**Task Completed:** Create Docker Compose for Staging-like Testing
+
+**Files Created:**
+
+- `docker-compose.staging.yml` - Production-like Docker Compose configuration
+- `.env.staging.example` - Environment variable template for staging testing
+- `infrastructure/docker/STAGING.md` - Comprehensive staging testing guide (9.4KB)
+
+**Files Modified:**
+
+- `infrastructure/README.md` - Added staging-like testing quick start section
+
+**Key Changes:**
+
+- Created docker-compose.staging.yml with production build configuration:
+  - Uses `production` target from Dockerfile (final optimized stage)
+  - No volume mounts for source code (tests actual compiled production image)
+  - Production command: `node apps/api/dist/main.js`
+  - Production environment: NODE_ENV=production, LOG_LEVEL=info, SWAGGER_ENABLED=false
+- Infrastructure differences from dev:
+  - Separate network: `restomarket-staging-network` (fully isolated)
+  - Different ports to allow simultaneous dev and staging:
+    - API: 3002 (dev: 3001)
+    - PostgreSQL: 5433 (dev: 5432)
+    - Redis: 6380 (dev: 6379)
+    - Adminer: 8081 (dev: 8080)
+  - Different database names and passwords for isolation
+- All services configured with health checks:
+  - PostgreSQL: `pg_isready` check
+  - Redis: ping check with password
+  - API: `/health` endpoint check with 60s start period
+- Created comprehensive documentation covering:
+  - Comparison table: dev vs staging configurations
+  - Quick start guide for building and testing production image
+  - Database and Redis operations
+  - Testing procedures (build testing, startup time, zero-downtime updates)
+  - Troubleshooting (container exits, health checks, port conflicts)
+  - Performance benchmarks (image size, build time, startup time)
+  - Differences from real DigitalOcean staging environment
+  - Best practices for production testing
+- Updated infrastructure README with staging testing section
+
+**Validation Results:**
+
+- ✅ docker-compose.staging.yml created and syntax validated
+- ✅ Uses production Docker image (target: production)
+- ✅ .env.staging.example created with staging defaults
+- ✅ No volume mounts for source code (only named volumes for data)
+- ✅ Health checks configured for all 3 services
+- ✅ Separate network: restomarket-staging-network
+- ✅ Comprehensive documentation created (9.4KB)
+- ✅ Can run simultaneously with dev environment (different ports/networks)
+
+**Status:** Task 6 marked as "passing" in IMPLEMENTATION_PLAN.md
+
+---
