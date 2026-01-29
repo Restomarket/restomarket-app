@@ -77,7 +77,7 @@ Before finishing, verify in IMPLEMENTATION_PLAN.md:
 
 - If ALL tasks are Status: "passing" → output: <promise>DEVOPS_COMPLETE</promise>
 - If stuck for multiple iterations → output: <promise>BLOCKED</promise>
-- Otherwise → continue normally
+- Otherwise → Provide a brief summary of what was completed and EXIT (the loop will automatically continue)
 
 ## Critical Rules
 
@@ -85,3 +85,4 @@ Before finishing, verify in IMPLEMENTATION_PLAN.md:
 2. **Always validate** - No commits without passing all checks.
 3. **Secrets Safety** - NEVER commit actual secrets. Use dummy values in examples.
 4. **Terraform Safety** - Always run `terraform validate` and `terraform fmt`.
+5. **No questions at the end** - Do NOT ask "Would you like me to continue?" or "What should I do next?". Just complete the task and exit. The loop will automatically start the next iteration.
