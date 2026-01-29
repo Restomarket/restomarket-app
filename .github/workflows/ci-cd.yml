@@ -206,3 +206,72 @@ jobs:
           # For now, just a placeholder that always passes
           echo "Coverage threshold check - implement with actual coverage tool"
         continue-on-error: true
+
+  build:
+    name: Build Packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Needed for Turborepo
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+        with:
+          version: ${{ env.PNPM_VERSION }}
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Turbo build outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            .turbo
+            node_modules/.cache/turbo
+          key: ${{ runner.os }}-turbo-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-build-
+            ${{ runner.os }}-turbo-
+
+      - name: Build all packages
+        run: pnpm turbo build
+
+      - name: Upload build artifacts (API)
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-build
+          path: |
+            apps/api/dist
+            apps/api/package.json
+          retention-days: 7
+
+      - name: Upload build artifacts (Web)
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: |
+            apps/web/.next
+            apps/web/package.json
+          retention-days: 7
+          if-no-files-found: warn # Web might not have build output yet
+
+      - name: Upload build artifacts (Packages)
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-build
+          path: |
+            packages/*/dist
+            packages/*/package.json
+          retention-days: 7
+          if-no-files-found: warn
