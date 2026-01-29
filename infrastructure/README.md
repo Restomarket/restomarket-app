@@ -138,20 +138,47 @@ docker-compose -f docker-compose.staging.yml down -v
 
 ### Infrastructure Provisioning (Staging)
 
+#### First Time Setup: Initialize Remote State Backend
+
+Before provisioning infrastructure, set up the Terraform remote state backend:
+
+```bash
+# 1. Set up DigitalOcean Spaces credentials
+export AWS_ACCESS_KEY_ID='your-spaces-access-key'
+export AWS_SECRET_ACCESS_KEY='your-spaces-secret-key'
+
+# 2. Run backend initialization script
+cd infrastructure/terraform/scripts
+./init-backend.sh staging restomarket-terraform-state-staging nyc3
+
+# The script will:
+# - Create a DigitalOcean Spaces bucket
+# - Enable versioning for state rollback
+# - Generate backend-config.tfvars in the staging directory
+```
+
+**For detailed backend setup instructions, see [terraform/scripts/README.md](terraform/scripts/README.md)**
+
+#### Provision Infrastructure
+
 ```bash
 # 1. Navigate to staging environment
 cd infrastructure/terraform/environments/staging
 
-# 2. Initialize Terraform
-terraform init
+# 2. Copy and configure variables
+cp terraform.tfvars.example terraform.tfvars
+# Edit terraform.tfvars with your values (DO token, SSH keys, etc.)
 
-# 3. Review planned changes
+# 3. Initialize Terraform with remote backend
+terraform init -backend-config=backend-config.tfvars
+
+# 4. Review planned changes
 terraform plan
 
-# 4. Apply infrastructure changes
+# 5. Apply infrastructure changes
 terraform apply
 
-# 5. Note the output values (IPs, connection strings)
+# 6. Note the output values (IPs, connection strings)
 terraform output
 ```
 

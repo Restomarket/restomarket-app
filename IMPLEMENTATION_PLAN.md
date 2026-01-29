@@ -899,7 +899,7 @@ terraform plan | grep digitalocean_loadbalancer
 
 **Category:** Infrastructure
 **Package:** root
-**Status:** not started
+**Status:** passing
 **Priority:** high
 **Risk Level:** low
 **Estimated Iterations:** 1
@@ -909,13 +909,42 @@ Create initialization script to set up Terraform remote state backend (DigitalOc
 
 **Acceptance Criteria:**
 
-- [ ] Script created at `infrastructure/terraform/scripts/init-backend.sh`
-- [ ] Creates S3-compatible bucket (DigitalOcean Spaces)
-- [ ] Configures bucket for state storage
-- [ ] Enables versioning for state files
-- [ ] Creates state lock table (if using DynamoDB)
-- [ ] Script is idempotent
-- [ ] Documentation in README
+- [x] Script created at `infrastructure/terraform/scripts/init-backend.sh`
+- [x] Creates S3-compatible bucket (DigitalOcean Spaces)
+- [x] Configures bucket for state storage
+- [x] Enables versioning for state files
+- [x] Creates state lock table (if using DynamoDB) - N/A (DigitalOcean Spaces doesn't require DynamoDB)
+- [x] Script is idempotent
+- [x] Documentation in README
+
+**Completion Notes:**
+
+- Completed on 2026-01-29
+- Created `infrastructure/terraform/scripts/init-backend.sh` (8.5KB, 300+ lines)
+- Created `infrastructure/terraform/scripts/README.md` (5.8KB comprehensive documentation)
+- Updated main infrastructure README with backend setup instructions
+- Updated dev and staging environment READMEs with automated setup instructions
+- Script features:
+  - Validates all inputs (environment: dev/staging/production, region: nyc3/sfo3/sgp1/fra1/ams3)
+  - Checks prerequisites (AWS CLI, credentials)
+  - Creates DigitalOcean Spaces bucket if not exists
+  - Enables versioning for state rollback capability
+  - Sets lifecycle policy (deletes versions older than 90 days)
+  - Generates `backend-config.tfvars` in environment directory
+  - Color-coded output for easy reading
+  - Comprehensive error handling and logging
+  - Idempotent - safe to run multiple times
+  - Usage examples and help message
+- Documentation includes:
+  - Prerequisites (AWS CLI, Spaces keys)
+  - Setup credentials (environment variables or ~/.aws/credentials)
+  - Usage examples for all 3 environments
+  - Security best practices
+  - Troubleshooting section
+  - Cost considerations (~$5/month for all environments)
+  - State management commands
+  - Migration guide from local state
+- All validation commands passed successfully
 
 **Validation Commands:**
 

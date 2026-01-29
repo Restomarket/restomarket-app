@@ -233,58 +233,48 @@ REDIS_PASSWORD=<from_terraform_output>
 
 Then deploy via GitHub Actions workflow.
 
-## Remote State Backend (Optional)
+## Remote State Backend (Recommended for Teams)
 
-To enable team collaboration with remote state:
+To enable team collaboration with remote state, use the automated backend initialization script:
 
-### Step 1: Create Spaces Bucket
-
-```bash
-# Using doctl
-doctl compute space create restomarket-terraform-state --region nyc3
-
-# Or manually via DigitalOcean console
-# Manage > Spaces > Create
-```
-
-### Step 2: Generate Spaces Access Keys
+### Automated Setup (Recommended)
 
 ```bash
-# Using doctl
-doctl compute spaces-access list
+# 1. Set up DigitalOcean Spaces credentials
+export AWS_ACCESS_KEY_ID='your-spaces-access-key'
+export AWS_SECRET_ACCESS_KEY='your-spaces-secret-key'
 
-# Or via console
-# Manage > API > Spaces Access Keys > Generate New Key
+# 2. Run the initialization script
+cd ../../scripts
+./init-backend.sh dev restomarket-terraform-state nyc3
+
+# The script will:
+# - Create the Spaces bucket with versioning enabled
+# - Generate backend-config.tfvars in this directory
+# - Set up lifecycle policies for old versions
+
+# 3. Initialize Terraform with remote backend
+cd ../environments/dev
+terraform init -backend-config=backend-config.tfvars
+
+# 4. Migrate existing state (if you have local state)
+terraform init -backend-config=backend-config.tfvars -migrate-state
 ```
 
-### Step 3: Configure Backend
+**For detailed instructions and troubleshooting, see [../../scripts/README.md](../../scripts/README.md)**
 
-Uncomment the backend block in `main.tf`:
+### Manual Setup (Alternative)
 
-```hcl
-backend "s3" {
-  endpoint                    = "nyc3.digitaloceanspaces.com"
-  key                         = "terraform/dev/terraform.tfstate"
-  bucket                      = "restomarket-terraform-state"
-  region                      = "us-east-1"
-  skip_credentials_validation = true
-  skip_metadata_api_check     = true
-  skip_region_validation      = true
-}
-```
+If you prefer manual setup:
 
-### Step 4: Set Credentials
+1. **Generate Spaces Access Keys**:
+   - Go to: https://cloud.digitalocean.com/account/api/tokens
+   - Click "Spaces Keys" tab
+   - Generate new key and save securely
 
-```bash
-export AWS_ACCESS_KEY_ID="<spaces_access_key>"
-export AWS_SECRET_ACCESS_KEY="<spaces_secret_key>"
-```
+2. **Run the init-backend.sh script** as shown above (this is still easier than fully manual setup)
 
-### Step 5: Migrate State
-
-```bash
-terraform init -migrate-state
-```
+3. **Or follow the manual steps** in the scripts README for complete manual setup instructions
 
 ## Updating Infrastructure
 

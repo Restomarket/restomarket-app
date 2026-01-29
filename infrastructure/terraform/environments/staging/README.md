@@ -565,35 +565,41 @@ doctl invoice list
 
 ## Remote State Backend
 
-### Configure DigitalOcean Spaces Backend
+### Automated Setup (Recommended)
+
+Use the automated backend initialization script for quick and reliable setup:
 
 ```bash
-# Create Spaces bucket
-doctl spaces create restomarket-terraform-state --region nyc3
+# 1. Set up DigitalOcean Spaces credentials
+export AWS_ACCESS_KEY_ID='your-spaces-access-key'
+export AWS_SECRET_ACCESS_KEY='your-spaces-secret-key'
 
-# Generate access keys
-doctl spaces keys create terraform-state-access
+# 2. Run the initialization script
+cd ../../scripts
+./init-backend.sh staging restomarket-terraform-state-staging sfo3
 
-# Configure backend (uncomment in main.tf)
+# The script will:
+# - Create the Spaces bucket with versioning enabled
+# - Generate backend-config.tfvars in this directory
+# - Set up lifecycle policies (keeps versions for 90 days)
+
+# 3. Initialize Terraform with remote backend
+cd ../environments/staging
+terraform init -backend-config=backend-config.tfvars
+
+# 4. Migrate existing state (if you have local state)
+terraform init -backend-config=backend-config.tfvars -migrate-state
 ```
 
-```hcl
-# In main.tf
-backend "s3" {
-  endpoint                    = "nyc3.digitaloceanspaces.com"
-  key                         = "terraform/staging/terraform.tfstate"
-  bucket                      = "restomarket-terraform-state"
-  region                      = "us-east-1"
-  skip_credentials_validation = true
-  skip_metadata_api_check     = true
-  skip_region_validation      = true
-}
-```
+**For detailed instructions and troubleshooting, see [../../scripts/README.md](../../scripts/README.md)**
 
-```bash
-# Re-initialize with backend
-terraform init -migrate-state
-```
+### Benefits of Remote State
+
+- **Team Collaboration**: Multiple team members can work on infrastructure
+- **State Locking**: Prevents concurrent modifications
+- **Versioning**: Rollback capability for state files
+- **Backup**: Automatic backups in DigitalOcean Spaces
+- **Security**: State stored securely with access controls
 
 ## Differences from Production
 
