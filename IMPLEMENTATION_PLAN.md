@@ -738,7 +738,7 @@ ansible-playbook playbooks/update-api.yml --check -i inventory/dev.yml
 
 **Category:** CI/CD
 **Package:** root
-**Status:** not started
+**Status:** passing
 **Priority:** high
 **Risk Level:** low
 **Estimated Iterations:** 2
@@ -748,14 +748,39 @@ Create GitHub Actions workflow job for code quality checks (lint, format, type-c
 
 **Acceptance Criteria:**
 
-- [ ] Workflow file created: `.github/workflows/ci-cd.yml`
-- [ ] Code quality job configured
-- [ ] Steps: checkout, setup pnpm, install deps (with cache), lint, format check, type-check
-- [ ] Snyk security scan integrated (or Trivy)
-- [ ] Dependency audit step
-- [ ] Job runs on pull requests and pushes
-- [ ] Uses Turborepo filters: `--filter=...[origin/main]`
-- [ ] Caching configured for pnpm and turbo
+- [x] Workflow file created: `.github/workflows/ci-cd.yml`
+- [x] Code quality job configured with 10 steps
+- [x] Steps: checkout, setup pnpm, install deps (with cache), lint, format check, type-check
+- [x] Trivy security scan integrated (filesystem scan with SARIF upload)
+- [x] Gitleaks secret detection integrated
+- [x] Dependency audit step (pnpm audit --audit-level=high)
+- [x] Job runs on pull requests and pushes to main/develop branches
+- [x] Uses Turborepo filters: `--filter=...[origin/${{ github.base_ref || 'main' }}]`
+- [x] Caching configured for pnpm (via setup-node) and turbo (via actions/cache)
+
+**Completion Notes:**
+
+- Completed on 2026-01-29
+- Created `.github/workflows/ci-cd.yml` with comprehensive code quality job
+- Configured concurrency control to cancel in-progress runs
+- Environment variables: NODE_VERSION: 20.18.1, PNPM_VERSION: 8
+- Quality check steps:
+  1. Checkout with full history (fetch-depth: 0 for Turborepo)
+  2. Setup pnpm v8
+  3. Setup Node.js 20.18.1 with pnpm cache
+  4. Install dependencies with --frozen-lockfile
+  5. Cache Turborepo build outputs
+  6. Run linter with Turborepo filter (only changed packages)
+  7. Check formatting with prettier
+  8. Run type check across all packages
+  9. Dependency audit (high severity, continue-on-error)
+  10. Gitleaks secret scan
+  11. Trivy filesystem scan (CRITICAL/HIGH vulnerabilities, exit-code 1)
+  12. Upload Trivy results to GitHub Security (SARIF format)
+- Turborepo filter dynamically uses base_ref for PRs: `--filter=...[origin/${{ github.base_ref || 'main' }}]`
+- Fail-fast on critical/high vulnerabilities from Trivy
+- Timeout: 15 minutes
+- All validation commands passed
 
 **Validation Commands:**
 

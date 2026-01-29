@@ -290,3 +290,59 @@
 **Status:** Task 6 marked as "passing" in IMPLEMENTATION_PLAN.md
 
 ---
+
+## [2026-01-29 14:30] Task 17 Completed: Create GitHub Actions Workflow - Code Quality
+
+**Task Completed:** Create GitHub Actions Workflow - Code Quality
+
+**Files Created:**
+
+- `.github/workflows/ci-cd.yml` - CI/CD pipeline with code quality job
+
+**Key Changes:**
+
+- Created comprehensive GitHub Actions workflow with code quality checks:
+  - **Triggers**: Push to main/develop, PRs to main/develop
+  - **Concurrency control**: Cancel in-progress runs for same workflow/ref
+  - **Environment**: Node 20.18.1, pnpm 8
+  - **Timeout**: 15 minutes
+- Code quality job with 12 steps:
+  1. Checkout repository (fetch-depth: 0 for Turborepo)
+  2. Setup pnpm v8
+  3. Setup Node.js with pnpm cache enabled
+  4. Install dependencies (--frozen-lockfile)
+  5. Cache Turborepo build outputs (.turbo, node_modules/.cache/turbo)
+  6. Run linter with Turborepo filter (only changed packages since base branch)
+  7. Check code formatting with prettier
+  8. Run TypeScript type checking
+  9. Run dependency audit (high severity, continue-on-error)
+  10. Run gitleaks secret detection scan
+  11. Run Trivy filesystem security scan (CRITICAL/HIGH)
+  12. Upload Trivy SARIF results to GitHub Security tab
+- Turborepo optimization:
+  - Dynamic filter: `--filter=...[origin/${{ github.base_ref || 'main' }}]`
+  - Only lints changed packages and their dependents
+  - Caching for fast subsequent runs
+- Security scanning:
+  - Gitleaks: Detects secrets in code
+  - Trivy: Scans for vulnerabilities in dependencies and code
+  - SARIF upload: Results visible in GitHub Security tab
+  - Fail-fast: exit-code 1 on high/critical vulnerabilities
+- Caching strategy:
+  - pnpm dependencies cached by setup-node
+  - Turborepo outputs cached with restore-keys for partial hits
+
+**Validation Results:**
+
+- ✅ Workflow file created: `.github/workflows/ci-cd.yml` (2.3KB)
+- ✅ Code quality job configured with 10+ steps
+- ✅ All required steps present: checkout, pnpm setup, install, lint, format, type-check
+- ✅ Security scans integrated: Trivy (fs scan), gitleaks (secret detection)
+- ✅ Dependency audit configured with pnpm audit
+- ✅ Runs on PRs and pushes to main/develop
+- ✅ Turborepo filter uses dynamic base ref
+- ✅ Caching configured for pnpm and Turbo
+
+**Status:** Task 17 marked as "passing" in IMPLEMENTATION_PLAN.md
+
+---
