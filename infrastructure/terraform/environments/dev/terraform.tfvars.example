@@ -1,0 +1,79 @@
+# Development Environment Configuration Example
+# Copy this file to terraform.tfvars and fill in your actual values
+# NEVER commit terraform.tfvars to git (it's in .gitignore)
+
+# ============================================================================
+# REQUIRED VARIABLES - You must provide these
+# ============================================================================
+
+# DigitalOcean API token
+# Get from: https://cloud.digitalocean.com/account/api/tokens
+do_token = "dop_v1_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# SSH key name (must exist in your DigitalOcean account)
+# Get list: doctl compute ssh-key list
+# Or create: doctl compute ssh-key import my-key --public-key-file ~/.ssh/id_rsa.pub
+ssh_key_name = "my-ssh-key"
+
+# ============================================================================
+# OPTIONAL VARIABLES - Defaults are provided, override if needed
+# ============================================================================
+
+# General Configuration
+# environment   = "dev"
+# project_name  = "restomarket"
+# region        = "nyc3"
+
+# Networking Configuration
+# vpc_ip_range = "10.10.0.0/16"
+# admin_ips    = ["0.0.0.0/0"] # WARNING: Allow from anywhere in dev (restrict for staging/prod)
+# api_port     = 3001
+
+# Database Configuration (PostgreSQL)
+# db_version       = "16"
+# db_node_size     = "db-s-1vcpu-1gb"  # $15/month
+# db_node_count    = 1                  # Single node for dev
+# db_name          = "restomarket_dev"
+# db_user          = "restomarket_app"
+# db_enable_pool   = false              # Optional connection pooling
+# db_pool_mode     = "transaction"
+# db_pool_size     = 10
+
+# Redis Configuration
+# redis_version          = "7"
+# redis_node_size        = "db-s-1vcpu-1gb"  # $15/month
+# redis_eviction_policy  = "allkeys-lru"
+# redis_maintenance_day  = "sunday"
+# redis_maintenance_hour = "02:00"
+
+# API Droplet Configuration
+# api_droplet_count   = 1                  # Single droplet for dev
+# api_droplet_size    = "s-1vcpu-1gb"      # $6/month
+# api_droplet_image   = "ubuntu-22-04-x64"
+# api_enable_backups  = false              # No backups for dev
+# api_enable_monitoring = true
+# api_enable_ipv6     = false
+
+# Additional Tags
+# tags = {
+#   ManagedBy = "Terraform"
+#   Purpose   = "Development"
+#   Team      = "DevOps"
+# }
+
+# Custom Firewall Rules (if needed)
+# custom_inbound_rules = [
+#   {
+#     protocol         = "tcp"
+#     port_range       = "8080"
+#     source_addresses = ["0.0.0.0/0"]
+#   }
+# ]
+
+# custom_outbound_rules = []
+
+# Custom User Data Script (optional)
+# api_custom_user_data = <<-EOT
+#   # Additional setup commands
+#   echo "Custom setup complete"
+# EOT
