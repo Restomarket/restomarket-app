@@ -184,13 +184,11 @@ jobs:
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
-        continue-on-error: true # Skip if coverage files not found
+        continue-on-error: true # Skip if coverage files not found or token missing
         if: always()
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: |
-            ./apps/api/coverage/lcov.info
-            ./packages/*/coverage/lcov.info
+          files: ./apps/api/coverage/lcov.info,./packages/ui/coverage/lcov.info,./apps/web/coverage/lcov.info
           flags: unittests
           name: codecov-umbrella
           fail_ci_if_error: false # Don't fail if Codecov upload fails
