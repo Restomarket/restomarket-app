@@ -21,69 +21,98 @@ The automated infrastructure implementation is complete. The remaining tasks req
 
 ## Task 25: Setup Secrets in GitHub Actions
 
-**Prerequisites:**
+Step-by-step guide following best practices. Requires **GitHub admin access** to the repository.
 
-- GitHub repository with Actions enabled
-- Admin access to repository settings
-- DigitalOcean infrastructure provisioned (for staging)
+**Quick reference:**
 
-### Step 1: Navigate to Repository Secrets
+- **Where:** `https://github.com/<OWNER>/<REPO>/settings/secrets/actions`
+- **See also:** [Secrets Management](../../../docs/SECRETS_MANAGEMENT.md) for rotation and safe handling.
 
-1. Go to your GitHub repository
-2. Click **Settings** → **Secrets and variables** → **Actions**
-3. Click **New repository secret** for each secret below
+### Prerequisites
 
-### Step 2: Configure Staging Environment Secrets
+- [ ] GitHub repository with **Actions** enabled
+- [ ] **Admin** access: **Settings** → **Secrets and variables** → **Actions**
+- [ ] Staging infrastructure provisioned (for staging deploy secrets); see [infrastructure/terraform/environments/staging](../../terraform/environments/staging/README.md)
+- [ ] Secrets never pasted in issues, PRs, or chat; see [docs/SECRETS_MANAGEMENT.md](../../../docs/SECRETS_MANAGEMENT.md)
 
-Create the following secrets:
+---
 
-#### Infrastructure Secrets
+### Step 1: Open Actions secrets (repository)
 
-| Secret Name        | Description                        | How to Get                                                                                         |
-| ------------------ | ---------------------------------- | -------------------------------------------------------------------------------------------------- |
-| `STAGING_HOST`     | Staging droplet IP address         | Run: `cd infrastructure/terraform/environments/staging && terraform output api_cluster_public_ips` |
-| `STAGING_USERNAME` | SSH username for deployment        | Use: `deploy` (created by Ansible playbook)                                                        |
-| `STAGING_SSH_KEY`  | Private SSH key for authentication | Copy from `~/.ssh/id_rsa` or your deployment key                                                   |
+1. In the repo: **Settings** → **Secrets and variables** → **Actions**  
+   Direct URL: `https://github.com/<OWNER>/<REPO>/settings/secrets/actions`
+2. Use **Repository secrets** for shared CI secrets; use **Environments** (Step 4) for staging-only overrides if needed.
 
-#### Database & Redis Secrets
+---
 
-| Secret Name    | Description                        | How to Get                                                   |
-| -------------- | ---------------------------------- | ------------------------------------------------------------ |
-| `DATABASE_URL` | Staging database connection string | Run: `terraform output -raw database_connection_uri_private` |
-| `REDIS_URL`    | Staging Redis connection string    | Run: `terraform output -raw redis_connection_uri_private`    |
+### Step 2: Create the staging environment (recommended before secrets)
 
-#### Registry Secrets
+1. **Settings** → **Environments** → **New environment**
+2. Name: **`staging`** (must match `environment: staging` in [.github/workflows/ci-cd.yml](../../../.github/workflows/ci-cd.yml))
+3. Configure:
+   - **Deployment branches**: e.g. **Selected branches** → add **`develop`**
+   - **Environment URL** (optional): `https://staging-api.example.com`
+   - **Required reviewers** (optional): add approvers for manual deploy gates
+4. Save. You can add **Environment secrets** here later to override repository secrets for staging only.
 
-| Secret Name         | Description                            | How to Get                                                                 |
-| ------------------- | -------------------------------------- | -------------------------------------------------------------------------- |
-| `GITHUB_TOKEN`      | GitHub Container Registry token        | **Auto-provided by GitHub Actions** - No manual setup needed               |
-| `DO_REGISTRY_TOKEN` | DigitalOcean registry token (optional) | DigitalOcean Console → API → Tokens/Keys → Generate New Token (read/write) |
+---
 
-#### Notification Secrets
+### Step 3: Add repository secrets
 
-| Secret Name     | Description                         | How to Get                                                         |
-| --------------- | ----------------------------------- | ------------------------------------------------------------------ |
-| `SLACK_WEBHOOK` | Slack webhook URL for notifications | Slack Workspace Settings → Apps → Incoming Webhooks → Add to Slack |
-| `CODECOV_TOKEN` | Codecov upload token (optional)     | codecov.io → Repository Settings → Copy upload token               |
+Add each via **New repository secret**. Use exact names (case-sensitive); the CI workflow references these names.
 
-### Step 3: Configure GitHub Environments
+#### 3.1 Required for deploy to staging
 
-1. Go to **Settings** → **Environments**
-2. Click **New environment**
-3. Name it `staging`
-4. Configure environment settings:
-   - **Deployment branches**: Select branches (e.g., `develop`)
-   - **Environment secrets**: Can override repository secrets here if needed
-   - **Required reviewers**: Optional - add team members for manual approval
-5. Set environment URL: `https://staging-api.example.com` (your staging domain)
+| Secret name        | Description            | How to get / best practice                                                                                                                                                                                                                                                                                                                                                      |
+| ------------------ | ---------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `STAGING_HOST`     | Staging server IP/host | From Terraform: `cd infrastructure/terraform/environments/staging && terraform output -raw api_cluster_public_ips` (or first element if list). Use a single IP/hostname.                                                                                                                                                                                                        |
+| `STAGING_USERNAME` | SSH user for deploy    | Use **`deploy`** (user created by Ansible; do not use `root`).                                                                                                                                                                                                                                                                                                                  |
+| `STAGING_SSH_KEY`  | Private SSH key        | **Best practice:** Use a **dedicated deploy key**, not a personal key. Generate: `ssh-keygen -t ed25519 -C "github-actions-deploy" -f ~/.ssh/restomarket_deploy -N ""`. Add the **private** key contents (including `-----BEGIN ... KEY-----` / `-----END ... KEY-----`) to the secret. Add the matching `.pub` to the server’s `~/.ssh/authorized_keys` for the `deploy` user. |
 
-### Step 4: Verify Secrets
+#### 3.2 Database and Redis (if used by staging app)
 
-Run this verification workflow to test secrets (optional):
+| Secret name    | Description                  | How to get                                                                                                            |
+| -------------- | ---------------------------- | --------------------------------------------------------------------------------------------------------------------- |
+| `DATABASE_URL` | Staging DB connection URI    | Terraform: `terraform output -raw database_connection_uri_private` in `infrastructure/terraform/environments/staging` |
+| `REDIS_URL`    | Staging Redis connection URI | Terraform: `terraform output -raw redis_connection_uri_private` in same directory                                     |
 
-```bash
-# Create a test workflow file
-cat > .github/workflows/verify-secrets.yml << 'EOF'
+#### 3.3 Notifications (required for current workflow when deploy runs)
+
+| Secret name     | Description       | How to get                                                                                                                                          |
+| --------------- | ----------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `SLACK_WEBHOOK` | Slack webhook URL | Slack: **Settings** → **Apps** → **Incoming Webhooks** → **Add to Slack** → copy webhook URL. Used by deploy job for success/failure notifications. |
+
+#### 3.4 Optional (no manual setup for default behavior)
+
+| Secret name         | Description                     | Note                                                                                                  |
+| ------------------- | ------------------------------- | ----------------------------------------------------------------------------------------------------- |
+| `GITHUB_TOKEN`      | GHCR / API access               | **Do not create** — automatically provided by GitHub Actions.                                         |
+| `CODECOV_TOKEN`     | Codecov upload                  | codecov.io → repo → Settings → Copy upload token. Workflow uses `fail_ci_if_error: false` if missing. |
+| `GITLEAKS_LICENSE`  | Gitleaks premium (optional)     | Only if using licensed Gitleaks features.                                                             |
+| `DO_REGISTRY_TOKEN` | DigitalOcean Container Registry | Only if using DO registry instead of GHCR.                                                            |
+
+---
+
+### Step 4: Use environment secrets for staging (optional)
+
+For staging-only overrides (e.g. different `STAGING_HOST` per environment):
+
+1. **Settings** → **Environments** → **staging** → **Environment secrets**
+2. Add or override secrets that should apply only when the `deploy-staging` job runs with `environment: staging`.
+
+Repository secrets are still used if no environment secret is set.
+
+---
+
+### Step 5: Verify setup (optional)
+
+- **Manual check:** In **Settings** → **Secrets and variables** → **Actions**, confirm expected **Repository secrets** (and **Environments** → **staging** if used). Values are not visible; only names.
+- **Workflow check:** Push to `develop` and confirm the **Deploy to Staging** job runs and health check passes, or run a manual workflow that only checks for presence (see below). Do **not** log or echo secret values.
+
+Example **workflow_dispatch** job that only checks presence (no values printed):
+
+```yaml
+# Optional: add to .github/workflows/verify-secrets.yml
 name: Verify Secrets
 on:
   workflow_dispatch:
@@ -92,58 +121,35 @@ jobs:
   verify:
     runs-on: ubuntu-latest
     steps:
-      - name: Verify Secrets Exist
+      - name: Verify required secrets exist
         run: |
-          echo "Checking secrets..."
-          [ -n "${{ secrets.STAGING_HOST }}" ] && echo "✅ STAGING_HOST exists"
-          [ -n "${{ secrets.STAGING_USERNAME }}" ] && echo "✅ STAGING_USERNAME exists"
-          [ -n "${{ secrets.STAGING_SSH_KEY }}" ] && echo "✅ STAGING_SSH_KEY exists"
-          [ -n "${{ secrets.SLACK_WEBHOOK }}" ] && echo "✅ SLACK_WEBHOOK exists"
-          echo "Secrets verification complete"
-EOF
-
-# Commit and push
-git add .github/workflows/verify-secrets.yml
-git commit -m "chore(ci): add secrets verification workflow"
-git push
-
-# Run manually from GitHub Actions tab
+          echo "Checking repository secrets (names only)..."
+          [ -n "${{ secrets.STAGING_HOST }}" ] && echo "✅ STAGING_HOST" || echo "❌ STAGING_HOST missing"
+          [ -n "${{ secrets.STAGING_USERNAME }}" ] && echo "✅ STAGING_USERNAME" || echo "❌ STAGING_USERNAME missing"
+          [ -n "${{ secrets.STAGING_SSH_KEY }}" ] && echo "✅ STAGING_SSH_KEY" || echo "❌ STAGING_SSH_KEY missing"
+          [ -n "${{ secrets.SLACK_WEBHOOK }}" ] && echo "✅ SLACK_WEBHOOK" || echo "❌ SLACK_WEBHOOK missing"
+          echo "Done (values are never printed)."
 ```
 
-### Step 5: Update Documentation
+Run it from the **Actions** tab → **Verify Secrets** → **Run workflow**.
 
-Document all configured secrets in `infrastructure/README.md`:
+---
 
-```markdown
-## GitHub Secrets
+### Step 6: Document and maintain
 
-The following secrets must be configured in GitHub repository settings:
+- List configured secrets (names and purpose only, no values) in `infrastructure/README.md` or this file so others know what must be set. See validation checklist below.
+- Rotate per [docs/SECRETS_MANAGEMENT.md](../../../docs/SECRETS_MANAGEMENT.md) (e.g. every 90 days for tokens and DB URLs, 180 days for SSH keys).
+- If a secret is leaked: revoke/rotate immediately, update GitHub (and any environment) secrets, then follow the incident steps in SECRETS_MANAGEMENT.md.
 
-### Staging Environment
+---
 
-- `STAGING_HOST` - Droplet IP address
-- `STAGING_USERNAME` - SSH username (deploy)
-- `STAGING_SSH_KEY` - Private SSH key
-- `DATABASE_URL` - PostgreSQL connection string
-- `REDIS_URL` - Redis connection string
+### Validation checklist
 
-### Notifications
-
-- `SLACK_WEBHOOK` - Slack webhook URL for deployment notifications
-
-### Optional
-
-- `CODECOV_TOKEN` - Code coverage reporting
-- `DO_REGISTRY_TOKEN` - DigitalOcean container registry
-```
-
-### Validation Checklist
-
-- [ ] All staging secrets configured in GitHub
-- [ ] Environment `staging` created with deployment branch rules
-- [ ] Secrets verification workflow runs successfully
-- [ ] Documentation updated with secret list
-- [ ] No actual secret values committed to git
+- [ ] **Environment** `staging` created with deployment branch (e.g. `develop`)
+- [ ] **Repository secrets** set: `STAGING_HOST`, `STAGING_USERNAME`, `STAGING_SSH_KEY`, `SLACK_WEBHOOK`; and `DATABASE_URL` / `REDIS_URL` if staging uses them
+- [ ] **SSH:** Dedicated deploy key used; public key on server for `deploy` user only
+- [ ] **No** secret values committed or pasted in PRs/issues/chat
+- [ ] Optional: verify-secrets workflow or a test deploy run; documentation updated with secret list
 
 ---
 
