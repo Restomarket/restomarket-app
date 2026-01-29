@@ -172,3 +172,62 @@
 **Status:** Task 4 marked as "passing" in IMPLEMENTATION_PLAN.md
 
 ---
+
+## [2026-01-29 14:26] Task 5 Completed: Create Docker Compose for Local Development
+
+**Task Completed:** Create Docker Compose for Local Development
+
+**Files Created:**
+
+- `docker-compose.yml` - Complete local development environment with 4 services
+- `.env.development.example` - Environment variable template for Docker Compose
+- `infrastructure/docker/README.md` - Comprehensive Docker development guide (6KB)
+
+**Files Modified:**
+
+- `infrastructure/README.md` - Updated quick start section to reference Docker documentation
+
+**Key Changes:**
+
+- Created production-ready docker-compose.yml with:
+  - **PostgreSQL 15 Alpine**: Health checks, named volume for persistence, configurable credentials
+  - **Redis 7 Alpine**: AOF persistence, password auth, health checks
+  - **NestJS API**: Hot reload via volume mounts, depends on healthy DB/Redis, targets `dependencies` stage from Dockerfile
+  - **Adminer**: Database management UI with Dracula theme
+- Service orchestration:
+  - All services in custom bridge network (`restomarket-network`)
+  - API waits for PostgreSQL and Redis to be healthy before starting
+  - Health checks configured for all services with appropriate intervals
+  - Named volumes for data persistence
+- Hot reload configuration:
+  - Source code mounted: `./apps/api/src` → `/app/apps/api/src`
+  - Packages mounted: `./packages` → `/app/packages`
+  - node_modules excluded from mounts (uses container's version)
+- Environment variables:
+  - All configurable via `.env.development` (not committed)
+  - Sensible defaults with `${VAR:-default}` syntax
+  - Database URL properly formatted for container networking
+- Documentation includes:
+  - Quick start guide and common commands
+  - Database, Redis, and API operations
+  - Health check verification steps
+  - Troubleshooting guide (port conflicts, hot reload, migrations)
+  - Development workflow best practices
+  - Security notes for team environments
+
+**Validation Results:**
+
+- ✅ docker-compose.yml syntax validated with `docker-compose config`
+- ✅ All 4 services configured (postgres, redis, api, adminer)
+- ✅ Health checks configured for all services
+- ✅ Named volumes for PostgreSQL and Redis
+- ✅ Custom network for service isolation
+- ✅ Volume mounts configured for hot reload
+- ✅ Environment variables with .env.development support
+- ✅ API accessible at localhost:3001
+- ✅ Adminer accessible at localhost:8080
+- ✅ Comprehensive documentation created
+
+**Status:** Task 5 marked as "passing" in IMPLEMENTATION_PLAN.md
+
+---

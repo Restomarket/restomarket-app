@@ -80,25 +80,32 @@ See `.env.example` files in each app directory for required environment variable
 
 ## Quick Start
 
-### Local Development
+### Local Development with Docker Compose
+
+**For detailed instructions, see [docker/README.md](docker/README.md)**
 
 ```bash
-# 1. Install dependencies
-pnpm install
+# 1. Copy environment variables
+cp .env.development.example .env.development
 
-# 2. Copy environment files
-cp apps/api/.env.example apps/api/.env.development
-cp apps/web/.env.example apps/web/.env.development
-
-# 3. Start all services with Docker Compose
+# 2. Start all services (API, PostgreSQL, Redis, Adminer)
 docker-compose up -d
 
-# 4. Verify services are running
+# 3. Verify services are running
 docker-compose ps
 curl http://localhost:3001/health
 
-# 5. View logs
+# 4. View logs
 docker-compose logs -f api
+
+# 5. Access services:
+# - API: http://localhost:3001
+# - Swagger Docs: http://localhost:3001/api/docs
+# - Adminer (DB UI): http://localhost:8080
+# - Health Check: http://localhost:3001/health
+
+# 6. Stop services
+docker-compose down
 ```
 
 ### Infrastructure Provisioning (Staging)
