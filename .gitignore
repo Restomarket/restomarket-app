@@ -48,4 +48,13 @@ Thumbs.db
 # Misc
 .cache/
 .temp/
+
+# Terraform
+**/.terraform/*
+**/.terraform.lock.hcl
+*.tfstate
+*.tfstate.*
+*.tfvars
+.terraformrc
+terraform.rc
 .tmp/
