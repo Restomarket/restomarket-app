@@ -75,6 +75,7 @@ jobs:
           GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }} # Optional for premium features
 
       - name: Security scan with Trivy
+        id: trivy
         uses: aquasecurity/trivy-action@master
         with:
           scan-type: 'fs'
@@ -85,8 +86,8 @@ jobs:
           exit-code: '1' # Fail on high/critical vulnerabilities
 
       - name: Upload Trivy results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
-        if: always() # Upload even if Trivy finds vulnerabilities
+        uses: github/codeql-action/upload-sarif@v4
+        if: always() && (steps.trivy.outcome == 'success' || steps.trivy.outcome == 'failure')
         with:
           sarif_file: 'trivy-results.sarif'
 
@@ -338,7 +339,7 @@ jobs:
           exit-code: '1' # Fail on high/critical vulnerabilities
 
       - name: Upload Trivy image scan results to GitHub Security
-        uses: github/codeql-action/upload-sarif@v3
+        uses: github/codeql-action/upload-sarif@v4
         if: always() # Upload even if Trivy finds vulnerabilities
         with:
           sarif_file: 'trivy-image-results.sarif'
