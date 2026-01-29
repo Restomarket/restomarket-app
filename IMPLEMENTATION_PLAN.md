@@ -2204,3 +2204,20 @@ If any task is blocked, document:
 - Each task should result in 1-3 Git commits
 - Run validation commands after each task before marking as "passing"
 - Update this file after each iteration with progress notes
+
+## Manual Tasks Remaining
+
+Tasks 25, 26, 33, 34, 35, 36 require manual configuration or deployed infrastructure.
+
+**Complete documentation available in:** `infrastructure/docs/MANUAL_TASKS.md`
+
+This document provides step-by-step instructions for:
+
+- Task 25: Configuring GitHub Actions secrets
+- Task 26: Setting up branch protection rules
+- Task 33: Testing the complete CI/CD pipeline
+- Task 34: Testing rollback procedures
+- Task 35: Performance testing and optimization
+- Task 36: Security audit procedures
+
+All infrastructure code is complete and validated. Manual tasks can be completed by following the comprehensive guide.

@@ -302,8 +302,10 @@ terraform force-unlock <lock-id>
 ## Documentation
 
 - [Deployment Runbook](docs/deployment-runbook.md) - Step-by-step deployment procedures
-- [Secrets Management](docs/secrets-management.md) - How to manage secrets safely
+- [Secrets Management](../docs/SECRETS_MANAGEMENT.md) - How to manage secrets safely
+- [Manual Tasks Guide](docs/MANUAL_TASKS.md) - Complete guide for manual configuration and testing
 - [Architecture Diagrams](docs/diagrams/) - Visual infrastructure diagrams
+- [Scripts Documentation](scripts/README.md) - Deployment and maintenance scripts
 
 ## Contributing
 
