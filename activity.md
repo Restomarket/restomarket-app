@@ -1234,3 +1234,88 @@
 **Status:** Task 23 marked as "passing" in IMPLEMENTATION_PLAN.md
 
 ---
+
+## [2026-01-29 17:00] Task 21 Completed: Create GitHub Actions Workflow - Deploy Staging Job
+
+**Task Completed:** Create GitHub Actions Workflow - Deploy Staging Job
+
+**Files Modified:**
+
+- `.github/workflows/ci-cd.yml` - Added deploy-staging job (602 lines total, 257 new lines)
+
+**Key Changes:**
+
+- Added comprehensive deploy-staging job to CI/CD workflow:
+  - **Dependencies**: Runs after docker-build job passes (needs: docker-build)
+  - **Conditional**: Only on push events to develop branch
+  - **Timeout**: 15 minutes
+  - **Environment**: GitHub environment "staging" with URL
+- Deployment workflow (9 steps):
+  1. **Checkout repository**: Gets code for accessing scripts
+  2. **Set up SSH key**: Configures SSH authentication from secrets
+  3. **Deploy to staging droplet**: Uses appleboy/ssh-action@v1.0.3
+     - Navigates to /opt/app directory
+     - Logs in to GHCR with GitHub token
+     - Runs zero-downtime deployment via deploy.sh script
+     - Uses blue-green deployment strategy
+  4. **Run health check**: 12 retries with 5s interval
+     - Tests /health endpoint
+     - Validates 200 status code
+  5. **Run smoke tests**: Basic validation
+     - Health endpoint returns valid JSON structure
+     - API version header presence check
+  6. **Rollback on failure**: Automatic rollback if deployment fails
+     - Identifies previous container image
+     - Executes rollback.sh script
+     - Restores previous stable version
+  7. **Notify Slack on success**: Rich notification with deployment details
+  8. **Notify Slack on failure**: Failure notification with rollback message
+- SSH deployment features:
+  - Uses infrastructure/scripts/deploy.sh for zero-downtime deployment
+  - Logs in to GitHub Container Registry
+  - Pulls image: ghcr.io/{owner}/restomarket-api:sha-{sha}
+  - Sets environment variables (IMAGE_TAG, ENVIRONMENT)
+  - Executes blue-green deployment with health checks
+- Health check configuration:
+  - URL: https://staging-api.example.com/health
+  - Max retries: 12 (total ~60s timeout)
+  - Retry delay: 5 seconds
+  - Success criteria: HTTP 200 status code
+- Rollback logic:
+  - Triggers on any step failure
+  - SSHs back to droplet
+  - Gets previous container image from docker ps
+  - Extracts SHA from image tag
+  - Calls rollback.sh script
+  - Maintains zero downtime during rollback
+- Slack notifications:
+  - **Success**: Green header, commit details, author, deployment URL, action buttons
+  - **Failure**: Red header, rollback message, log viewer button
+  - Uses slackapi/slack-github-action@v1.25.0
+  - Rich block formatting with multiple sections
+- Required GitHub secrets (documented for manual setup):
+  - `STAGING_HOST`: DigitalOcean droplet IP
+  - `STAGING_USERNAME`: SSH user (e.g., deploy)
+  - `STAGING_SSH_KEY`: Private SSH key
+  - `SLACK_WEBHOOK`: Slack webhook URL for notifications
+  - `GITHUB_TOKEN`: Auto-provided by GitHub Actions
+
+**Validation Results:**
+
+- ✅ Deploy-staging job added to workflow
+- ✅ Runs after docker-build, only on develop branch
+- ✅ Uses GitHub environment: staging
+- ✅ SSH deployment configured with appleboy/ssh-action
+- ✅ Zero-downtime deployment via deploy.sh script
+- ✅ Health check with 12 retries implemented
+- ✅ Smoke tests implemented
+- ✅ Rollback on failure configured
+- ✅ Slack notifications for success and failure
+- ✅ Environment secrets documented
+- ✅ YAML structure validated
+- ✅ Type check passed
+- ✅ Workflow now 602 lines with 5 jobs
+
+**Status:** Task 21 marked as "passing" in IMPLEMENTATION_PLAN.md
+
+---

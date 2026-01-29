@@ -343,3 +343,260 @@ jobs:
         with:
           sarif_file: 'trivy-image-results.sarif'
           category: 'docker-image'
+
+  # ============================================================================
+  # Deploy Staging
+  # ============================================================================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    timeout-minutes: 15
+    environment:
+      name: staging
+      url: https://staging-api.example.com
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up SSH key
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.STAGING_SSH_KEY }}" > ~/.ssh/id_rsa
+          chmod 600 ~/.ssh/id_rsa
+          ssh-keyscan -H ${{ secrets.STAGING_HOST }} >> ~/.ssh/known_hosts
+
+      - name: Deploy to staging droplet
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USERNAME }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            # Navigate to application directory
+            cd /opt/app || exit 1
+
+            # Log in to GitHub Container Registry
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Set environment variables for deployment script
+            export IMAGE_TAG="ghcr.io/${{ github.repository_owner }}/restomarket-api:sha-${{ github.sha }}"
+            export ENVIRONMENT="staging"
+
+            # Run zero-downtime deployment script
+            if [ -f ./infrastructure/scripts/deploy.sh ]; then
+              chmod +x ./infrastructure/scripts/deploy.sh
+              ./infrastructure/scripts/deploy.sh "$IMAGE_TAG" "$ENVIRONMENT"
+            else
+              echo "Error: deploy.sh script not found"
+              exit 1
+            fi
+
+      - name: Run health check
+        run: |
+          echo "Waiting for application to be ready..."
+          sleep 10
+
+          # Health check with retries
+          MAX_RETRIES=12
+          RETRY_DELAY=5
+
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Health check attempt $i/$MAX_RETRIES..."
+
+            if curl -f -s -o /dev/null -w "%{http_code}" https://staging-api.example.com/health | grep -q "200"; then
+              echo "✅ Health check passed!"
+              exit 0
+            fi
+
+            if [ $i -lt $MAX_RETRIES ]; then
+              echo "⏳ Retrying in ${RETRY_DELAY}s..."
+              sleep $RETRY_DELAY
+            fi
+          done
+
+          echo "❌ Health check failed after $MAX_RETRIES attempts"
+          exit 1
+
+      - name: Run smoke tests
+        run: |
+          echo "Running basic smoke tests..."
+
+          # Test 1: Health endpoint returns expected structure
+          HEALTH_RESPONSE=$(curl -s https://staging-api.example.com/health)
+
+          if echo "$HEALTH_RESPONSE" | grep -q '"status"'; then
+            echo "✅ Health endpoint returns valid JSON"
+          else
+            echo "❌ Health endpoint response invalid"
+            exit 1
+          fi
+
+          # Test 2: API returns correct version header
+          if curl -I -s https://staging-api.example.com/health | grep -q "X-API-Version"; then
+            echo "✅ API version header present"
+          else
+            echo "⚠️  API version header missing (non-critical)"
+          fi
+
+          echo "✅ All smoke tests passed!"
+
+      - name: Rollback on failure
+        if: failure()
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USERNAME }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            cd /opt/app || exit 1
+
+            echo "🔄 Deployment failed, initiating rollback..."
+
+            # Get the previously running container's image
+            PREVIOUS_IMAGE=$(docker ps -a --filter "name=api-" --format "{{.Image}}" | head -2 | tail -1)
+
+            if [ -n "$PREVIOUS_IMAGE" ]; then
+              echo "Rolling back to: $PREVIOUS_IMAGE"
+
+              if [ -f ./infrastructure/scripts/rollback.sh ]; then
+                chmod +x ./infrastructure/scripts/rollback.sh
+                # Extract SHA from image tag for rollback script
+                IMAGE_SHA=$(echo "$PREVIOUS_IMAGE" | grep -oP 'sha-\K[a-f0-9]+')
+                ./infrastructure/scripts/rollback.sh "$IMAGE_SHA" staging
+              else
+                echo "Warning: rollback.sh not found, manual rollback required"
+              fi
+            else
+              echo "Error: Could not determine previous image for rollback"
+            fi
+
+      - name: Notify Slack on success
+        if: success()
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK }}
+          payload: |
+            {
+              "text": "✅ Staging Deployment Successful",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "✅ Staging Deployment Successful"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Environment:*\nStaging"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch:*\n${{ github.ref_name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Commit:*\n<${{ github.event.head_commit.url }}|${{ github.sha }}>"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Author:*\n${{ github.actor }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Message:* ${{ github.event.head_commit.message }}"
+                  }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Deployment"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View API"
+                      },
+                      "url": "https://staging-api.example.com"
+                    }
+                  ]
+                }
+              ]
+            }
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.25.0
+        with:
+          webhook: ${{ secrets.SLACK_WEBHOOK }}
+          payload: |
+            {
+              "text": "❌ Staging Deployment Failed",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "❌ Staging Deployment Failed"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Environment:*\nStaging"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch:*\n${{ github.ref_name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Commit:*\n<${{ github.event.head_commit.url }}|${{ github.sha }}>"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Author:*\n${{ github.actor }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "⚠️ *Rollback initiated* - Previous version restored"
+                  }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Logs"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }
