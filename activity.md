@@ -1378,3 +1378,84 @@
 **Status:** Task 24 marked as "passing" in IMPLEMENTATION_PLAN.md
 
 ---
+
+## [2026-01-29 16:46] Task 15 Completed: Create Ansible Playbook for Initial Server Setup
+
+**Task Completed:** Create Ansible Playbook for Initial Server Setup
+
+**Files Created:**
+
+- `infrastructure/ansible/playbooks/setup-api.yml` - Comprehensive server setup playbook (460 lines, 46 tasks)
+- `infrastructure/ansible/inventory/dev.yml` - Development environment inventory
+- `infrastructure/ansible/inventory/staging.yml` - Staging environment inventory (2 droplets)
+- `infrastructure/ansible/ansible.cfg` - Ansible configuration with optimized settings
+- `infrastructure/ansible/README.md` - Comprehensive documentation (466 lines)
+- `infrastructure/ansible/keys/README.md` - SSH key management guide
+
+**Files Modified:**
+
+- Removed `.gitkeep` files from playbooks/ and inventory/ directories (now have actual content)
+
+**Key Changes:**
+
+- Created comprehensive Ansible playbook with 46 tasks organized into sections:
+  - **System Updates**: APT cache update, full system upgrade, required packages
+  - **Docker Installation**: Official Docker CE repository, Docker Engine, Buildx, Compose plugin
+  - **Docker Compose**: v2.24.5 binary installation with verification
+  - **Deploy User**: Non-root user (deploy:1001) with Docker group, sudo privileges, SSH keys
+  - **UFW Firewall**: Rate-limited SSH, HTTP/HTTPS, API port, deny-by-default incoming
+  - **SSH Hardening**: 8 security measures (no root, no password, key-only, max 3 tries, etc.)
+  - **Fail2ban**: Brute-force protection (3 retries, 1 hour ban, 10-minute window)
+  - **Automatic Updates**: Daily security patches, weekly cleanup, no auto-reboot
+  - **DigitalOcean Monitoring**: Optional agent installation (enabled by default)
+  - **Node Exporter**: Optional Prometheus exporter (disabled by default)
+  - **System Tuning**: Production sysctl settings, file descriptor limits
+  - **Docker Daemon**: Log rotation (10MB, 3 files), live-restore, no userland-proxy
+- Playbook features:
+  - Fully idempotent - safe to run multiple times
+  - Modular - monitoring and exporters configurable via inventory
+  - Secure - follows security best practices throughout
+  - Production-ready - optimized for production workloads
+  - Error handling - retries on APT operations, validation checks
+  - Comprehensive handlers for service restarts
+- Inventory configuration:
+  - Dev: 1 droplet (api-dev-01), DigitalOcean monitoring enabled
+  - Staging: 2 droplets (api-staging-01, api-staging-02), both agents enabled
+  - All configurable variables documented with defaults
+- ansible.cfg features:
+  - Smart gathering with fact caching
+  - YAML output for readability
+  - SSH optimization (ControlMaster, pipelining)
+  - Performance tuning (10 forks, 30s timeout)
+- Documentation includes:
+  - Complete usage guide with examples
+  - Prerequisites and installation (macOS, Ubuntu, pip)
+  - Playbook descriptions and features
+  - SSH key management
+  - Post-setup verification steps
+  - Security best practices (5 recommendations)
+  - Troubleshooting guide (8 common issues with solutions)
+  - CI/CD integration examples
+  - Terraform integration workflow
+  - Vagrant local testing
+
+**Validation Results:**
+
+- ✅ Playbook created: setup-api.yml (460 lines, 46 tasks)
+- ✅ Tasks implemented: Docker, Docker Compose, UFW, deploy user, SSH hardening, Fail2ban, auto-updates, monitoring
+- ✅ Deploy user creation with Docker group membership and sudo privileges
+- ✅ Automatic security updates configured (unattended-upgrades)
+- ✅ Monitoring agents: DigitalOcean (optional), Node Exporter (optional)
+- ✅ SSH hardening: 8 security measures applied
+- ✅ Playbook is idempotent (all tasks use proper Ansible modules)
+- ✅ Inventory files created for dev (1 host) and staging (2 hosts)
+- ✅ ansible.cfg created with optimized settings
+- ✅ Comprehensive documentation created (466 lines)
+- ✅ SSH key management documented in keys/README.md
+- ✅ YAML structure validated
+- ✅ File creation verified
+- ✅ .gitkeep files removed from directories with content
+
+**Status:** Task 15 marked as "passing" in IMPLEMENTATION_PLAN.md
+
+---

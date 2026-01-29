@@ -1,0 +1,47 @@
+---
+# Ansible Inventory: Staging Environment
+# Usage: ansible-playbook -i inventory/staging.yml playbooks/setup-api.yml
+
+all:
+  children:
+    api_servers:
+      hosts:
+        api-staging-01:
+          ansible_host: 10.20.0.10 # Replace with actual staging droplet IP
+          ansible_user: root
+          ansible_ssh_private_key_file: ~/.ssh/id_rsa
+          ansible_python_interpreter: /usr/bin/python3
+
+        api-staging-02:
+          ansible_host: 10.20.0.11 # Replace with actual staging droplet IP
+          ansible_user: root
+          ansible_ssh_private_key_file: ~/.ssh/id_rsa
+          ansible_python_interpreter: /usr/bin/python3
+
+      vars:
+        environment: staging
+        api_port: 3001
+        enable_do_monitoring: true
+        enable_node_exporter: true
+
+        # Application configuration
+        app_name: restomarket-api
+        app_directory: /opt/app
+
+        # Docker configuration
+        docker_compose_version: '2.24.5'
+
+        # Deploy user configuration
+        deploy_user: deploy
+        deploy_user_uid: 1001
+
+        # Security configuration
+        ssh_port: 22
+        fail2ban_enabled: true
+
+        # Monitoring configuration
+        node_exporter_version: '1.7.0'
+
+        # Load balancer IPs (allowed to connect to API port)
+        load_balancer_ips:
+          - 10.20.0.100 # Replace with actual load balancer IP
