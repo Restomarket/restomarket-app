@@ -39,11 +39,11 @@ Blue-green deployment script that ensures zero downtime during API updates.
 
 **Environment Variables:**
 
-- `HEALTH_CHECK_URL` - Health endpoint URL (default: http://localhost:3001/health)
+- `HEALTH_CHECK_URL` - Health endpoint URL (default: http://localhost:3000/health)
 - `HEALTH_CHECK_TIMEOUT` - Max wait time in seconds (default: 60)
 - `HEALTH_CHECK_INTERVAL` - Retry interval in seconds (default: 5)
-- `CONTAINER_PORT` - Container port (default: 3001)
-- `HOST_PORT` - Host port (default: 3001)
+- `CONTAINER_PORT` - Container port (default: 3000)
+- `HOST_PORT` - Host port (default: 3000)
 - `STARTUP_WAIT` - Initial startup wait in seconds (default: 10)
 
 **Deployment Flow:**
@@ -202,6 +202,80 @@ This script is automatically run weekly via GitHub Actions:
 - Can be manually triggered via GitHub UI
 
 **See Also:** Task 24 in IMPLEMENTATION_PLAN.md
+
+---
+
+### 4. gh-list-secrets-env.sh - List GitHub Actions Secrets and Environments
+
+Lists repository secrets and environments (names only; values are never printed). Use to validate Task 25 (Setup Secrets in GitHub Actions) after `gh auth login`.
+
+**Usage:**
+
+```bash
+# From repo root (auto-detects repo)
+./infrastructure/scripts/gh-list-secrets-env.sh
+
+# With explicit repo
+GH_REPO=owner/repo ./infrastructure/scripts/gh-list-secrets-env.sh
+```
+
+**Prerequisites:**
+
+- [GitHub CLI (gh)](https://cli.github.com/) installed and authenticated: `gh auth login`
+
+**Output:**
+
+- Repository secrets (names only)
+- Environment names (e.g. `staging`)
+- Checklist for required deploy-staging secrets: `STAGING_HOST`, `STAGING_USERNAME`, `STAGING_SSH_KEY`, `SLACK_WEBHOOK`
+
+**See Also:** Task 25 in IMPLEMENTATION_PLAN.md, [MANUAL_TASKS.md](../docs/MANUAL_TASKS.md), `.github/workflows/verify-secrets.yml`
+
+---
+
+### 5. gh-setup-staging-secrets.sh - Ensure Staging Env, Branch Rules, and Secrets
+
+Uses **gh CLI** to ensure the staging environment exists, deployment branch rule **develop** is configured, and adds **STAGING_USERNAME=deploy** if missing. Reports other missing secrets and prints commands to add them.
+
+**Usage:**
+
+```bash
+# From repo root (requires: gh auth login)
+./infrastructure/scripts/gh-setup-staging-secrets.sh
+```
+
+**What it does:**
+
+1. **Environments** – Ensures environment `staging` exists with custom branch policies.
+2. **Deployment branch rules** – Ensures branch pattern `develop` can deploy to staging (via GitHub API).
+3. **Repository secrets** – Lists secrets; adds `STAGING_USERNAME` with value `deploy` if missing.
+4. **Missing secrets** – Prints `gh secret set STAGING_SSH_KEY` (and similar) for you to run with your values.
+
+**Prerequisites:** `gh auth login` (repo admin for branch policies and secrets).
+
+**See Also:** Task 25 in IMPLEMENTATION_PLAN.md, [MANUAL_TASKS.md](../docs/MANUAL_TASKS.md)
+
+---
+
+### 6. gh-set-branch-protection.sh - Set Branch Protection (main + develop)
+
+Uses **gh API** to set branch protection rules for `main` and `develop`: required status checks (`code-quality`, `test`, `build`), PR requirements, no force push/delete. Use for Task 26 (Configure Branch Protection Rules).
+
+**Usage:**
+
+```bash
+# From repo root (requires: gh auth login with admin scope, jq)
+./infrastructure/scripts/gh-set-branch-protection.sh
+```
+
+**What it sets:**
+
+- **main:** Require status checks (code-quality, test, build), require PR with 1 approval, dismiss stale reviews, enforce for admins, no force push/delete.
+- **develop:** Same status checks, require PR with 0 approvals, no force push/delete.
+
+**Prerequisites:** `gh auth login` (repo admin), `jq` installed.
+
+**See Also:** Task 26 in IMPLEMENTATION_PLAN.md, [MANUAL_TASKS.md § Task 26](../docs/MANUAL_TASKS.md#task-26-configure-branch-protection-rules)
 
 ---
 

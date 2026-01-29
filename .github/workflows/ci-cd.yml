@@ -156,8 +156,12 @@ jobs:
           REDIS_PORT: 6379
 
       - name: Run integration tests
-        run: pnpm --filter api test:integration || echo "No integration tests configured yet"
-        continue-on-error: true
+        run: |
+          if grep -q "test:integration" apps/api/package.json; then
+            pnpm --filter api test:integration
+          else
+            echo "⚠️ Integration tests not yet configured - skipping"
+          fi
         env:
           NODE_ENV: test
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restomarket_test
@@ -165,8 +169,7 @@ jobs:
           REDIS_PORT: 6379
 
       - name: Run E2E tests
-        run: pnpm --filter api test:e2e || echo "No E2E tests configured yet"
-        continue-on-error: true
+        run: pnpm --filter api test:e2e
         env:
           NODE_ENV: test
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restomarket_test
@@ -174,8 +177,8 @@ jobs:
           REDIS_PORT: 6379
 
       - name: Generate coverage report
-        run: pnpm turbo test:cov --filter=...[origin/${{ github.base_ref || 'main' }}] || echo "Coverage not configured for all packages"
-        continue-on-error: true
+        run: pnpm turbo test:cov --filter=...[origin/${{ github.base_ref || 'main' }}]
+        continue-on-error: true # Allow failure if some packages don't have coverage configured yet
         env:
           NODE_ENV: test
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restomarket_test
@@ -198,7 +201,7 @@ jobs:
           # This would check if coverage is above 80%
           # For now, just a placeholder that always passes
           echo "Coverage threshold check - implement with actual coverage tool"
-        continue-on-error: true
+        continue-on-error: true # Allow failure until proper threshold checking is implemented
 
   build:
     name: Build Packages
