@@ -77,7 +77,7 @@ Before finishing, verify in IMPLEMENTATION_PLAN.md:
 
 - If ALL tasks are Status: "passing" → output: <promise>DEVOPS_COMPLETE</promise>
 - If stuck for multiple iterations → output: <promise>BLOCKED</promise>
-- Otherwise → Provide a brief summary of what was completed and EXIT (the loop will automatically continue)
+- Otherwise → Provide a brief summary of what was completed, then **end your response**. Do not wait for user input or ask to continue. The loop runs in single-turn mode and will automatically start the next iteration when you finish.
 
 ## Critical Rules
 

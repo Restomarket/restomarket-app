@@ -1104,3 +1104,71 @@
 **Status:** Task 14 marked as "passing" in IMPLEMENTATION_PLAN.md
 
 ---
+
+## [2026-01-29 16:27] Task 22 Completed: Create Deployment Script for Zero-Downtime Deploy
+
+**Task Completed:** Create Deployment Script for Zero-Downtime Deploy
+
+**Files Created:**
+
+- `infrastructure/scripts/deploy.sh` - Comprehensive blue-green deployment script (300+ lines, 9KB)
+
+**Key Changes:**
+
+- Created production-ready zero-downtime deployment script with blue-green strategy:
+  - **Blue-Green Deployment**: Alternates between blue and green containers for zero downtime
+  - **Health Checks**: Configurable health check with timeout (60s), interval (5s), startup wait (10s)
+  - **Automatic Rollback**: If health check fails, stops new container and keeps old one running
+  - **Image Management**: Pulls new image, cleans up old images (keeps last 5)
+  - **Error Handling**: Comprehensive error handling with trap for cleanup on failure
+- Script features:
+  - Takes 2 arguments: image tag and environment (dev, staging, production)
+  - Environment validation with clear error messages
+  - Color-coded logging: info (blue), success (green), warning (yellow), error (red)
+  - Timestamps on all log messages
+  - Container state detection (identifies current blue/green container)
+  - First deployment support (no existing container)
+- Deployment flow:
+  1. Pull new Docker image from registry
+  2. Start new container (blue or green, opposite of current)
+  3. Wait for initial startup (10s default)
+  4. Perform health checks until healthy or timeout
+  5. Stop old container gracefully (with fallback to force kill)
+  6. Remove old container
+  7. Clean up old images (keep last 5)
+  8. Verify deployment success
+- Configuration via environment variables:
+  - `HEALTH_CHECK_URL`: Health endpoint (default: http://localhost:3001/health)
+  - `HEALTH_CHECK_TIMEOUT`: Max wait time (default: 60s)
+  - `HEALTH_CHECK_INTERVAL`: Retry interval (default: 5s)
+  - `CONTAINER_PORT`: Container port (default: 3001)
+  - `HOST_PORT`: Host port (default: 3001)
+  - `STARTUP_WAIT`: Initial wait (default: 10s)
+- Rollback logic:
+  - Monitors container health during checks
+  - If container stops unexpectedly, shows logs and rolls back
+  - If health check times out, shows logs and rolls back
+  - Cleanup function removes new container but preserves old one
+- Logging features:
+  - All steps logged with timestamps
+  - Container logs shown on failure
+  - Final verification with container details table
+
+**Validation Results:**
+
+- ✅ Script created at infrastructure/scripts/deploy.sh
+- ✅ Script is executable (chmod +x applied)
+- ✅ Bash syntax check passed (bash -n)
+- ✅ Usage help displays correctly with examples
+- ✅ Accepts 2 parameters (image tag, environment)
+- ✅ Environment validation (dev, staging, production)
+- ✅ All deployment flow steps implemented
+- ✅ Health check logic with timeout and retry
+- ✅ Rollback logic on failed health check
+- ✅ Old image cleanup implemented
+- ✅ Error handling and logging comprehensive
+- ⚠️ Full deployment test requires Docker daemon (manual testing step)
+
+**Status:** Task 22 marked as "passing" in IMPLEMENTATION_PLAN.md
+
+---

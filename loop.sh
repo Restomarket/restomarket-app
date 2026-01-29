@@ -55,10 +55,9 @@ for (( ITERATION=START_ITERATION; ITERATION<=MAX_ITERATIONS; ITERATION++ )); do
     echo "  $(date '+%H:%M:%S')"
     echo "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━"
 
-    # Stream output live (no capture) so you can monitor progress. --permission-mode
-    # bypassPermissions avoids prompts for edits, file access, and commands.
-    # Using cat to pipe the prompt file allows for better output visibility
-    if ! cat "$PROMPT_FILE" | claude --permission-mode bypassPermissions; then
+    # -p (--print): Exits after printing response (non-interactive). Critical for loop.
+    # --dangerously-skip-permissions: Bypasses permission prompts (alt: --permission-mode bypassPermissions).
+    if ! claude -p --dangerously-skip-permissions < "$PROMPT_FILE"; then
         echo "❌ Claude exited with error"
         echo "Check $ACTIVITY_FILE for details"
         exit 1
