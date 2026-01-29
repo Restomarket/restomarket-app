@@ -899,3 +899,150 @@
 **Status:** Task 11 marked as "passing" in IMPLEMENTATION_PLAN.md
 
 ---
+
+## [2026-01-29 16:30] Tasks 12-13 Completed: Staging Environment with Load Balancer
+
+**Tasks Completed:** Create Terraform Configuration for Staging Environment + Create Load Balancer Configuration
+
+**Files Created:**
+
+- `infrastructure/terraform/environments/staging/main.tf` - Complete staging infrastructure configuration with all modules and load balancer (260 lines)
+- `infrastructure/terraform/environments/staging/variables.tf` - Input variables with staging-specific defaults (36 variables)
+- `infrastructure/terraform/environments/staging/outputs.tf` - Output values including load balancer details (20+ outputs, 280 lines)
+- `infrastructure/terraform/environments/staging/terraform.tfvars.example` - Configuration template with cost estimates
+- `infrastructure/terraform/environments/staging/README.md` - Comprehensive setup and deployment guide (18KB, 500+ lines)
+
+**Files Modified:**
+
+- Removed `.gitkeep` from staging directory (now has actual content)
+
+**Key Changes:**
+
+**Task 12 - Staging Environment:**
+
+- Created production-like staging environment integrating all 4 modules:
+  - **Networking module**: VPC (10.20.0.0/16), API firewall, database firewall
+  - **Database module**: PostgreSQL 16, 2 nodes (HA), db-s-2vcpu-4gb (~$60/month per node), connection pooling enabled
+  - **Redis module**: Redis 7, single node, db-s-2vcpu-4gb (~$60/month), allkeys-lru eviction
+  - **API cluster module**: 2 droplets, s-2vcpu-4gb (~$24/month each), Ubuntu 22.04, Docker + monitoring + backups
+- Infrastructure configuration:
+  - 2 API droplets for redundancy behind load balancer
+  - HA database with 2 nodes (automatic failover)
+  - Connection pooling enabled (transaction mode, size 25)
+  - Backups enabled for droplets
+  - VPC networking for private communication
+  - Different IP range from dev (10.20.0.0/16 vs 10.10.0.0/16)
+
+**Task 13 - Load Balancer (completed as part of Task 12):**
+
+- Load balancer resource `digitalocean_loadbalancer.api` configured:
+  - **Forwarding rules**:
+    - HTTPS (443) → HTTP (3001) with optional SSL certificate
+    - HTTP (80) → HTTP (3001) with optional HTTPS redirect
+  - **Health check**: /health endpoint, 10s interval, 5s timeout, 3 unhealthy/2 healthy threshold
+  - **Droplet attachment**: tag-based (`restomarket-staging-api`)
+  - **VPC integration**: private networking enabled
+  - **Sticky sessions**: none (stateless API)
+  - **PROXY protocol**: configurable for client IP preservation
+- SSL certificate support:
+  - Variable for certificate name (Let's Encrypt or custom)
+  - HTTPS redirect configurable
+  - Complete setup guide in README
+
+**Monitoring and Alerting:**
+
+- 4 DigitalOcean monitoring alert resources:
+  - CPU usage > 80% for 5 minutes
+  - Memory usage > 85% for 5 minutes
+  - Disk usage > 90% for 5 minutes
+  - Load average > 3 for 5 minutes
+- Email and Slack notification support
+- Alert configuration documented in README
+
+**Variables Configuration (36 variables):**
+
+- Environment: staging (validated)
+- VPC: 10.20.0.0/16 CIDR
+- Admin IPs: empty by default (must be configured for security)
+- API port: 3001
+- Database: PostgreSQL 16, 2 nodes, db-s-2vcpu-4gb, connection pool enabled
+- Redis: version 7, db-s-2vcpu-4gb
+- API: 2 droplets, s-2vcpu-4gb, backups enabled, monitoring enabled
+- SSL: optional certificate name, HTTPS redirect enabled by default
+- Monitoring: alerts enabled by default with email/Slack recipients
+
+**Outputs (20+ outputs):**
+
+- VPC details (id, URN, IP range, firewall IDs)
+- Database connection (host, port, user, password, URIs, pool URI)
+- Redis connection (host, port, password, URIs)
+- API cluster (IDs, names, public/private IPs)
+- Load balancer (ID, IP, URN, status, URLs)
+- Monitoring alert IDs (CPU, memory, disk, load)
+- Environment summary with cost estimation
+- SSH commands, health check URL
+- Quick start guide with 10 steps
+- Deployment notes with next steps
+
+**terraform.tfvars.example features:**
+
+- All 36 variables documented with examples
+- Security warnings for admin IPs
+- SSL certificate instructions
+- Monitoring configuration
+- Custom firewall rules examples
+- Estimated monthly cost: ~$245 (excluding bandwidth)
+
+**README.md documentation (18KB, 500+ lines):**
+
+- Overview with cost estimate
+- Prerequisites (Terraform, doctl, domain)
+- Quick start guide (5 steps from setup to deployment)
+- Post-deployment configuration:
+  - DNS setup with verification
+  - SSL certificate configuration (Let's Encrypt and custom)
+  - Application environment variable setup
+- Deployment procedures:
+  - Manual deployment to single droplet
+  - Zero-downtime deployment to all droplets (script reference)
+- Infrastructure maintenance:
+  - Update configuration, scale droplets, upgrade resources
+  - View infrastructure state
+- Monitoring and alerting:
+  - View alerts, configure Slack, view droplet metrics
+- Backup and recovery:
+  - Database backups, droplet backups, disaster recovery
+- Security best practices (5 recommendations):
+  - Restrict SSH access, rotate credentials, enable HTTPS only, review firewall, enable monitoring
+- Troubleshooting section (8 issues):
+  - Terraform init fails, SSH key not found, LB health checks failing, database connection refused
+  - High resource usage, SSL certificate issues, state lock, etc.
+- Cost optimization tips (5 strategies)
+- Remote state backend setup guide
+- Differences from production (comparison table)
+- Next steps checklist
+
+**Validation Results:**
+
+- ✅ Terraform initialized successfully with DigitalOcean provider v2.75.0
+- ✅ All 4 modules loaded successfully (networking, database, redis, api-cluster)
+- ✅ Load balancer resource configured correctly
+- ✅ Configuration validation passed
+- ✅ Terraform formatting applied and verified
+- ✅ All 5 files created (main.tf, variables.tf, outputs.tf, terraform.tfvars.example, README.md)
+- ✅ No syntax errors or validation issues
+- ✅ Fixed variable name issues (load_balancer_ips → removed)
+- ✅ Fixed load balancer tags issue (tags not supported on LB resource)
+
+**Estimated Monthly Cost:**
+
+- API droplets: 2 × $24 = $48
+- Database: 2 × $60 = $120 (HA)
+- Redis: $60
+- Load balancer: $12
+- Backups: ~$10
+- **Total: ~$250/month** (excluding bandwidth)
+
+**Status:** Tasks 12 and 13 marked as "passing" in IMPLEMENTATION_PLAN.md
+
+---
