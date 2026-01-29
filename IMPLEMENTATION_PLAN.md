@@ -932,7 +932,7 @@ pnpm turbo build
 
 **Category:** CI/CD
 **Package:** root
-**Status:** not started
+**Status:** passing
 **Priority:** high
 **Risk Level:** medium
 **Estimated Iterations:** 3
@@ -942,23 +942,67 @@ Create job to build Docker images, tag with Git SHA, push to registry, and scan 
 
 **Acceptance Criteria:**
 
-- [ ] Docker build job added to workflow
-- [ ] Runs after build job, only on push events (not PRs)
-- [ ] Uses Docker Buildx for efficient builds
-- [ ] Logs into container registry (GHCR or DigitalOcean)
-- [ ] Builds image with multiple tags: `<sha>`, `<branch>-<sha>`, `latest`
-- [ ] Pushes to registry
-- [ ] Runs Trivy vulnerability scan
-- [ ] Uploads scan results to GitHub Security
-- [ ] Fails on high/critical vulnerabilities
-- [ ] Uses layer caching for fast builds
+- [x] Docker build job added to workflow
+- [x] Runs after build job, only on push events (not PRs)
+- [x] Uses Docker Buildx for efficient builds
+- [x] Logs into GitHub Container Registry (GHCR)
+- [x] Builds image with multiple tags: `<sha>`, `<branch>`, `<branch>-<sha>`, `latest` (main only)
+- [x] Pushes to registry
+- [x] Runs Trivy vulnerability scan on built image
+- [x] Uploads scan results to GitHub Security
+- [x] Fails on high/critical vulnerabilities (exit-code: 1)
+- [x] Uses GitHub Actions cache for layer caching (type=gha)
+
+**Completion Notes:**
+
+- Completed on 2026-01-29
+- Added docker-build job to `.github/workflows/ci-cd.yml`
+- Docker build job configuration:
+  - Depends on: build job (needs: build)
+  - Runs only on: push events (if: github.event_name == 'push')
+  - Timeout: 30 minutes
+  - Runner: ubuntu-latest
+  - Permissions: contents: read, packages: write, security-events: write
+- Docker build steps (8 total):
+  1. Checkout repository
+  2. Set up Docker Buildx for efficient multi-platform builds
+  3. Log in to GitHub Container Registry (ghcr.io)
+  4. Extract Docker metadata (tags and labels)
+  5. Build and push Docker image to GHCR
+  6. Run Trivy vulnerability scan on pushed image
+  7. Upload Trivy scan results to GitHub Security (category: docker-image)
+- Image tagging strategy:
+  - Short SHA: `sha-abc1234`
+  - Branch name: `main` or `develop`
+  - Branch + SHA: `main-abc1234`
+  - Latest: only on main branch (conditional)
+  - Full image path: `ghcr.io/{owner}/restomarket-api:{tag}`
+- Docker build configuration:
+  - Context: repository root (.)
+  - Dockerfile: apps/api/Dockerfile
+  - Target: production (multi-stage final stage)
+  - Build args: NODE_ENV=production
+  - Cache: GitHub Actions cache (type=gha, mode=max)
+  - Push: true (pushes to registry)
+- Security scanning:
+  - Trivy scans pushed image by reference
+  - Severity: CRITICAL, HIGH only
+  - Format: SARIF for GitHub Security integration
+  - Exit code: 1 (fails pipeline on vulnerabilities)
+  - Upload: always runs, even if scan fails
+- Layer caching:
+  - cache-from: type=gha (restore from GHA cache)
+  - cache-to: type=gha,mode=max (save to GHA cache)
+  - Enables fast incremental builds
+- Workflow now 345 lines with 4 jobs
 
 **Image Tags:**
 
 ```
-ghcr.io/org/api:abc1234
-ghcr.io/org/api:main-abc1234
-ghcr.io/org/api:latest
+ghcr.io/{owner}/restomarket-api:sha-abc1234
+ghcr.io/{owner}/restomarket-api:main
+ghcr.io/{owner}/restomarket-api:main-abc1234
+ghcr.io/{owner}/restomarket-api:latest (only on main branch)
 ```
 
 **Validation Commands:**

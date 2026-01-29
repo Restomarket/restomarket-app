@@ -466,3 +466,74 @@
 **Status:** Task 19 marked as "passing" in IMPLEMENTATION_PLAN.md
 
 ---
+
+## [2026-01-29 14:34] Task 20 Completed: Create GitHub Actions Workflow - Docker Build Job
+
+**Task Completed:** Create GitHub Actions Workflow - Docker Build Job
+
+**Files Modified:**
+
+- `.github/workflows/ci-cd.yml` - Added docker-build job (345 lines total)
+
+**Key Changes:**
+
+- Added docker-build job to CI/CD workflow:
+  - **Dependencies**: Runs after build job passes (needs: build)
+  - **Conditional**: Only runs on push events, not PRs (if: github.event_name == 'push')
+  - **Timeout**: 30 minutes
+  - **Runner**: ubuntu-latest
+  - **Permissions**: contents: read, packages: write, security-events: write
+- Docker build and push steps (8 steps):
+  1. Checkout repository
+  2. Set up Docker Buildx for efficient builds
+  3. Log in to GitHub Container Registry (ghcr.io)
+  4. Extract Docker metadata (automatic tagging)
+  5. Build and push Docker image
+  6. Run Trivy vulnerability scan on pushed image
+  7. Upload Trivy scan results to GitHub Security
+- Image tagging strategy (docker/metadata-action):
+  - **Short SHA**: `sha-abc1234` (always)
+  - **Branch ref**: `main`, `develop` (on push to branch)
+  - **Branch + SHA**: `main-abc1234`, `develop-abc1234` (always)
+  - **Latest**: Only enabled on main branch
+  - **Registry**: ghcr.io/{owner}/restomarket-api:{tag}
+- Docker build configuration:
+  - Context: . (repository root)
+  - Dockerfile: apps/api/Dockerfile
+  - Target: production (final optimized stage)
+  - Build args: NODE_ENV=production
+  - Push: true (pushes all tags to GHCR)
+  - Cache: GitHub Actions cache (type=gha, mode=max)
+- Layer caching for fast builds:
+  - cache-from: type=gha (restores from previous builds)
+  - cache-to: type=gha,mode=max (saves all layers)
+  - Significantly reduces build time on subsequent runs
+- Security scanning with Trivy:
+  - Scans pushed image by reference: `ghcr.io/{owner}/restomarket-api:sha-{sha}`
+  - Severity filter: CRITICAL and HIGH only
+  - Format: SARIF for GitHub Security tab integration
+  - Exit code: 1 (fails pipeline on vulnerabilities)
+  - Upload: if: always() (uploads even if scan fails)
+  - Category: docker-image (for Security tab organization)
+- Authentication:
+  - Uses GITHUB_TOKEN for GHCR authentication
+  - Automatic permission via packages: write
+  - Works with public and private repositories
+
+**Validation Results:**
+
+- ✅ Docker build job added to workflow
+- ✅ Runs after build job, only on push events
+- ✅ Docker Buildx configured
+- ✅ GHCR login configured with GITHUB_TOKEN
+- ✅ Multiple tags configured (SHA, branch, branch-SHA, latest)
+- ✅ Pushes to registry
+- ✅ Trivy vulnerability scan on image
+- ✅ Uploads scan results to GitHub Security
+- ✅ Fails on high/critical vulnerabilities
+- ✅ Layer caching configured (type=gha)
+- ✅ Workflow validates (345 lines, 4 jobs)
+
+**Status:** Task 20 marked as "passing" in IMPLEMENTATION_PLAN.md
+
+---
