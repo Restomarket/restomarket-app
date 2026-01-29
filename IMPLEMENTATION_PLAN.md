@@ -1663,10 +1663,12 @@ shellcheck cleanup-images.sh || echo "shellcheck not installed"
 
 **Category:** Security
 **Package:** root
-**Status:** not started
+**Status:** blocked
 **Priority:** high
 **Risk Level:** high
 **Estimated Iterations:** 1
+
+**Blocker:** Requires GitHub repository admin access to configure secrets in Settings > Secrets and variables > Actions. This task must be completed manually by someone with repository admin permissions.
 
 **Description:**
 Configure all required secrets in GitHub repository settings for CI/CD pipeline.
@@ -1701,10 +1703,12 @@ This is a manual configuration task. Validation:
 
 **Category:** CI/CD
 **Package:** root
-**Status:** not started
+**Status:** blocked
 **Priority:** high
 **Risk Level:** low
 **Estimated Iterations:** 1
+
+**Blocker:** Requires GitHub repository admin access to configure branch protection rules in Settings > Branches. This task must be completed manually by someone with repository admin permissions.
 
 **Description:**
 Set up branch protection rules on `main` and `develop` branches to require CI checks before merging.
@@ -2048,10 +2052,12 @@ cat infrastructure/README.md | grep -i prerequisites
 
 **Category:** Testing
 **Package:** root
-**Status:** not started
+**Status:** blocked
 **Priority:** high
 **Risk Level:** low
 **Estimated Iterations:** 2
+
+**Blocker:** Requires code to be pushed to GitHub repository with Actions enabled. Cannot test CI/CD pipeline without an active GitHub repository and the ability to create PRs and trigger workflow runs.
 
 **Description:**
 End-to-end test of CI/CD pipeline by creating a test PR that goes through all stages.
@@ -2082,10 +2088,12 @@ This is an integration test task. Validation:
 
 **Category:** Testing
 **Package:** root
-**Status:** not started
+**Status:** blocked
 **Priority:** high
 **Risk Level:** medium
 **Estimated Iterations:** 1
+
+**Blocker:** Requires deployed staging infrastructure on DigitalOcean with running API droplets. Cannot test rollback procedure without actual infrastructure provisioned and at least two deployed versions to test rollback between.
 
 **Description:**
 Test rollback procedure by deploying a version, then rolling back to previous version.
@@ -2114,10 +2122,12 @@ Manual testing task. Document results in activity.md
 
 **Category:** Performance
 **Package:** root
-**Status:** not started
+**Status:** blocked
 **Priority:** low
 **Risk Level:** low
 **Estimated Iterations:** 1
+
+**Blocker:** Requires active GitHub repository with Actions and multiple workflow runs to measure baseline performance and optimization impact. Cannot measure build times without actual CI/CD pipeline execution history.
 
 **Description:**
 Measure and optimize CI/CD pipeline build times to meet <10 minute target.
@@ -2145,10 +2155,12 @@ Measure and optimize CI/CD pipeline build times to meet <10 minute target.
 
 **Category:** Security
 **Package:** root
-**Status:** not started
+**Status:** blocked
 **Priority:** medium
 **Risk Level:** low
 **Estimated Iterations:** 1
+
+**Blocker:** Requires deployed infrastructure on DigitalOcean with running services to conduct comprehensive security audit. Docker image vulnerability scans require built images pushed to registry. SSH and firewall audits require actual provisioned droplets.
 
 **Description:**
 Conduct security audit of complete infrastructure configuration and fix any issues.
