@@ -71,6 +71,14 @@ If you cannot make progress after 30 total iterations (loop-wide):
 1. Document blockers in `IMPLEMENTATION_PLAN.md` and `activity.md`.
 2. Output: <promise>BLOCKED</promise>
 
+## Iteration End Check
+
+Before finishing, verify in IMPLEMENTATION_PLAN.md:
+
+- If ALL tasks are Status: "passing" → output: <promise>DEVOPS_COMPLETE</promise>
+- If stuck for multiple iterations → output: <promise>BLOCKED</promise>
+- Otherwise → continue normally
+
 ## Critical Rules
 
 1. **One task at a time** - Never work on multiple tasks in one iteration.

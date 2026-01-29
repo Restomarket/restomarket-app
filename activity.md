@@ -740,3 +740,99 @@
 **Status:** Task 9 marked as "passing" in IMPLEMENTATION_PLAN.md
 
 ---
+
+## [2026-01-29 15:15] Task 10 Completed: Create Terraform Module for API Droplets
+
+**Task Completed:** Create Terraform Module for API Droplets
+
+**Files Created:**
+
+- `infrastructure/terraform/modules/api-cluster/main.tf` - Main Terraform configuration with droplet, volume, firewall, and reserved IP resources
+- `infrastructure/terraform/modules/api-cluster/variables.tf` - Input variables with comprehensive validation
+- `infrastructure/terraform/modules/api-cluster/outputs.tf` - Output values for droplet IPs and cluster details
+- `infrastructure/terraform/modules/api-cluster/versions.tf` - Terraform and provider version requirements
+- `infrastructure/terraform/modules/api-cluster/README.md` - Comprehensive module documentation (15KB)
+
+**Files Modified:**
+
+- Removed `.gitkeep` from api-cluster module directory (now has actual content)
+
+**Key Changes:**
+
+- Created complete Terraform module for DigitalOcean Droplets running API with Docker:
+  - **Droplet Resource**: Configurable count (1-10), size, image, region
+  - **SSH Key Integration**: Data source fetches keys by name
+  - **User Data Script**: Comprehensive setup automation:
+    - System updates and security hardening
+    - Docker CE installation (latest stable from official repo)
+    - Docker Compose installation (latest from GitHub releases)
+    - Deploy user creation (non-root) with Docker group membership
+    - UFW firewall (SSH, HTTP, HTTPS, custom API port)
+    - DigitalOcean monitoring agent installation (optional)
+    - Application directory creation (/opt/app)
+    - Custom user data extension support
+  - **VPC Networking**: Full VPC integration for secure private communication
+  - **Resource Tagging**: Environment, service type, cluster name, custom tags
+- Optional features implemented:
+  - **Automated Backups**: Configurable backup scheduling
+  - **Monitoring**: DigitalOcean monitoring agent integration
+  - **IPv6 Support**: Optional IPv6 addressing
+  - **Reserved IPs**: Static IPs for each droplet (useful without LB)
+  - **Data Volumes**: Block storage with automatic attachment and mount
+  - **Custom Firewall**: Additional firewall rules via dynamic blocks
+  - **Custom User Data**: Extend setup script with custom commands
+- Module configuration features:
+  - 20+ input variables with validation (count, size, CIDR, UUID)
+  - Default values for common settings
+  - Validation constraints (droplet count 1-10, API port 1024-65535)
+  - Environment validation (dev, staging, production)
+- Module outputs (20+ outputs):
+  - Droplet details: IDs, names, URNs
+  - IP addresses: public IPv4, private IPv4, IPv6 (if enabled)
+  - Reserved IPs: addresses and URNs (if enabled)
+  - Volumes: IDs and names (if enabled)
+  - Firewall: ID and name (if custom rules enabled)
+  - Cluster metadata: name, environment, region, count
+  - Summary output: comprehensive cluster overview
+- Security implementation:
+  - VPC integration for private networking
+  - SSH key-only authentication (no passwords)
+  - Non-root deploy user for application management
+  - UFW firewall rules on each droplet
+  - Tag-based organization for firewall rules
+  - Lifecycle management (create_before_destroy)
+- Documentation includes:
+  - 4 detailed usage examples (dev, staging HA, production HA, custom rules)
+  - Complete input/output reference tables
+  - Droplet size recommendations with cost estimates
+  - User data script explanation (all installed packages)
+  - SSH access instructions (root and deploy user)
+  - Volume management guide
+  - Reserved IP use cases
+  - Security best practices (VPC, SSH keys, monitoring)
+  - Firewall configuration details
+  - Monitoring and alerting setup
+  - Troubleshooting section (SSH, Docker, volumes, memory issues)
+  - Cost estimation table (from $6/month for dev)
+  - Resource tagging strategy
+  - Integration with networking, database, Redis, LB modules
+  - Scaling guidance (vertical: change size, horizontal: increase count)
+  - Backup and recovery procedures
+
+**Validation Results:**
+
+- ✅ Module created at infrastructure/terraform/modules/api-cluster/
+- ✅ Droplet resource with configurable count (1-10)
+- ✅ SSH key configuration via data source
+- ✅ Comprehensive user data script (Docker, Docker Compose, deploy user, UFW)
+- ✅ VPC networking support
+- ✅ Tags for environment and service (environment, api-server, cluster name)
+- ✅ Output variables for droplet IPs (public, private, IPv6, reserved)
+- ✅ Comprehensive module documentation (15KB)
+- ✅ terraform init successful
+- ✅ terraform validate successful
+- ✅ terraform fmt successful
+
+**Status:** Task 10 marked as "passing" in IMPLEMENTATION_PLAN.md
+
+---
