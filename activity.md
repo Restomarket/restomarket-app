@@ -1660,3 +1660,61 @@
 **Status:** Tasks 27, 28, 30, 32 marked as "passing" in IMPLEMENTATION_PLAN.md
 
 ---
+
+## [2026-01-29 18:15] Task 31 Completed: Create Architecture Diagrams
+
+**Task Completed:** Create Architecture Diagrams
+
+**Files Created:**
+
+- `infrastructure/docs/diagrams/topology.md` - Infrastructure topology diagrams (dev and staging)
+- `infrastructure/docs/diagrams/cicd-pipeline.md` - CI/CD pipeline flow diagrams
+- `infrastructure/docs/diagrams/deployment-flow.md` - Blue-green deployment flow diagrams
+- `infrastructure/docs/diagrams/network-security.md` - Network security architecture diagrams
+- `infrastructure/docs/diagrams/README.md` - Comprehensive diagrams documentation
+
+**Files Modified:**
+
+- `infrastructure/README.md` - Added diagrams directory to structure and new "Architecture Diagrams" section
+
+**Key Changes:**
+
+- Created 4 comprehensive Mermaid diagram files totaling ~15KB of visual documentation:
+  - **Infrastructure Topology**: VPC architecture, services, firewalls, monitoring, cost breakdown for both environments
+  - **CI/CD Pipeline**: 5-stage pipeline with job dependencies, caching strategy, security scanning, performance targets
+  - **Deployment Flow**: Blue-green sequence diagrams, health checks, rollback logic, zero-downtime timeline, 3 deployment methods
+  - **Network Security**: Security zones, firewall rules, UFW/Fail2ban, SSH hardening, SSL/TLS, 5-layer security model
+- Diagrams use consistent color scheme: Blue (primary), Green (success), Orange (warning), Purple (special), Red (error)
+- All diagrams render automatically on GitHub (Mermaid syntax)
+- Created comprehensive diagrams README with:
+  - Viewing instructions (GitHub, VS Code, Mermaid Live Editor)
+  - Diagram types reference and syntax guide
+  - Editing resources and Mermaid documentation links
+  - Export instructions for PNG/SVG/PDF
+  - Integration references and update procedures
+- Updated infrastructure README with new "Architecture Diagrams" section linking to all 4 diagrams
+- All diagrams are text-based (version control friendly) and fully editable
+
+**Diagram Statistics:**
+
+- **topology.md**: 3 diagrams (staging architecture, dev architecture, resource costs)
+- **cicd-pipeline.md**: 6 diagrams (pipeline overview, job dependencies, caching, security, performance, branch protection)
+- **deployment-flow.md**: 6 diagrams (sequence, normal flow, rollback, methods comparison, zero-downtime timeline, health check states)
+- **network-security.md**: 8 diagrams (security architecture, firewall rules, UFW, SSH hardening, SSL/TLS, security layers, attack surface, monitoring)
+
+**Validation Results:**
+
+- ✅ All 4 diagram files created in infrastructure/docs/diagrams/
+- ✅ Diagrams use Mermaid syntax (GitHub-compatible)
+- ✅ Infrastructure topology: staging and dev environments
+- ✅ CI/CD pipeline: complete flow from trigger to deployment
+- ✅ Deployment flow: blue-green strategy with rollback
+- ✅ Network security: comprehensive security architecture
+- ✅ Diagrams referenced in infrastructure/README.md
+- ✅ Source files in editable Mermaid format
+- ✅ Comprehensive README with viewing/editing instructions
+- ✅ Consistent color scheme across all diagrams
+
+**Status:** Task 31 marked as "passing" in IMPLEMENTATION_PLAN.md
+
+---

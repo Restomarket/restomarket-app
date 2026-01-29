@@ -36,8 +36,11 @@ infrastructure/
 │   └── cleanup-images.sh   # Image retention policy enforcement
 └── docs/                # Infrastructure documentation
     ├── deployment-runbook.md    # Deployment procedures
-    ├── secrets-management.md    # Secrets management guide
-    └── diagrams/                # Architecture diagrams
+    └── diagrams/                # Architecture diagrams (Mermaid)
+        ├── topology.md              # Infrastructure topology
+        ├── cicd-pipeline.md         # CI/CD pipeline flow
+        ├── deployment-flow.md       # Blue-green deployment
+        └── network-security.md      # Security architecture
 ```
 
 ## Overview
@@ -234,6 +237,17 @@ Quick rollback:
 # On the droplet or via CI/CD
 ./infrastructure/scripts/rollback.sh <previous-git-sha>
 ```
+
+## Architecture Diagrams
+
+Comprehensive visual documentation is available in the `docs/diagrams/` directory:
+
+- **[Infrastructure Topology](./docs/diagrams/topology.md)**: Complete infrastructure layout for dev and staging environments with VPC, services, firewalls, and cost breakdown
+- **[CI/CD Pipeline](./docs/diagrams/cicd-pipeline.md)**: Full pipeline flow from code quality to deployment, including caching strategy and security scanning
+- **[Deployment Flow](./docs/diagrams/deployment-flow.md)**: Blue-green deployment sequence with health checks, rollback mechanism, and zero-downtime guarantee
+- **[Network Security](./docs/diagrams/network-security.md)**: Security architecture with firewall rules, SSH hardening, SSL/TLS configuration, and defense-in-depth layers
+
+All diagrams use Mermaid and render automatically on GitHub. See [diagrams README](./docs/diagrams/README.md) for viewing and editing instructions.
 
 ## Monitoring
 
