@@ -49,7 +49,7 @@ ls -la infrastructure/docker
 
 **Category:** Security
 **Package:** root
-**Status:** not started
+**Status:** passing
 **Priority:** high
 **Risk Level:** high
 **Estimated Iterations:** 1
@@ -59,11 +59,22 @@ Remove any existing .env files from git history, create .env.example templates w
 
 **Acceptance Criteria:**
 
-- [ ] All `.env` files added to `.gitignore`
-- [ ] `.env.example` files created for each app/package with dummy values
-- [ ] Existing .env files removed from git history (if present)
-- [ ] Pre-commit hook configured to detect secrets
-- [ ] Documentation updated with secrets management guidelines
+- [x] All `.env` files added to `.gitignore` (including .env.development, .env.staging)
+- [x] `.env.example` files created for each app/package with dummy values (root, api, web)
+- [x] Existing .env files removed from git history (none were present - verified clean)
+- [x] Pre-commit hook configured to detect secrets (.pre-commit-config.yaml with gitleaks)
+- [x] Documentation updated with secrets management guidelines (docs/SECRETS_MANAGEMENT.md)
+
+**Completion Notes:**
+
+- Completed on 2026-01-29
+- Enhanced .gitignore with additional .env patterns (.env.development, .env.staging, etc.)
+- Created .env.example for root, apps/api (already existed), and apps/web
+- Created .pre-commit-config.yaml with gitleaks and additional security checks
+- Created .gitleaks.toml for customized secret detection rules
+- Created comprehensive docs/SECRETS_MANAGEMENT.md with rotation procedures, incident response, and best practices
+- No .env files were found in git history - repository is clean
+- All validation commands passed successfully
 
 **Validation Commands:**
 
