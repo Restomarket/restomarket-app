@@ -1,13 +1,17 @@
 # Multi-Stage Dockerfile for NestJS API
 # Optimized for Turborepo monorepo with security best practices
 
+# Build arguments
+ARG NODE_VERSION=20.18.1
+ARG PNPM_VERSION=9.10.0
+
 # ============================================
 # Stage 1: Base - Setup pnpm and dependencies
 # ============================================
-FROM node:24.13.0-alpine AS base
+FROM node:${NODE_VERSION}-alpine AS base
 
 # Enable corepack for pnpm
-RUN corepack enable && corepack prepare pnpm@9.10.0 --activate
+RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
 
 # Set working directory
 WORKDIR /app
@@ -65,17 +69,23 @@ FROM base AS production-deps
 # Copy workspace configuration
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 
-# Copy package.json files for production
+# Copy all package.json files to properly resolve workspace dependencies
 COPY packages/shared/package.json ./packages/shared/
+COPY packages/ui/package.json ./packages/ui/
+COPY packages/eslint-config/package.json ./packages/eslint-config/
+COPY packages/jest-config/package.json ./packages/jest-config/
+COPY packages/typescript-config/package.json ./packages/typescript-config/
 COPY apps/api/package.json ./apps/api/
 
 # Install only production dependencies
+# Note: Workspace packages like @repo/shared have no prod deps, so their node_modules won't be created
+# This is expected - we'll copy the built dist/ from the builder stage instead
 RUN pnpm install --prod --frozen-lockfile --prefer-offline --ignore-scripts
 
 # ============================================
 # Stage 5: Production - Final image
 # ============================================
-FROM node:24.13.0-alpine AS production
+FROM node:${NODE_VERSION}-alpine AS production
 
 # Install dumb-init for proper signal handling
 RUN apk add --no-cache dumb-init curl
@@ -87,16 +97,15 @@ RUN addgroup -g 1001 -S nodejs && \
 # Set working directory
 WORKDIR /app
 
-# Copy production dependencies
+# Copy production dependencies (hoisted to root by pnpm)
+# pnpm workspaces hoist all dependencies to the root node_modules
 COPY --from=production-deps --chown=nestjs:nodejs /app/node_modules ./node_modules
-COPY --from=production-deps --chown=nestjs:nodejs /app/packages/shared/node_modules ./packages/shared/node_modules
-COPY --from=production-deps --chown=nestjs:nodejs /app/apps/api/node_modules ./apps/api/node_modules
 
-# Copy shared package (built)
+# Copy shared package (built output only - no source needed)
 COPY --from=builder --chown=nestjs:nodejs /app/packages/shared/dist ./packages/shared/dist
 COPY --from=builder --chown=nestjs:nodejs /app/packages/shared/package.json ./packages/shared/
 
-# Copy built application
+# Copy built API application
 COPY --from=builder --chown=nestjs:nodejs /app/apps/api/dist ./apps/api/dist
 COPY --from=builder --chown=nestjs:nodejs /app/apps/api/package.json ./apps/api/
 
