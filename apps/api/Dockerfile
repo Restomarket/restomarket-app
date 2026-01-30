@@ -6,10 +6,6 @@
 ARG NODE_VERSION=20.18.1
 ARG PNPM_VERSION=9.10.0
 
-# Build arguments
-ARG NODE_VERSION=20.18.1
-ARG PNPM_VERSION=9.10.0
-
 # ============================================
 # Stage 1: Base - Setup pnpm and dependencies
 # ============================================
@@ -126,8 +122,8 @@ COPY --from=production-deploy --chown=nestjs:nodejs /prod/api ./
 # Switch to non-root user
 USER nestjs
 
-# Expose port
-EXPOSE 3000
+# Expose port (matches APP_PORT in production/staging)
+EXPOSE 3002
 
 # Set environment to production
 ENV NODE_ENV=production
