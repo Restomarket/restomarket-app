@@ -22,6 +22,9 @@
     "type-check": "turbo run type-check",
     "clean": "turbo run clean && rm -rf node_modules .turbo",
     "clean:cache": "turbo daemon clean && rm -rf .turbo node_modules/.cache",
+    "docker:dev": "docker compose up",
+    "docker:dev:build": "docker compose up --build",
+    "docker:dev:detach": "docker compose up -d",
     "prepare": "husky",
     "preinstall": "npx only-allow pnpm"
   },
