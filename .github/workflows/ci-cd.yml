@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: '20.18.1'
+  NODE_VERSION: '24.13.0'
 
 jobs:
   code-quality:
