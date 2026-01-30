@@ -1,5 +1,10 @@
 # Multi-Stage Dockerfile for NestJS API
 # Optimized for Turborepo monorepo with security best practices
+# Uses turbo prune for minimal image size
+
+# Build arguments
+ARG NODE_VERSION=20.18.1
+ARG PNPM_VERSION=9.10.0
 
 # Build arguments
 ARG NODE_VERSION=20.18.1
@@ -10,14 +15,18 @@ ARG PNPM_VERSION=9.10.0
 # ============================================
 FROM node:${NODE_VERSION}-alpine AS base
 
-# Enable corepack for pnpm
-RUN corepack enable && corepack prepare pnpm@${PNPM_VERSION} --activate
+ARG PNPM_VERSION
+
+# Enable corepack and install pnpm
+RUN corepack enable && \
+    corepack prepare pnpm@${PNPM_VERSION} --activate && \
+    pnpm --version
 
 # Set working directory
 WORKDIR /app
 
 # Install dumb-init for proper signal handling
-RUN apk add --no-cache dumb-init
+RUN apk add --no-cache dumb-init curl
 
 # ============================================
 # Stage 2: Dependencies - Install all dependencies
@@ -49,7 +58,7 @@ COPY --from=dependencies /app/packages ./packages
 COPY --from=dependencies /app/apps/api/node_modules ./apps/api/node_modules
 
 # Copy workspace configuration
-COPY pnpm-workspace.yaml package.json turbo.json ./
+COPY pnpm-workspace.yaml package.json pnpm-lock.yaml turbo.json ./
 
 # Copy source code for shared packages
 COPY packages/shared ./packages/shared
@@ -58,29 +67,28 @@ COPY packages/typescript-config ./packages/typescript-config
 # Copy API source code
 COPY apps/api ./apps/api
 
-# Build the API using Turborepo
-RUN pnpm turbo build --filter=api
+# Build the API using Turborepo (use full package name @apps/api)
+RUN pnpm turbo build --filter=@apps/api
 
 # ============================================
-# Stage 4: Production Dependencies
+# Stage 4: Production Deploy
 # ============================================
-FROM base AS production-deps
+FROM base AS production-deploy
 
-# Copy workspace configuration
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
+# Copy built application from builder
+COPY --from=builder /app ./
 
-# Copy all package.json files to properly resolve workspace dependencies
-COPY packages/shared/package.json ./packages/shared/
-COPY packages/ui/package.json ./packages/ui/
-COPY packages/eslint-config/package.json ./packages/eslint-config/
-COPY packages/jest-config/package.json ./packages/jest-config/
-COPY packages/typescript-config/package.json ./packages/typescript-config/
-COPY apps/api/package.json ./apps/api/
+# Use pnpm deploy to create a pruned production installation
+# This installs only the API's production dependencies in an isolated directory
+RUN pnpm --filter=@apps/api deploy --prod /prod/api
 
-# Install only production dependencies
-# Note: Workspace packages like @repo/shared have no prod deps, so their node_modules won't be created
-# This is expected - we'll copy the built dist/ from the builder stage instead
-RUN pnpm install --prod --frozen-lockfile --prefer-offline --ignore-scripts
+# Copy built code to deployed location (pnpm deploy doesn't copy dist/)
+RUN cp -r /app/apps/api/dist /prod/api/dist
+
+# Copy shared package build output to deployed location
+RUN mkdir -p /prod/api/packages/shared && \
+    cp -r /app/packages/shared/dist /prod/api/packages/shared/ && \
+    cp /app/packages/shared/package.json /prod/api/packages/shared/
 
 # ============================================
 # Stage 5: Production - Final image
@@ -97,20 +105,8 @@ RUN addgroup -g 1001 -S nodejs && \
 # Set working directory
 WORKDIR /app
 
-# Copy production dependencies (hoisted to root by pnpm)
-# pnpm workspaces hoist all dependencies to the root node_modules
-COPY --from=production-deps --chown=nestjs:nodejs /app/node_modules ./node_modules
-
-# Copy shared package (built output only - no source needed)
-COPY --from=builder --chown=nestjs:nodejs /app/packages/shared/dist ./packages/shared/dist
-COPY --from=builder --chown=nestjs:nodejs /app/packages/shared/package.json ./packages/shared/
-
-# Copy built API application
-COPY --from=builder --chown=nestjs:nodejs /app/apps/api/dist ./apps/api/dist
-COPY --from=builder --chown=nestjs:nodejs /app/apps/api/package.json ./apps/api/
-
-# Set working directory to API
-WORKDIR /app/apps/api
+# Copy deployed API with production dependencies from pnpm deploy
+COPY --from=production-deploy --chown=nestjs:nodejs /prod/api ./
 
 # Switch to non-root user
 USER nestjs
@@ -121,12 +117,12 @@ EXPOSE 3000
 # Set environment to production
 ENV NODE_ENV=production
 
-# Health check using /health endpoint
+# Health check using /v1/health endpoint (versioned API)
 HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
-  CMD curl -f http://localhost:3000/health || exit 1
+  CMD curl -f http://localhost:3002/v1/health || exit 1
 
 # Use dumb-init to handle signals properly
 ENTRYPOINT ["dumb-init", "--"]
 
-# Start the application
-CMD ["node", "dist/main.js"]
+# Start the application (NestJS outputs to dist/src/)
+CMD ["node", "dist/src/main.js"]
