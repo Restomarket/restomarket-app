@@ -1,5 +1,6 @@
 # Multi-Stage Dockerfile for NestJS API
 # Optimized for Turborepo monorepo with security best practices
+# Uses turbo prune for minimal image size
 
 # Build arguments
 ARG NODE_VERSION=20.18.1
@@ -20,26 +21,31 @@ WORKDIR /app
 RUN apk add --no-cache dumb-init
 
 # ============================================
-# Stage 2: Dependencies - Install all dependencies
+# Stage 2: Pruner - Extract minimal workspace for API
+# ============================================
+FROM base AS pruner
+
+# Copy entire monorepo
+COPY . .
+
+# Prune workspace to only include API and its dependencies
+# This creates a minimal subset in /app/out
+RUN pnpm turbo prune --scope=api --docker
+
+# ============================================
+# Stage 3: Dependencies - Install all dependencies
 # ============================================
 FROM base AS dependencies
 
-# Copy workspace configuration
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
-
-# Copy all package.json files for workspace
-COPY packages/shared/package.json ./packages/shared/
-COPY packages/ui/package.json ./packages/ui/
-COPY packages/eslint-config/package.json ./packages/eslint-config/
-COPY packages/jest-config/package.json ./packages/jest-config/
-COPY packages/typescript-config/package.json ./packages/typescript-config/
-COPY apps/api/package.json ./apps/api/
+# Copy pruned workspace lockfile and package.json files
+COPY --from=pruner /app/out/json/ ./
+COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 
 # Install all dependencies (including dev dependencies for build)
 RUN pnpm install --frozen-lockfile --prefer-offline
 
 # ============================================
-# Stage 3: Builder - Compile TypeScript
+# Stage 4: Builder - Compile TypeScript
 # ============================================
 FROM base AS builder
 
@@ -48,34 +54,20 @@ COPY --from=dependencies /app/node_modules ./node_modules
 COPY --from=dependencies /app/packages ./packages
 COPY --from=dependencies /app/apps/api/node_modules ./apps/api/node_modules
 
-# Copy workspace configuration
-COPY pnpm-workspace.yaml package.json turbo.json ./
-
-# Copy source code for shared packages
-COPY packages/shared ./packages/shared
-COPY packages/typescript-config ./packages/typescript-config
-
-# Copy API source code
-COPY apps/api ./apps/api
+# Copy pruned source code
+COPY --from=pruner /app/out/full/ ./
 
 # Build the API using Turborepo
 RUN pnpm turbo build --filter=api
 
 # ============================================
-# Stage 4: Production Dependencies
+# Stage 5: Production Dependencies
 # ============================================
 FROM base AS production-deps
 
-# Copy workspace configuration
-COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
-
-# Copy all package.json files to properly resolve workspace dependencies
-COPY packages/shared/package.json ./packages/shared/
-COPY packages/ui/package.json ./packages/ui/
-COPY packages/eslint-config/package.json ./packages/eslint-config/
-COPY packages/jest-config/package.json ./packages/jest-config/
-COPY packages/typescript-config/package.json ./packages/typescript-config/
-COPY apps/api/package.json ./apps/api/
+# Copy pruned workspace lockfile and package.json files
+COPY --from=pruner /app/out/json/ ./
+COPY --from=pruner /app/out/pnpm-lock.yaml ./pnpm-lock.yaml
 
 # Install only production dependencies
 # Note: Workspace packages like @repo/shared have no prod deps, so their node_modules won't be created
@@ -83,7 +75,7 @@ COPY apps/api/package.json ./apps/api/
 RUN pnpm install --prod --frozen-lockfile --prefer-offline --ignore-scripts
 
 # ============================================
-# Stage 5: Production - Final image
+# Stage 6: Production - Final image
 # ============================================
 FROM node:${NODE_VERSION}-alpine AS production
 
