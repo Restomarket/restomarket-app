@@ -339,7 +339,7 @@ jobs:
         with:
           images: ghcr.io/${{ steps.repo_owner.outputs.lowercase }}/restomarket-api
           tags: |
-            type=sha,format=short
+            type=sha,format=long,prefix=sha-
             type=ref,event=branch
             type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
             type=raw,value={{branch}}-{{sha}},enable=true
