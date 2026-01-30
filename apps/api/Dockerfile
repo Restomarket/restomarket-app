@@ -6,10 +6,6 @@
 ARG NODE_VERSION=20.18.1
 ARG PNPM_VERSION=9.10.0
 
-# Build arguments
-ARG NODE_VERSION=20.18.1
-ARG PNPM_VERSION=9.10.0
-
 # ============================================
 # Stage 1: Base - Setup pnpm and dependencies
 # ============================================
@@ -50,45 +46,60 @@ RUN pnpm install --frozen-lockfile --prefer-offline
 # ============================================
 # Stage 3: Builder - Compile TypeScript
 # ============================================
-FROM base AS builder
+FROM dependencies AS builder
 
-# Copy dependencies from previous stage
-COPY --from=dependencies /app/node_modules ./node_modules
-COPY --from=dependencies /app/packages ./packages
-COPY --from=dependencies /app/apps/api/node_modules ./apps/api/node_modules
-
-# Copy workspace configuration
+# Copy workspace configuration and global config files
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml turbo.json ./
+COPY tsconfig.json eslint.config.mjs .prettierrc ./
 
-# Copy source code for shared packages
-COPY packages/shared ./packages/shared
-COPY packages/typescript-config ./packages/typescript-config
+# Copy source code for shared packages (without overwriting node_modules)
+COPY packages/shared/src ./packages/shared/src
+COPY packages/shared/tsconfig.json ./packages/shared/
+COPY packages/typescript-config/*.json ./packages/typescript-config/
 
-# Copy API source code
-COPY apps/api ./apps/api
+# Copy API source code and configuration
+COPY apps/api/src ./apps/api/src
+COPY apps/api/drizzle ./apps/api/drizzle
+COPY apps/api/tsconfig*.json apps/api/nest-cli.json apps/api/eslint.config.mjs ./apps/api/
+COPY apps/api/drizzle.config.ts ./apps/api/
 
-# Build the API using Turborepo (use full package name @apps/api)
+# Build the API using Turborepo
 RUN pnpm turbo build --filter=@apps/api
 
+# Verify build outputs exist
+RUN ls -la /app/apps/api/dist/src/ || (echo "ERROR: Build failed - no output" && exit 1)
+
 # ============================================
-# Stage 4: Production Deploy
+# Stage 4: Production Deploy - Use pnpm deploy for minimal production image
 # ============================================
 FROM base AS production-deploy
 
 # Copy built application from builder
-COPY --from=builder /app ./
+COPY --from=builder /app/apps/api/dist ./apps/api/dist
+COPY --from=builder /app/packages/shared/dist ./packages/shared/dist
+
+# Copy workspace and package configuration
+COPY --from=builder /app/pnpm-workspace.yaml /app/package.json /app/pnpm-lock.yaml ./
+COPY --from=builder /app/packages/shared/package.json ./packages/shared/
+COPY --from=builder /app/packages/typescript-config/package.json ./packages/typescript-config/
+COPY --from=builder /app/packages/eslint-config/package.json ./packages/eslint-config/
+COPY --from=builder /app/packages/jest-config/package.json ./packages/jest-config/
+COPY --from=builder /app/apps/api/package.json ./apps/api/
 
 # Use pnpm deploy to create a pruned production installation
 # This installs only the API's production dependencies in an isolated directory
-RUN pnpm --filter=@apps/api deploy --prod /prod/api
+# Skip scripts to avoid husky/dev tools errors in production
+RUN pnpm --filter=@apps/api deploy --prod --ignore-scripts /prod/api
 
 # Copy built code to deployed location (pnpm deploy doesn't copy dist/)
 RUN cp -r /app/apps/api/dist /prod/api/dist
 
-# Copy shared package build output to deployed location
-RUN mkdir -p /prod/api/packages/shared && \
-    cp -r /app/packages/shared/dist /prod/api/packages/shared/ && \
-    cp /app/packages/shared/package.json /prod/api/packages/shared/
+# Copy shared package build output to deployed location if it exists
+RUN if [ -d "/app/packages/shared/dist" ]; then \
+      mkdir -p /prod/api/packages/shared && \
+      cp -r /app/packages/shared/dist /prod/api/packages/shared/ && \
+      cp /app/packages/shared/package.json /prod/api/packages/shared/; \
+    fi
 
 # ============================================
 # Stage 5: Production - Final image
@@ -111,8 +122,8 @@ COPY --from=production-deploy --chown=nestjs:nodejs /prod/api ./
 # Switch to non-root user
 USER nestjs
 
-# Expose port
-EXPOSE 3000
+# Expose port (matches APP_PORT in production/staging)
+EXPOSE 3002
 
 # Set environment to production
 ENV NODE_ENV=production
