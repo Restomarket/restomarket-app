@@ -6,6 +6,10 @@
 ARG NODE_VERSION=20.18.1
 ARG PNPM_VERSION=9.10.0
 
+# Build arguments
+ARG NODE_VERSION=20.18.1
+ARG PNPM_VERSION=9.10.0
+
 # ============================================
 # Stage 1: Base - Setup pnpm and dependencies
 # ============================================
