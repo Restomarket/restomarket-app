@@ -1,5 +1,5 @@
 # Stage 1: Dependencies
-FROM node:20.18.1-alpine AS dependencies
+FROM node:24.13.0-alpine AS dependencies
 
 RUN corepack enable && corepack prepare pnpm@9.10.0 --activate
 
@@ -9,7 +9,7 @@ COPY package.json pnpm-lock.yaml ./
 RUN pnpm install --frozen-lockfile
 
 # Stage 2: Build
-FROM node:20.18.1-alpine AS build
+FROM node:24.13.0-alpine AS build
 
 RUN corepack enable && corepack prepare pnpm@9.10.0 --activate
 
@@ -21,7 +21,7 @@ COPY . .
 RUN pnpm build
 
 # Stage 3: Production
-FROM node:20.18.1-alpine AS production
+FROM node:24.13.0-alpine AS production
 
 RUN corepack enable && corepack prepare pnpm@9.10.0 --activate
 

@@ -16,7 +16,7 @@ concurrency:
   cancel-in-progress: true
 
 env:
-  NODE_VERSION: '20.18.1'
+  NODE_VERSION: '24.13.0'
 
 jobs:
   code-quality:
@@ -493,9 +493,10 @@ jobs:
 
       - name: Notify Slack on success
         if: success()
-        uses: slackapi/slack-github-action@v1.25.0
+        uses: slackapi/slack-github-action@v2.1.1
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK }}
+          webhook-type: incoming-webhook
           payload: |
             {
               "text": "✅ Staging Deployment Successful",
@@ -561,9 +562,10 @@ jobs:
 
       - name: Notify Slack on failure
         if: failure()
-        uses: slackapi/slack-github-action@v1.25.0
+        uses: slackapi/slack-github-action@v2.1.1
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK }}
+          webhook-type: incoming-webhook
           payload: |
             {
               "text": "❌ Staging Deployment Failed",
