@@ -181,8 +181,8 @@ variable "redis_version" {
   default     = "7"
 
   validation {
-    condition     = contains(["6", "7"], var.redis_version)
-    error_message = "Redis version must be either 6 or 7."
+    condition     = contains(["6", "7", "8"], var.redis_version)
+    error_message = "Redis/Valkey version must be 6, 7, or 8 (Valkey)."
   }
 }
 

@@ -333,6 +333,10 @@ jobs:
         id: repo_owner
         run: echo "lowercase=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
+      - name: Set short SHA for image tag
+        id: short_sha
+        run: echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
       - name: Extract metadata for Docker
         id: meta
         uses: docker/metadata-action@v5
@@ -363,7 +367,7 @@ jobs:
       - name: Run Trivy vulnerability scanner on image
         uses: aquasecurity/trivy-action@master
         with:
-          image-ref: ghcr.io/${{ steps.repo_owner.outputs.lowercase }}/restomarket-api:sha-${{ github.sha }}
+          image-ref: ghcr.io/${{ steps.repo_owner.outputs.lowercase }}/restomarket-api:sha-${{ steps.short_sha.outputs.short_sha }}
           format: 'table'
           severity: 'CRITICAL,HIGH'
           exit-code: '0' # Don't fail the build on vulnerabilities
@@ -389,6 +393,10 @@ jobs:
         id: repo_owner
         run: echo "lowercase=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
 
+      - name: Set short SHA for image tag
+        id: short_sha
+        run: echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
       - name: Set up SSH key
         run: |
           mkdir -p ~/.ssh
@@ -409,9 +417,12 @@ jobs:
             # Log in to GitHub Container Registry
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # Set environment variables for deployment script
-            export IMAGE_TAG="ghcr.io/${{ steps.repo_owner.outputs.lowercase }}/restomarket-api:sha-${{ github.sha }}"
+            # Set environment variables for deployment script (API port 3001 matches Ansible/Terraform)
+            export IMAGE_TAG="ghcr.io/${{ steps.repo_owner.outputs.lowercase }}/restomarket-api:sha-${{ steps.short_sha.outputs.short_sha }}"
             export ENVIRONMENT="staging"
+            export HEALTH_CHECK_URL="http://localhost:3001/health"
+            export HOST_PORT="3001"
+            export CONTAINER_PORT="3000"
 
             # Run zero-downtime deployment script
             if [ -f ./infrastructure/scripts/deploy.sh ]; then
