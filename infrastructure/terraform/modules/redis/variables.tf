@@ -26,8 +26,8 @@ variable "redis_version" {
   default     = "7"
 
   validation {
-    condition     = contains(["6", "7"], var.redis_version)
-    error_message = "Redis version must be 6 or 7"
+    condition     = contains(["6", "7", "8"], var.redis_version)
+    error_message = "Redis/Valkey version must be 6, 7, or 8 (Valkey)"
   }
 }
 
@@ -92,13 +92,13 @@ variable "maintenance_window_day" {
 }
 
 variable "maintenance_window_hour" {
-  description = "Hour for maintenance window (0-23, UTC)"
-  type        = number
-  default     = 3
+  description = "Hour for maintenance window in HH:MM format (UTC), e.g., '02:00'"
+  type        = string
+  default     = "03:00"
 
   validation {
-    condition     = var.maintenance_window_hour >= 0 && var.maintenance_window_hour <= 23
-    error_message = "Maintenance window hour must be between 0 and 23"
+    condition     = can(regex("^([01]?[0-9]|2[0-3]):[0-5][0-9]$", var.maintenance_window_hour))
+    error_message = "Maintenance window hour must be in HH:MM format (e.g., '02:00', '14:30')"
   }
 }
 

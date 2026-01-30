@@ -39,18 +39,18 @@ data "digitalocean_ssh_key" "default" {
 module "networking" {
   source = "../../modules/networking"
 
-  vpc_name                 = "${var.project_name}-${var.environment}-vpc"
+  vpc_name                 = "${var.project_name}-${var.environment}-${var.region}-vpc"
   environment              = var.environment
   region                   = var.region
   ip_range                 = var.vpc_ip_range
   vpc_description          = "VPC for ${var.project_name} ${var.environment} environment"
-  enable_firewall          = true
+  enable_firewall          = false  # Will be enabled after droplets are created
   firewall_droplet_tags    = ["${var.project_name}-${var.environment}-api"]
   admin_ssh_ips            = var.admin_ips
   api_port                 = var.api_port
   custom_inbound_rules     = var.custom_inbound_rules
   custom_outbound_rules    = var.custom_outbound_rules
-  enable_database_firewall = true
+  enable_database_firewall = false  # Will be enabled after databases are created
   database_firewall_tags   = ["${var.project_name}-${var.environment}-db"]
 }
 
@@ -88,7 +88,7 @@ module "redis" {
   enable_firewall         = true
   eviction_policy         = var.redis_eviction_policy
   maintenance_window_day  = var.redis_maintenance_day
-  maintenance_window_hour = tonumber(split(":", var.redis_maintenance_hour)[0])
+  maintenance_window_hour = var.redis_maintenance_hour
 }
 
 # API Droplet Cluster (2 droplets for redundancy)
@@ -126,18 +126,19 @@ resource "digitalocean_loadbalancer" "api" {
   name   = "${var.project_name}-${var.environment}-api-lb"
   region = var.region
 
-  # Forward HTTPS traffic to API port on droplets
-  forwarding_rule {
-    entry_protocol  = "https"
-    entry_port      = 443
-    target_protocol = "http"
-    target_port     = var.api_port
-
-    # SSL certificate (use Let's Encrypt managed certificate)
-    certificate_name = var.ssl_certificate_name != "" ? var.ssl_certificate_name : null
+  # Forward HTTPS traffic to API port on droplets (only if SSL certificate is configured)
+  dynamic "forwarding_rule" {
+    for_each = var.ssl_certificate_name != "" ? [1] : []
+    content {
+      entry_protocol   = "https"
+      entry_port       = 443
+      target_protocol  = "http"
+      target_port      = var.api_port
+      certificate_name = var.ssl_certificate_name
+    }
   }
 
-  # Forward HTTP traffic to HTTPS (redirect)
+  # Forward HTTP traffic to API port
   forwarding_rule {
     entry_protocol  = "http"
     entry_port      = 80
@@ -167,8 +168,8 @@ resource "digitalocean_loadbalancer" "api" {
     type = "none"
   }
 
-  # Redirect HTTP to HTTPS
-  redirect_http_to_https = var.enable_https_redirect
+  # Redirect HTTP to HTTPS (only when SSL certificate is configured)
+  redirect_http_to_https = var.ssl_certificate_name != "" && var.enable_https_redirect
 
   # Enable PROXY protocol for preserving client IPs
   enable_proxy_protocol = var.enable_proxy_protocol

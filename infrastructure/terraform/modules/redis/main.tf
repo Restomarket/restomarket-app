@@ -1,7 +1,7 @@
-# DigitalOcean Managed Redis Cluster
+# DigitalOcean Managed Redis Cluster (now uses Valkey - Redis-compatible)
 resource "digitalocean_database_cluster" "redis" {
   name       = "${var.project_name}-${var.environment}-redis"
-  engine     = "redis"
+  engine     = "valkey"
   version    = var.redis_version
   size       = var.node_size
   region     = var.region

@@ -95,7 +95,8 @@ enable_proxy_protocol  = false
 # MONITORING AND ALERTING CONFIGURATION
 # ============================================================================
 
-enable_monitoring_alerts = true
+# Disabled until Slack webhook is configured (alert_slack_webhook)
+enable_monitoring_alerts = false
 
 # Email notifications
 alert_email_recipients = [

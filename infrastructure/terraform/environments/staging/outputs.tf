@@ -282,6 +282,7 @@ output "health_check_url" {
 
 output "quick_start" {
   description = "Quick start commands for using this infrastructure"
+  sensitive   = true
   value       = <<-EOT
     Staging Environment Quick Start:
 
