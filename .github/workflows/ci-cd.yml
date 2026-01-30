@@ -383,7 +383,7 @@ jobs:
     timeout-minutes: 15
     environment:
       name: staging
-      url: https://staging-api.example.com
+      url: http://157.245.21.33
 
     steps:
       - name: Checkout repository
@@ -396,13 +396,6 @@ jobs:
       - name: Set short SHA for image tag
         id: short_sha
         run: echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
-
-      - name: Set up SSH key
-        run: |
-          mkdir -p ~/.ssh
-          echo "${{ secrets.STAGING_SSH_KEY }}" > ~/.ssh/id_rsa
-          chmod 600 ~/.ssh/id_rsa
-          ssh-keyscan -H ${{ secrets.STAGING_HOST }} >> ~/.ssh/known_hosts
 
       - name: Deploy to staging droplet
         uses: appleboy/ssh-action@v1.0.3
@@ -417,12 +410,12 @@ jobs:
             # Log in to GitHub Container Registry
             echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
 
-            # Set environment variables for deployment script (API port 3001 matches Ansible/Terraform)
+            # Set environment variables for deployment script (API port 3002 matches Dockerfile)
             export IMAGE_TAG="ghcr.io/${{ steps.repo_owner.outputs.lowercase }}/restomarket-api:sha-${{ steps.short_sha.outputs.short_sha }}"
             export ENVIRONMENT="staging"
-            export HEALTH_CHECK_URL="http://localhost:3001/health"
-            export HOST_PORT="3001"
-            export CONTAINER_PORT="3000"
+            export HEALTH_CHECK_URL="http://localhost:3002/v1/health"
+            export HOST_PORT="3002"
+            export CONTAINER_PORT="3002"
 
             # Run zero-downtime deployment script
             if [ -f ./infrastructure/scripts/deploy.sh ]; then
@@ -438,16 +431,22 @@ jobs:
           echo "Waiting for application to be ready..."
           sleep 10
 
-          # Health check with retries
+          # Health check with retries (use load balancer IP from Frankfurt)
           MAX_RETRIES=12
           RETRY_DELAY=5
+          HEALTH_URL="http://${{ secrets.STAGING_HOST }}:3002/v1/health"
 
           for i in $(seq 1 $MAX_RETRIES); do
             echo "Health check attempt $i/$MAX_RETRIES..."
+            echo "Checking: $HEALTH_URL"
 
-            if curl -f -s -o /dev/null -w "%{http_code}" https://staging-api.example.com/health | grep -q "200"; then
-              echo "✅ Health check passed!"
+            HTTP_CODE=$(curl -f -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || echo "000")
+
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ Health check passed! (HTTP $HTTP_CODE)"
               exit 0
+            else
+              echo "❌ Health check failed (HTTP $HTTP_CODE)"
             fi
 
             if [ $i -lt $MAX_RETRIES ]; then
@@ -462,19 +461,22 @@ jobs:
       - name: Run smoke tests
         run: |
           echo "Running basic smoke tests..."
+          STAGING_URL="http://${{ secrets.STAGING_HOST }}:3002"
 
           # Test 1: Health endpoint returns expected structure
-          HEALTH_RESPONSE=$(curl -s https://staging-api.example.com/health)
+          echo "Testing: $STAGING_URL/v1/health"
+          HEALTH_RESPONSE=$(curl -s "$STAGING_URL/v1/health")
 
           if echo "$HEALTH_RESPONSE" | grep -q '"status"'; then
             echo "✅ Health endpoint returns valid JSON"
+            echo "Response: $HEALTH_RESPONSE"
           else
-            echo "❌ Health endpoint response invalid"
+            echo "❌ Health endpoint response invalid: $HEALTH_RESPONSE"
             exit 1
           fi
 
           # Test 2: API returns correct version header
-          if curl -I -s https://staging-api.example.com/health | grep -q "X-API-Version"; then
+          if curl -I -s "$STAGING_URL/v1/health" | grep -q "X-API-Version"; then
             echo "✅ API version header present"
           else
             echo "⚠️  API version header missing (non-critical)"
@@ -575,7 +577,7 @@ jobs:
                         "type": "plain_text",
                         "text": "View API"
                       },
-                      "url": "https://staging-api.example.com"
+                      "url": "http://157.245.21.33:3002"
                     }
                   ]
                 }
