@@ -4,7 +4,7 @@
 # ============================================
 # Stage 1: Base - Setup pnpm and dependencies
 # ============================================
-FROM node:20.18.1-alpine AS base
+FROM node:24.13.0-alpine AS base
 
 # Enable corepack for pnpm
 RUN corepack enable && corepack prepare pnpm@9.10.0 --activate
@@ -75,7 +75,7 @@ RUN pnpm install --prod --frozen-lockfile --prefer-offline --ignore-scripts
 # ============================================
 # Stage 5: Production - Final image
 # ============================================
-FROM node:20.18.1-alpine AS production
+FROM node:24.13.0-alpine AS production
 
 # Install dumb-init for proper signal handling
 RUN apk add --no-cache dumb-init curl

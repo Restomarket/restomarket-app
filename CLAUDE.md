@@ -242,7 +242,7 @@ Tasks are defined in `turbo.json` with dependency graphs:
 ## Important Notes
 
 - **Package Manager**: Enforces pnpm only (via `preinstall` script with `only-allow`)
-- **Node Version**: >= 20.18.1 (specified in `.nvmrc` and `engines`)
+- **Node Version**: >= 24.13.0 LTS (specified in `.nvmrc` and `engines`)
 - **ESLint**: Uses ESLint 9 with flat config format
 - **Database**: Uses Drizzle ORM with PostgreSQL
 - **Logging**: Uses Pino for structured logging in the API
