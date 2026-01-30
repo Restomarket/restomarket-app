@@ -195,6 +195,7 @@ output "ssh_commands" {
 
 output "quick_start" {
   description = "Quick start commands for using this infrastructure"
+  sensitive   = true
   value       = <<-EOT
     Development Environment Quick Start:
 
