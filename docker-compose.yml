@@ -51,7 +51,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: development
-      PORT: ${API_PORT:-3000}
+      APP_PORT: ${API_PORT:-3002}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres:5432/${POSTGRES_DB:-restomarket}
       REDIS_HOST: redis
       REDIS_PORT: 6379

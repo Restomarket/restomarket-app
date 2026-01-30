@@ -65,7 +65,7 @@ services:
     restart: unless-stopped
     environment:
       NODE_ENV: production
-      PORT: ${API_PORT:-3002}
+      APP_PORT: ${API_PORT:-3002}
       DATABASE_URL: postgresql://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD:-postgres}@postgres-staging:5432/${POSTGRES_DB:-restomarket_staging}
       REDIS_HOST: redis-staging
       REDIS_PORT: 6379
@@ -82,15 +82,15 @@ services:
       redis-staging:
         condition: service_healthy
     healthcheck:
-      test: ['CMD', 'curl', '-f', 'http://localhost:3002/health']
+      test: ['CMD', 'curl', '-f', 'http://localhost:3002/v1/health']
       interval: 30s
       timeout: 10s
       retries: 3
       start_period: 60s
     networks:
       - restomarket-staging-network
-    # Use production start command
-    command: node apps/api/dist/main.js
+    # Use production start command (CMD from Dockerfile: node dist/src/main.js)
+    # command: node dist/src/main.js  # Commented - use Dockerfile CMD instead
 
   # Adminer - Database Management UI (Staging)
   adminer-staging:
