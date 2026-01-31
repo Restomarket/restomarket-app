@@ -22,6 +22,14 @@
 #   CONTAINER_PORT        - Container port (default: 3000)
 #   HOST_PORT             - Host port (default: 3000)
 #   STARTUP_WAIT          - Initial startup wait in seconds (default: 10)
+#
+# Application Environment Variables (passed to container):
+#   DATABASE_URL          - PostgreSQL connection string (REQUIRED)
+#   REDIS_URL             - Redis connection string (optional)
+#   CORS_ORIGINS          - Comma-separated list of allowed origins
+#   LOG_LEVEL             - Logging level (fatal, error, warn, info, debug, trace)
+#   API_PREFIX            - API route prefix (default: v1)
+#   EXTRA_ENV_VARS        - Additional environment variables (format: "KEY1=value1 KEY2=value2")
 ################################################################################
 
 set -euo pipefail
@@ -158,14 +166,63 @@ if docker ps -a --filter "name=${NEW_CONTAINER}" --format "{{.Names}}" | grep -q
   docker rm "$NEW_CONTAINER" 2>/dev/null || true
 fi
 
-# Start new container
-# Note: In production, you may want to add more environment variables, volumes, networks, etc.
-# This is a basic example that can be extended based on your docker-compose.yml configuration
+# Start new container with environment variables
+# Note: Environment variables should be passed from the CI/CD workflow
+log_info "Configuring container environment variables..."
+
+# Build environment variable arguments
+ENV_ARGS="-e NODE_ENV=$ENVIRONMENT"
+
+# Add DATABASE_URL if provided
+if [ -n "${DATABASE_URL:-}" ]; then
+  ENV_ARGS="$ENV_ARGS -e DATABASE_URL=$DATABASE_URL"
+  log_info "✓ DATABASE_URL configured"
+else
+  log_warning "DATABASE_URL not provided - container may fail to start!"
+fi
+
+# Add REDIS_URL if provided
+if [ -n "${REDIS_URL:-}" ]; then
+  ENV_ARGS="$ENV_ARGS -e REDIS_URL=$REDIS_URL"
+  log_info "✓ REDIS_URL configured"
+fi
+
+# Add APP_PORT (should match CONTAINER_PORT)
+ENV_ARGS="$ENV_ARGS -e APP_PORT=$CONTAINER_PORT"
+log_info "✓ APP_PORT set to $CONTAINER_PORT"
+
+# Add CORS_ORIGINS if provided
+if [ -n "${CORS_ORIGINS:-}" ]; then
+  ENV_ARGS="$ENV_ARGS -e CORS_ORIGINS=$CORS_ORIGINS"
+  log_info "✓ CORS_ORIGINS configured"
+fi
+
+# Add LOG_LEVEL if provided
+if [ -n "${LOG_LEVEL:-}" ]; then
+  ENV_ARGS="$ENV_ARGS -e LOG_LEVEL=$LOG_LEVEL"
+  log_info "✓ LOG_LEVEL set to $LOG_LEVEL"
+fi
+
+# Add API_PREFIX if provided (defaults to 'api' in the app)
+if [ -n "${API_PREFIX:-}" ]; then
+  ENV_ARGS="$ENV_ARGS -e API_PREFIX=$API_PREFIX"
+fi
+
+# Add any additional environment variables passed as EXTRA_ENV_VARS
+# Format: "KEY1=value1 KEY2=value2"
+if [ -n "${EXTRA_ENV_VARS:-}" ]; then
+  for var in $EXTRA_ENV_VARS; do
+    ENV_ARGS="$ENV_ARGS -e $var"
+  done
+  log_info "✓ Additional environment variables configured"
+fi
+
+# Start the container with all environment variables
 if ! docker run -d \
   --name "$NEW_CONTAINER" \
   --restart unless-stopped \
   -p "${HOST_PORT}:${CONTAINER_PORT}" \
-  -e NODE_ENV="$ENVIRONMENT" \
+  $ENV_ARGS \
   "$IMAGE_TAG"; then
   log_error "Failed to start container: $NEW_CONTAINER"
   exit 1
