@@ -9,65 +9,7 @@ data "digitalocean_ssh_keys" "keys" {
   }
 }
 
-# User data script to install Docker and Docker Compose
-locals {
-  user_data = <<-EOT
-    #!/bin/bash
-    set -e
-
-    # Update system
-    apt-get update
-    apt-get upgrade -y
-
-    # Install prerequisites
-    apt-get install -y \
-      apt-transport-https \
-      ca-certificates \
-      curl \
-      gnupg \
-      lsb-release \
-      software-properties-common
-
-    # Install Docker
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg
-    echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/ubuntu $(lsb_release -cs) stable" | tee /etc/apt/sources.list.d/docker.list > /dev/null
-    apt-get update
-    apt-get install -y docker-ce docker-ce-cli containerd.io
-
-    # Install Docker Compose
-    curl -L "https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
-    chmod +x /usr/local/bin/docker-compose
-
-    # Create deploy user
-    useradd -m -s /bin/bash deploy
-    usermod -aG docker deploy
-    mkdir -p /home/deploy/.ssh
-    chmod 700 /home/deploy/.ssh
-
-    # Enable Docker service
-    systemctl enable docker
-    systemctl start docker
-
-    # Configure firewall (UFW)
-    ufw --force enable
-    ufw allow 22/tcp    # SSH
-    ufw allow 80/tcp    # HTTP
-    ufw allow 443/tcp   # HTTPS
-    ufw allow ${var.api_port}/tcp  # API port
-
-    # Install monitoring agent (if enabled)
-    ${var.enable_monitoring ? "curl -sSL https://repos.insights.digitalocean.com/install.sh | bash" : "# Monitoring disabled"}
-
-    # Create app directory
-    mkdir -p /opt/app
-    chown deploy:deploy /opt/app
-
-    # Log setup completion
-    echo "Setup completed at $(date)" > /var/log/user-data.log
-
-    ${var.custom_user_data}
-  EOT
-}
+# Note: Enhanced user data is defined in cloud-init.tf
 
 # API Droplets
 resource "digitalocean_droplet" "api" {
@@ -84,8 +26,8 @@ resource "digitalocean_droplet" "api" {
   # SSH keys
   ssh_keys = data.digitalocean_ssh_keys.keys.ssh_keys[*].id
 
-  # User data for initial setup
-  user_data = local.user_data
+  # User data for initial setup (enhanced configuration)
+  user_data = local.enhanced_user_data
 
   # Enable backups if configured
   backups = var.enable_backups

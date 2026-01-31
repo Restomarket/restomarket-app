@@ -347,3 +347,19 @@ variable "alert_slack_webhook" {
   default     = ""
   sensitive   = true
 }
+
+# ============================================================================
+# Droplet Configuration
+# ============================================================================
+
+variable "timezone" {
+  description = "Timezone for all droplets"
+  type        = string
+  default     = "UTC"
+}
+
+variable "alert_email" {
+  description = "Email address for security alerts (fail2ban, etc.)"
+  type        = string
+  default     = "devops@example.com"
+}

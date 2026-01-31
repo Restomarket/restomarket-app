@@ -1,0 +1,50 @@
+# Docker Compose for Production Deployment
+# Uses managed databases (DigitalOcean), only runs API container
+# Supports blue-green deployment with profiles
+
+services:
+  # Blue deployment
+  api-blue:
+    image: ${IMAGE_TAG:-ghcr.io/yonko-bc/restomarket-api:latest}
+    container_name: restomarket-api-blue
+    restart: unless-stopped
+    profiles: ['blue']
+    environment:
+      NODE_ENV: ${ENVIRONMENT:-staging}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      APP_PORT: ${APP_PORT:-3002}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      API_PREFIX: ${API_PREFIX:-v1}
+    ports:
+      - '${HOST_PORT:-3002}:${APP_PORT:-3002}'
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:${APP_PORT:-3002}/v1/health']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+
+  # Green deployment
+  api-green:
+    image: ${IMAGE_TAG:-ghcr.io/yonko-bc/restomarket-api:latest}
+    container_name: restomarket-api-green
+    restart: unless-stopped
+    profiles: ['green']
+    environment:
+      NODE_ENV: ${ENVIRONMENT:-staging}
+      DATABASE_URL: ${DATABASE_URL}
+      REDIS_URL: ${REDIS_URL}
+      APP_PORT: ${APP_PORT:-3002}
+      CORS_ORIGINS: ${CORS_ORIGINS}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      API_PREFIX: ${API_PREFIX:-v1}
+    ports:
+      - '${HOST_PORT:-3002}:${APP_PORT:-3002}'
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:${APP_PORT:-3002}/v1/health']
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
