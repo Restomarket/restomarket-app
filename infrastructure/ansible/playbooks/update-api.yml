@@ -63,7 +63,7 @@
     # ============================================
 
     - name: Get current running container
-      command: docker ps --filter "name=api-" --format "{{ '{{' }}.Names{{ '}}' }}"
+      command: docker ps --filter "name=restomarket-api-" --format "{{ '{{' }}.Names{{ '}}' }}"
       register: current_container
       changed_when: false
       failed_when: false
@@ -118,7 +118,7 @@
 
     - name: Determine new container name (blue-green)
       set_fact:
-        new_container: "{{ 'api-blue' if (old_container == 'api-green' or old_container == '') else 'api-green' }}"
+        new_container: "{{ 'restomarket-api-blue' if (old_container == 'restomarket-api-green' or old_container == '') else 'restomarket-api-green' }}"
 
     - name: Display container names
       debug:
@@ -147,8 +147,13 @@
         ports:
           - '{{ host_port }}:{{ container_port }}'
         env:
-          NODE_ENV: '{{ environment }}'
-          PORT: '{{ container_port }}'
+          NODE_ENV: '{{ node_env }}'
+          DATABASE_URL: '{{ database_url }}'
+          REDIS_URL: '{{ redis_url }}'
+          APP_PORT: '{{ container_port }}'
+          CORS_ORIGINS: '{{ cors_origins }}'
+          LOG_LEVEL: '{{ log_level }}'
+          API_PREFIX: '{{ api_prefix }}'
         networks:
           - name: bridge
         healthcheck:
@@ -281,8 +286,13 @@
         ports:
           - '{{ host_port }}:{{ container_port }}'
         env:
-          NODE_ENV: '{{ environment }}'
-          PORT: '{{ container_port }}'
+          NODE_ENV: '{{ node_env }}'
+          DATABASE_URL: '{{ database_url }}'
+          REDIS_URL: '{{ redis_url }}'
+          APP_PORT: '{{ container_port }}'
+          CORS_ORIGINS: '{{ cors_origins }}'
+          LOG_LEVEL: '{{ log_level }}'
+          API_PREFIX: '{{ api_prefix }}'
       when:
         - rollback_on_failure | bool
         - old_container != ''
@@ -319,7 +329,7 @@
 
   post_tasks:
     - name: Display current containers
-      command: docker ps --filter "name=api-" --format "table {{ '{{' }}.Names{{ '}}' }}\t{{ '{{' }}.Image{{ '}}' }}\t{{ '{{' }}.Status{{ '}}' }}"
+      command: docker ps --filter "name=restomarket-api-" --format "table {{ '{{' }}.Names{{ '}}' }}\t{{ '{{' }}.Image{{ '}}' }}\t{{ '{{' }}.Status{{ '}}' }}"
       register: final_containers
       changed_when: false
 

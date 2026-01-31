@@ -199,12 +199,12 @@
         proto: tcp
         comment: 'HTTPS'
 
-    - name: Allow API port (from load balancer only)
+    - name: Allow API port
       ufw:
         rule: allow
-        port: '3001'
+        port: '{{ api_port }}'
         proto: tcp
-        comment: 'API application port'
+        comment: 'API application port ({{ api_port }})'
       when: api_port is defined
 
     - name: Enable UFW

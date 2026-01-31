@@ -71,7 +71,7 @@ variable "admin_ips" {
 variable "api_port" {
   description = "Port for API service"
   type        = number
-  default     = 3001
+  default     = 3002
 
   validation {
     condition     = var.api_port >= 1024 && var.api_port <= 65535

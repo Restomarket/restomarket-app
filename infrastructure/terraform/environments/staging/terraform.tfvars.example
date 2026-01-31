@@ -32,7 +32,7 @@ admin_ips = [
   # "5.6.7.8/32",  # Home IP
 ]
 
-api_port = 3001
+api_port = 3002
 
 # ============================================================================
 # DATABASE CONFIGURATION (HA with 2 nodes)
