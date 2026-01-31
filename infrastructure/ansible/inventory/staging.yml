@@ -1,26 +1,28 @@
 ---
 # Ansible Inventory: Staging Environment
 # Usage: ansible-playbook -i inventory/staging.yml playbooks/setup-api.yml
+# ALIGNED WITH CI/CD WORKFLOW - Last updated: 2026-01-31
 
 all:
   children:
     api_servers:
       hosts:
         api-staging-01:
-          ansible_host: 10.20.0.10 # Replace with actual staging droplet IP
-          ansible_user: root
-          ansible_ssh_private_key_file: ~/.ssh/id_rsa
+          ansible_host: 165.227.129.93 # Primary staging droplet (Frankfurt)
+          ansible_user: deploy
+          ansible_ssh_private_key_file: ~/.ssh/staging_deploy_ed25519
           ansible_python_interpreter: /usr/bin/python3
 
         api-staging-02:
-          ansible_host: 10.20.0.11 # Replace with actual staging droplet IP
-          ansible_user: root
-          ansible_ssh_private_key_file: ~/.ssh/id_rsa
+          ansible_host: 161.35.21.86 # Secondary staging droplet (Frankfurt)
+          ansible_user: deploy
+          ansible_ssh_private_key_file: ~/.ssh/staging_deploy_ed25519
           ansible_python_interpreter: /usr/bin/python3
 
       vars:
         environment: staging
-        api_port: 3001
+        node_env: production # Staging runs in production mode (aligned with CI/CD)
+        api_port: 3002 # Changed from 3001 to match CI/CD
         enable_do_monitoring: true
         enable_node_exporter: true
 
@@ -42,14 +44,20 @@ all:
         # Monitoring configuration
         node_exporter_version: '1.7.0'
 
-        # Load balancer IPs (allowed to connect to API port)
-        load_balancer_ips:
-          - 10.20.0.100 # Replace with actual load balancer IP
+        # Load balancer and CORS origins
+        load_balancer_ip: 157.245.21.33
+        cors_origins: 'http://157.245.21.33,http://165.227.129.93,http://161.35.21.86'
 
         # API Deployment configuration (update-api.yml)
         docker_registry_url: ghcr.io
-        docker_registry_username: "{{ lookup('env', 'GITHUB_ACTOR') | default('your-github-username') }}"
+        docker_registry_username: "{{ lookup('env', 'GITHUB_ACTOR') | default('yonko-bc') }}"
         docker_image_name: restomarket-api
-        api_health_check_url: 'http://localhost:3001/health'
+        api_health_check_url: 'http://localhost:3002/v1/health' # Fixed: added /v1 prefix
         api_health_check_timeout: 60
         api_rollback_on_failure: true
+
+        # Environment variables (from GitHub Secrets)
+        database_url: "{{ lookup('env', 'DATABASE_URL') }}"
+        redis_url: "{{ lookup('env', 'REDIS_URL') }}"
+        log_level: info
+        api_prefix: v1

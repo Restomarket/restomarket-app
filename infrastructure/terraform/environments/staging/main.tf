@@ -150,7 +150,7 @@ resource "digitalocean_loadbalancer" "api" {
   healthcheck {
     protocol                 = "http"
     port                     = var.api_port
-    path                     = "/health"
+    path                     = "/v1/health"
     check_interval_seconds   = 10
     response_timeout_seconds = 5
     unhealthy_threshold      = 3
