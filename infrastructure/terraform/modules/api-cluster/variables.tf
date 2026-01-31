@@ -159,3 +159,21 @@ variable "additional_tags" {
   type        = list(string)
   default     = []
 }
+
+variable "timezone" {
+  description = "Timezone for the droplets"
+  type        = string
+  default     = "UTC"
+}
+
+variable "alert_email" {
+  description = "Email address for security alerts (fail2ban, etc.)"
+  type        = string
+  default     = "devops@example.com"
+}
+
+variable "vpc_cidr" {
+  description = "VPC CIDR block for firewall rules"
+  type        = string
+  default     = ""
+}

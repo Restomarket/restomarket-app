@@ -44,13 +44,13 @@ module "networking" {
   region                   = var.region
   ip_range                 = var.vpc_ip_range
   vpc_description          = "VPC for ${var.project_name} ${var.environment} environment"
-  enable_firewall          = false  # Will be enabled after droplets are created
+  enable_firewall          = false # Will be enabled after droplets are created
   firewall_droplet_tags    = ["${var.project_name}-${var.environment}-api"]
   admin_ssh_ips            = var.admin_ips
   api_port                 = var.api_port
   custom_inbound_rules     = var.custom_inbound_rules
   custom_outbound_rules    = var.custom_outbound_rules
-  enable_database_firewall = false  # Will be enabled after databases are created
+  enable_database_firewall = false # Will be enabled after databases are created
   database_firewall_tags   = ["${var.project_name}-${var.environment}-db"]
 }
 
@@ -112,6 +112,11 @@ module "api_cluster" {
   volume_size            = var.api_volume_size
   enable_custom_firewall = false # Using networking module firewall
   custom_user_data       = var.api_custom_user_data
+
+  # Enhanced configuration
+  timezone    = var.timezone
+  alert_email = var.alert_email
+  vpc_cidr    = var.vpc_ip_range
 
   # Dependencies
   depends_on = [
@@ -176,6 +181,74 @@ resource "digitalocean_loadbalancer" "api" {
 
   # Depends on API cluster being created
   depends_on = [module.api_cluster]
+}
+
+# DigitalOcean Firewall for API Servers (Defense-in-Depth)
+# This provides a second layer of security in addition to UFW on each droplet
+# Created after load balancer so we can restrict API port to LB UID only
+resource "digitalocean_firewall" "api_servers" {
+  name = "${var.project_name}-${var.environment}-api-firewall"
+
+  # Apply to all API droplets via tag
+  tags = ["${var.project_name}-${var.environment}-api"]
+
+  # Inbound Rules
+
+  # Allow SSH from admin IPs only
+  dynamic "inbound_rule" {
+    for_each = length(var.admin_ips) > 0 ? [1] : []
+    content {
+      protocol         = "tcp"
+      port_range       = "22"
+      source_addresses = var.admin_ips
+    }
+  }
+
+  # Allow API port (3002) ONLY from load balancer
+  inbound_rule {
+    protocol                  = "tcp"
+    port_range                = tostring(var.api_port)
+    source_load_balancer_uids = [digitalocean_loadbalancer.api.id]
+  }
+
+  # Allow all traffic from within VPC (for database, Redis, inter-droplet communication)
+  inbound_rule {
+    protocol         = "tcp"
+    port_range       = "1-65535"
+    source_addresses = [var.vpc_ip_range]
+  }
+
+  inbound_rule {
+    protocol         = "udp"
+    port_range       = "1-65535"
+    source_addresses = [var.vpc_ip_range]
+  }
+
+  inbound_rule {
+    protocol         = "icmp"
+    source_addresses = [var.vpc_ip_range]
+  }
+
+  # Outbound Rules - Allow all outbound traffic
+  outbound_rule {
+    protocol              = "tcp"
+    port_range            = "1-65535"
+    destination_addresses = ["0.0.0.0/0", "::/0"]
+  }
+
+  outbound_rule {
+    protocol              = "udp"
+    port_range            = "1-65535"
+    destination_addresses = ["0.0.0.0/0", "::/0"]
+  }
+
+  outbound_rule {
+    protocol              = "icmp"
+    destination_addresses = ["0.0.0.0/0", "::/0"]
+  }
+
+  # Ensure load balancer exists before creating firewall
+  depends_on = [digitalocean_loadbalancer.api]
 }
 
 # DigitalOcean Monitoring Alerts
