@@ -170,8 +170,18 @@ fi
 # Note: Environment variables should be passed from the CI/CD workflow
 log_info "Configuring container environment variables..."
 
+# Map deployment environment to NODE_ENV (staging uses production mode)
+if [ "$ENVIRONMENT" = "staging" ]; then
+  NODE_ENV_VALUE="production"
+elif [ "$ENVIRONMENT" = "dev" ]; then
+  NODE_ENV_VALUE="development"
+else
+  NODE_ENV_VALUE="$ENVIRONMENT"
+fi
+
 # Build environment variable arguments
-ENV_ARGS="-e NODE_ENV=$ENVIRONMENT"
+ENV_ARGS="-e NODE_ENV=$NODE_ENV_VALUE"
+log_info "✓ NODE_ENV set to $NODE_ENV_VALUE (deployment environment: $ENVIRONMENT)"
 
 # Add DATABASE_URL if provided
 if [ -n "${DATABASE_URL:-}" ]; then
