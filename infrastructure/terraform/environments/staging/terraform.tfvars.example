@@ -34,6 +34,15 @@ admin_ips = [
 
 api_port = 3002
 
+# Timezone for all droplets (Morocco - Western European Summer Time)
+timezone = "Africa/Casablanca" # UTC+1 (WEST)
+
+# Alert email for security notifications (fail2ban, etc.)
+alert_email = "nmiliali8@gmail.com"
+
+# VPC CIDR for firewall rules (same as vpc_ip_range)
+vpc_cidr = "10.20.0.0/16"
+
 # ============================================================================
 # DATABASE CONFIGURATION (HA with 2 nodes)
 # ============================================================================
