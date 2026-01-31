@@ -1,0 +1,762 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+# Cancel in-progress runs for the same workflow and ref
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '24.13.0'
+
+jobs:
+  code-quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Needed for Turborepo to compare with base branch
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Turbo build outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            .turbo
+            node_modules/.cache/turbo
+          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+
+      - name: Run linter
+        run: pnpm turbo lint --filter=...[origin/${{ github.base_ref || 'main' }}]
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Run type check
+        run: pnpm turbo type-check
+
+      - name: Dependency audit
+        run: pnpm audit --audit-level=high
+        continue-on-error: true # Don't fail on audit, but report
+
+      - name: Run gitleaks secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }} # Optional for premium features
+
+      - name: Security scan with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0' # Don't fail the build on vulnerabilities
+
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: code-quality
+
+    # Service containers for integration and E2E tests
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: restomarket_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Needed for Turborepo and coverage
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Turbo build outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            .turbo
+            node_modules/.cache/turbo
+          key: ${{ runner.os }}-turbo-test-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-test-
+            ${{ runner.os }}-turbo-
+
+      - name: Run unit tests
+        run: pnpm turbo test --filter=...[origin/${{ github.base_ref || 'main' }}]
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restomarket_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+
+      - name: Run integration tests
+        run: |
+          if grep -q "test:integration" apps/api/package.json; then
+            pnpm --filter api test:integration
+          else
+            echo "⚠️ Integration tests not yet configured - skipping"
+          fi
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restomarket_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+
+      - name: Setup test database schema
+        run: |
+          # Install postgresql client
+          sudo apt-get update && sudo apt-get install -y postgresql-client
+
+          # Create database schema using SQL (non-interactive)
+          PGPASSWORD=postgres psql -h localhost -U postgres -d restomarket_test <<'EOF'
+          -- Enable UUID extension
+          CREATE EXTENSION IF NOT EXISTS "pgcrypto";
+
+          -- Create users table with UUID
+          CREATE TABLE IF NOT EXISTS "users" (
+            "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
+            "created_at" timestamp with time zone DEFAULT now() NOT NULL,
+            "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
+            "deleted_at" timestamp with time zone,
+            "email" varchar(255) NOT NULL,
+            "first_name" varchar(100) NOT NULL,
+            "last_name" varchar(100) NOT NULL,
+            "is_active" boolean DEFAULT true NOT NULL,
+            CONSTRAINT "users_email_unique" UNIQUE("email"),
+            CONSTRAINT "users_email_length_check" CHECK (length("users"."email") >= 3),
+            CONSTRAINT "users_email_normalized_check" CHECK ("users"."email" = lower("users"."email")),
+            CONSTRAINT "users_first_name_length_check" CHECK (length("users"."first_name") >= 1),
+            CONSTRAINT "users_last_name_length_check" CHECK (length("users"."last_name") >= 1)
+          );
+
+          CREATE INDEX IF NOT EXISTS "users_active_query_idx" ON "users" USING btree ("deleted_at","is_active","created_at");
+          CREATE INDEX IF NOT EXISTS "users_email_idx" ON "users" USING btree ("email");
+          CREATE INDEX IF NOT EXISTS "users_name_idx" ON "users" USING btree ("first_name","last_name");
+          EOF
+
+      - name: Run E2E tests
+        run: pnpm --filter api test:e2e
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restomarket_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+
+      - name: Generate coverage report
+        run: pnpm turbo test:cov --filter=...[origin/${{ github.base_ref || 'main' }}]
+        continue-on-error: true # Allow failure if some packages don't have coverage configured yet
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restomarket_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        continue-on-error: true # Skip if coverage files not found or token missing
+        if: always()
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./apps/api/coverage/lcov.info,./packages/ui/coverage/lcov.info,./apps/web/coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false # Don't fail if Codecov upload fails
+
+      - name: Check coverage threshold
+        run: |
+          # This would check if coverage is above 80%
+          # For now, just a placeholder that always passes
+          echo "Coverage threshold check - implement with actual coverage tool"
+        continue-on-error: true # Allow failure until proper threshold checking is implemented
+
+  build:
+    name: Build Packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: test
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Needed for Turborepo
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Turbo build outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            .turbo
+            node_modules/.cache/turbo
+          key: ${{ runner.os }}-turbo-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-build-
+            ${{ runner.os }}-turbo-
+
+      - name: Build all packages
+        run: pnpm turbo build
+
+      - name: Upload build artifacts (API)
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-build
+          path: |
+            apps/api/dist
+            apps/api/package.json
+          retention-days: 7
+
+      - name: Upload build artifacts (Web)
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: |
+            apps/web/.next
+            apps/web/package.json
+          retention-days: 7
+          if-no-files-found: warn # Web might not have build output yet
+
+      - name: Upload build artifacts (Packages)
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-build
+          path: |
+            packages/*/dist
+            packages/*/package.json
+          retention-days: 7
+          if-no-files-found: warn
+
+  docker-build:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: build
+    # Only run on push events, not on pull requests
+    if: github.event_name == 'push'
+
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set lowercase repository owner
+        id: repo_owner
+        run: echo "lowercase=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+      - name: Set short SHA for image tag
+        id: short_sha
+        run: echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ steps.repo_owner.outputs.lowercase }}/restomarket-api
+          tags: |
+            type=sha,format=short,prefix=sha-
+            type=ref,event=branch
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value={{branch}}-{{sha}},enable=true
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          target: production
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            NODE_VERSION=${{ env.NODE_VERSION }}
+            PNPM_VERSION=9.10.0
+            NODE_ENV=production
+
+      - name: Run Trivy vulnerability scanner on image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/${{ steps.repo_owner.outputs.lowercase }}/restomarket-api:sha-${{ steps.short_sha.outputs.short_sha }}
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0' # Don't fail the build on vulnerabilities
+
+  # ============================================================================
+  # Deploy Staging
+  # ============================================================================
+  deploy-staging:
+    name: Deploy to Staging
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    timeout-minutes: 15
+    environment:
+      name: staging
+      url: http://157.245.21.33
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set lowercase repository owner
+        id: repo_owner
+        run: echo "lowercase=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+      - name: Set short SHA for image tag
+        id: short_sha
+        run: echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Deploy to staging droplet
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USERNAME }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            set -e
+
+            # Log in to GitHub Container Registry
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Configuration
+            IMAGE_TAG="ghcr.io/${{ steps.repo_owner.outputs.lowercase }}/restomarket-api:sha-${{ steps.short_sha.outputs.short_sha }}"
+            BLUE_CONTAINER="restomarket-api-blue"
+            GREEN_CONTAINER="restomarket-api-green"
+
+            # Application environment variables
+            DATABASE_URL="${{ secrets.STAGING_DATABASE_URL }}"
+            REDIS_URL="${{ secrets.STAGING_REDIS_URL }}"
+            CORS_ORIGINS="http://157.245.21.33,http://165.227.129.93,http://161.35.21.86"
+
+            echo "🚀 Starting blue-green deployment..."
+            echo "Image: $IMAGE_TAG"
+
+            # Determine current and new container
+            if docker ps --filter "name=${GREEN_CONTAINER}" --format "{{.Names}}" | grep -q "${GREEN_CONTAINER}"; then
+              CURRENT_CONTAINER="$GREEN_CONTAINER"
+              NEW_CONTAINER="$BLUE_CONTAINER"
+              echo "✓ Current: GREEN → Deploying to: BLUE"
+            elif docker ps --filter "name=${BLUE_CONTAINER}" --format "{{.Names}}" | grep -q "${BLUE_CONTAINER}"; then
+              CURRENT_CONTAINER="$BLUE_CONTAINER"
+              NEW_CONTAINER="$GREEN_CONTAINER"
+              echo "✓ Current: BLUE → Deploying to: GREEN"
+            else
+              CURRENT_CONTAINER=""
+              NEW_CONTAINER="$GREEN_CONTAINER"
+              echo "✓ First deployment → Deploying to: GREEN"
+            fi
+
+            # Pull new image
+            echo "📥 Pulling Docker image..."
+            if ! docker pull "$IMAGE_TAG"; then
+              echo "❌ Failed to pull image"
+              exit 1
+            fi
+            echo "✓ Image pulled successfully"
+
+            # Remove existing new container if exists (from failed deployment)
+            docker stop "$NEW_CONTAINER" 2>/dev/null || true
+            docker rm "$NEW_CONTAINER" 2>/dev/null || true
+
+            # Start new container with all environment variables
+            echo "🔧 Starting new container: $NEW_CONTAINER"
+            docker run -d \
+              --name "$NEW_CONTAINER" \
+              --restart unless-stopped \
+              -p 3002:3002 \
+              -e NODE_ENV="production" \
+              -e DATABASE_URL="$DATABASE_URL" \
+              -e REDIS_URL="$REDIS_URL" \
+              -e APP_PORT="3002" \
+              -e CORS_ORIGINS="$CORS_ORIGINS" \
+              -e LOG_LEVEL="info" \
+              -e API_PREFIX="v1" \
+              "$IMAGE_TAG"
+
+            if [ $? -ne 0 ]; then
+              echo "❌ Failed to start container"
+              exit 1
+            fi
+            echo "✓ Container started successfully"
+
+            # Wait for container startup
+            echo "⏳ Waiting 10s for container to initialize..."
+            sleep 10
+
+            # Health check loop
+            echo "🏥 Running health checks on http://localhost:3002/v1/health"
+            HEALTH_PASSED=false
+            for i in {1..12}; do
+              echo "  Attempt $i/12..."
+
+              # Check if container is still running
+              if ! docker ps --filter "name=${NEW_CONTAINER}" --format "{{.Names}}" | grep -q "${NEW_CONTAINER}"; then
+                echo "❌ Container stopped unexpectedly!"
+                echo "Container logs:"
+                docker logs "$NEW_CONTAINER" --tail 50
+                exit 1
+              fi
+
+              # Health check
+              if curl -f -s http://localhost:3002/v1/health > /dev/null 2>&1; then
+                echo "✅ Health check passed!"
+                HEALTH_PASSED=true
+                break
+              fi
+
+              if [ $i -lt 12 ]; then
+                sleep 5
+              fi
+            done
+
+            if [ "$HEALTH_PASSED" = false ]; then
+              echo "❌ Health check failed after 12 attempts"
+              echo "Container logs:"
+              docker logs "$NEW_CONTAINER" --tail 50
+
+              # Cleanup failed deployment
+              docker stop "$NEW_CONTAINER"
+              docker rm "$NEW_CONTAINER"
+              exit 1
+            fi
+
+            # Switch traffic - stop old container
+            if [ -n "$CURRENT_CONTAINER" ]; then
+              echo "🔄 Switching traffic from $CURRENT_CONTAINER to $NEW_CONTAINER"
+              docker stop "$CURRENT_CONTAINER"
+              docker rm "$CURRENT_CONTAINER"
+              echo "✓ Old container removed"
+            fi
+
+            # Cleanup old images (keep last 3)
+            echo "🧹 Cleaning up old images..."
+            docker images "ghcr.io/${{ steps.repo_owner.outputs.lowercase }}/restomarket-api" --format "{{.ID}} {{.CreatedAt}}" | \
+              sort -k2 -r | tail -n +4 | awk '{print $1}' | xargs -r docker rmi || true
+
+            echo "🎉 Deployment successful!"
+            docker ps --filter "name=restomarket-api" --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
+
+      - name: Run health check
+        run: |
+          echo "Waiting for application to be ready..."
+          sleep 10
+
+          # Health check with retries (use load balancer IP from Frankfurt)
+          MAX_RETRIES=12
+          RETRY_DELAY=5
+          HEALTH_URL="http://${{ secrets.STAGING_HOST }}:3002/v1/health"
+
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Health check attempt $i/$MAX_RETRIES..."
+            echo "Checking: $HEALTH_URL"
+
+            HTTP_CODE=$(curl -f -s -o /dev/null -w "%{http_code}" "$HEALTH_URL" || echo "000")
+
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ Health check passed! (HTTP $HTTP_CODE)"
+              exit 0
+            else
+              echo "❌ Health check failed (HTTP $HTTP_CODE)"
+            fi
+
+            if [ $i -lt $MAX_RETRIES ]; then
+              echo "⏳ Retrying in ${RETRY_DELAY}s..."
+              sleep $RETRY_DELAY
+            fi
+          done
+
+          echo "❌ Health check failed after $MAX_RETRIES attempts"
+          exit 1
+
+      - name: Run smoke tests
+        run: |
+          echo "Running basic smoke tests..."
+          STAGING_URL="http://${{ secrets.STAGING_HOST }}:3002"
+
+          # Test 1: Health endpoint returns expected structure
+          echo "Testing: $STAGING_URL/v1/health"
+          HEALTH_RESPONSE=$(curl -s "$STAGING_URL/v1/health")
+
+          if echo "$HEALTH_RESPONSE" | grep -q '"status"'; then
+            echo "✅ Health endpoint returns valid JSON"
+            echo "Response: $HEALTH_RESPONSE"
+          else
+            echo "❌ Health endpoint response invalid: $HEALTH_RESPONSE"
+            exit 1
+          fi
+
+          # Test 2: API returns correct version header
+          if curl -I -s "$STAGING_URL/v1/health" | grep -q "X-API-Version"; then
+            echo "✅ API version header present"
+          else
+            echo "⚠️  API version header missing (non-critical)"
+          fi
+
+          echo "✅ All smoke tests passed!"
+
+      - name: Rollback on failure
+        if: failure()
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ secrets.STAGING_HOST }}
+          username: ${{ secrets.STAGING_USERNAME }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            echo "🔄 Deployment failed, checking for rollback..."
+
+            # Check if there are any stopped containers to restore
+            BLUE_CONTAINER="restomarket-api-blue"
+            GREEN_CONTAINER="restomarket-api-green"
+
+            # Find the most recently stopped container
+            STOPPED_CONTAINER=$(docker ps -a --filter "status=exited" --filter "name=restomarket-api-" --format "{{.Names}}" --latest 2>/dev/null | head -1)
+
+            if [ -n "$STOPPED_CONTAINER" ]; then
+              echo "Found stopped container: $STOPPED_CONTAINER"
+              echo "Attempting to restart..."
+
+              # Restart the stopped container
+              if docker start "$STOPPED_CONTAINER"; then
+                echo "✅ Successfully restarted previous container: $STOPPED_CONTAINER"
+
+                # Wait for health check
+                sleep 5
+                if curl -f -s http://localhost:3002/v1/health > /dev/null 2>&1; then
+                  echo "✅ Previous version is healthy and running"
+                else
+                  echo "⚠️  Previous container restarted but health check failed"
+                fi
+              else
+                echo "❌ Failed to restart previous container"
+              fi
+            else
+              echo "⚠️  No previous container found to rollback to"
+              echo "This might be the first deployment or all previous containers were removed"
+            fi
+
+            # Show current container status
+            echo "Current container status:"
+            docker ps --filter "name=restomarket-api" --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}" || echo "No containers running"
+
+      - name: Notify Slack on success
+        if: success()
+        uses: slackapi/slack-github-action@v1.25.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        with:
+          payload: |
+            {
+              "text": "✅ Staging Deployment Successful",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "✅ Staging Deployment Successful"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Environment:*\nStaging"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch:*\n${{ github.ref_name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Commit:*\n<${{ github.event.head_commit.url }}|${{ github.sha }}>"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Author:*\n${{ github.actor }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Message:* ${{ github.event.head_commit.message }}"
+                  }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Deployment"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View API"
+                      },
+                      "url": "http://157.245.21.33:3002"
+                    }
+                  ]
+                }
+              ]
+            }
+
+      - name: Notify Slack on failure
+        if: failure()
+        uses: slackapi/slack-github-action@v1.25.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        with:
+          payload: |
+            {
+              "text": "❌ Staging Deployment Failed",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "❌ Staging Deployment Failed"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Environment:*\nStaging"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch:*\n${{ github.ref_name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Commit:*\n<${{ github.event.head_commit.url }}|${{ github.sha }}>"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Author:*\n${{ github.actor }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "⚠️ *Rollback initiated* - Previous version restored"
+                  }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Logs"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }

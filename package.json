@@ -5,8 +5,8 @@
   "description": "RestoMarket Monorepo - Modern B2B Food Supply Platform",
   "packageManager": "pnpm@9.10.0",
   "engines": {
-    "node": ">=20.17.0",
-    "pnpm": ">=9.0.0"
+    "node": ">=20.19.0",
+    "pnpm": ">=9.10.0"
   },
   "scripts": {
     "dev": "turbo run dev",
@@ -22,6 +22,9 @@
     "type-check": "turbo run type-check",
     "clean": "turbo run clean && rm -rf node_modules .turbo",
     "clean:cache": "turbo daemon clean && rm -rf .turbo node_modules/.cache",
+    "docker:dev": "docker compose up",
+    "docker:dev:build": "docker compose up --build",
+    "docker:dev:detach": "docker compose up -d",
     "prepare": "husky",
     "preinstall": "npx only-allow pnpm"
   },
@@ -42,7 +45,7 @@
     "typescript-eslint": "^8.54.0"
   },
   "volta": {
-    "node": "20.17.0",
+    "node": "24.13.0",
     "pnpm": "9.10.0"
   },
   "lint-staged": {
