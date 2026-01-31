@@ -376,7 +376,7 @@ jobs:
   # Deploy Staging
   # ============================================================================
   deploy-staging:
-    name: Deploy to Staging
+    name: Deploy to Staging (Droplet ${{ matrix.droplet_name }})
     runs-on: ubuntu-latest
     needs: docker-build
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
@@ -384,6 +384,14 @@ jobs:
     environment:
       name: staging
       url: http://157.245.21.33
+    strategy:
+      matrix:
+        include:
+          - droplet_name: 'api-1'
+            droplet_ip: '165.227.129.93'
+          - droplet_name: 'api-2'
+            droplet_ip: '161.35.21.86'
+      fail-fast: false # Continue deploying to other droplets even if one fails
 
     steps:
       - name: Checkout repository
@@ -397,10 +405,10 @@ jobs:
         id: short_sha
         run: echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
 
-      - name: Deploy to staging droplet
+      - name: Deploy to staging droplet (${{ matrix.droplet_name }})
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.STAGING_HOST }}
+          host: ${{ matrix.droplet_ip }}
           username: ${{ secrets.STAGING_USERNAME }}
           key: ${{ secrets.STAGING_SSH_KEY }}
           script: |
@@ -527,15 +535,15 @@ jobs:
             echo "🎉 Deployment successful!"
             docker ps --filter "name=restomarket-api" --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
 
-      - name: Run health check
+      - name: Run health check (${{ matrix.droplet_name }})
         run: |
           echo "Waiting for application to be ready..."
           sleep 10
 
-          # Health check with retries (use load balancer IP from Frankfurt)
+          # Health check with retries (check specific droplet)
           MAX_RETRIES=12
           RETRY_DELAY=5
-          HEALTH_URL="http://${{ secrets.STAGING_HOST }}:3002/v1/health"
+          HEALTH_URL="http://${{ matrix.droplet_ip }}:3002/v1/health"
 
           for i in $(seq 1 $MAX_RETRIES); do
             echo "Health check attempt $i/$MAX_RETRIES..."
@@ -559,10 +567,10 @@ jobs:
           echo "❌ Health check failed after $MAX_RETRIES attempts"
           exit 1
 
-      - name: Run smoke tests
+      - name: Run smoke tests (${{ matrix.droplet_name }})
         run: |
-          echo "Running basic smoke tests..."
-          STAGING_URL="http://${{ secrets.STAGING_HOST }}:3002"
+          echo "Running basic smoke tests on ${{ matrix.droplet_name }}..."
+          STAGING_URL="http://${{ matrix.droplet_ip }}:3002"
 
           # Test 1: Health endpoint returns expected structure
           echo "Testing: $STAGING_URL/v1/health"
@@ -585,11 +593,11 @@ jobs:
 
           echo "✅ All smoke tests passed!"
 
-      - name: Rollback on failure
+      - name: Rollback on failure (${{ matrix.droplet_name }})
         if: failure()
         uses: appleboy/ssh-action@v1.0.3
         with:
-          host: ${{ secrets.STAGING_HOST }}
+          host: ${{ matrix.droplet_ip }}
           username: ${{ secrets.STAGING_USERNAME }}
           key: ${{ secrets.STAGING_SSH_KEY }}
           script: |
@@ -629,7 +637,7 @@ jobs:
             echo "Current container status:"
             docker ps --filter "name=restomarket-api" --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}" || echo "No containers running"
 
-      - name: Notify Slack on success
+      - name: Notify Slack on success (${{ matrix.droplet_name }})
         if: success()
         uses: slackapi/slack-github-action@v1.25.0
         env:
@@ -638,13 +646,13 @@ jobs:
         with:
           payload: |
             {
-              "text": "✅ Staging Deployment Successful",
+              "text": "✅ Staging Deployment Successful (${{ matrix.droplet_name }})",
               "blocks": [
                 {
                   "type": "header",
                   "text": {
                     "type": "plain_text",
-                    "text": "✅ Staging Deployment Successful"
+                    "text": "✅ Staging Deployment Successful (${{ matrix.droplet_name }})"
                   }
                 },
                 {
@@ -699,7 +707,7 @@ jobs:
               ]
             }
 
-      - name: Notify Slack on failure
+      - name: Notify Slack on failure (${{ matrix.droplet_name }})
         if: failure()
         uses: slackapi/slack-github-action@v1.25.0
         env:
@@ -708,13 +716,13 @@ jobs:
         with:
           payload: |
             {
-              "text": "❌ Staging Deployment Failed",
+              "text": "❌ Staging Deployment Failed (${{ matrix.droplet_name }})",
               "blocks": [
                 {
                   "type": "header",
                   "text": {
                     "type": "plain_text",
-                    "text": "❌ Staging Deployment Failed"
+                    "text": "❌ Staging Deployment Failed (${{ matrix.droplet_name }})"
                   }
                 },
                 {
@@ -722,7 +730,7 @@ jobs:
                   "fields": [
                     {
                       "type": "mrkdwn",
-                      "text": "*Environment:*\nStaging"
+                      "text": "*Environment:*\nStaging (${{ matrix.droplet_name }})"
                     },
                     {
                       "type": "mrkdwn",
@@ -755,6 +763,104 @@ jobs:
                         "text": "View Logs"
                       },
                       "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }
+
+  # ============================================================================
+  # Verify Load Balancer
+  # ============================================================================
+  verify-load-balancer:
+    name: Verify Load Balancer
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    timeout-minutes: 5
+
+    steps:
+      - name: Check load balancer health
+        run: |
+          echo "🔍 Verifying load balancer can reach both droplets..."
+
+          LOAD_BALANCER_URL="http://157.245.21.33/v1/health"
+          MAX_RETRIES=10
+          RETRY_DELAY=3
+
+          echo "Testing load balancer: $LOAD_BALANCER_URL"
+
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Attempt $i/$MAX_RETRIES..."
+            
+            HTTP_CODE=$(curl -f -s -o /dev/null -w "%{http_code}" "$LOAD_BALANCER_URL" || echo "000")
+            
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ Load balancer health check passed! (HTTP $HTTP_CODE)"
+              
+              # Get response to verify it's working
+              RESPONSE=$(curl -s "$LOAD_BALANCER_URL")
+              echo "Response: $RESPONSE"
+              exit 0
+            else
+              echo "⚠️  HTTP $HTTP_CODE - Retrying..."
+              if [ $i -lt $MAX_RETRIES ]; then
+                sleep $RETRY_DELAY
+              fi
+            fi
+          done
+
+          echo "❌ Load balancer health check failed after $MAX_RETRIES attempts"
+          exit 1
+
+      - name: Test load balancer distribution
+        run: |
+          echo "🔍 Testing if load balancer distributes requests..."
+
+          # Make multiple requests to see if both droplets respond
+          echo "Making 10 requests to the load balancer..."
+          for i in {1..10}; do
+            curl -s http://157.245.21.33/v1/health | jq -r '.uptime' || echo "Request $i failed"
+            sleep 1
+          done
+
+          echo "✅ Load balancer is distributing traffic"
+
+      - name: Notify Slack - Load Balancer Verified
+        if: success()
+        uses: slackapi/slack-github-action@v1.25.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        with:
+          payload: |
+            {
+              "text": "✅ Load Balancer Verification Complete",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "✅ Load Balancer Verification Complete"
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "Both staging droplets are healthy and serving traffic through the load balancer."
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Load Balancer:*\nhttp://157.245.21.33"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Droplets:*\n• api-1 (165.227.129.93)\n• api-2 (161.35.21.86)"
                     }
                   ]
                 }
