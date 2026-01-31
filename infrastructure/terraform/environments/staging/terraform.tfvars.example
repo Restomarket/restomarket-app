@@ -32,6 +32,10 @@ admin_ips = [
   # "5.6.7.8/32",  # Home IP
 ]
 
+# Allow GitHub Actions to SSH for CI/CD deployment (fetches IPs from api.github.com/meta)
+# Set to false if not using GitHub Actions for deployment
+allow_github_actions_ssh = true
+
 api_port = 3002
 
 # Timezone for all droplets (Morocco - Western European Summer Time)
