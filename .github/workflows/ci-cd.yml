@@ -455,7 +455,7 @@ jobs:
               --name "$NEW_CONTAINER" \
               --restart unless-stopped \
               -p 3002:3002 \
-              -e NODE_ENV="staging" \
+              -e NODE_ENV="production" \
               -e DATABASE_URL="$DATABASE_URL" \
               -e REDIS_URL="$REDIS_URL" \
               -e APP_PORT="3002" \
