@@ -10,18 +10,9 @@ export interface HealthCheckResponse {
   timestamp: string;
   uptime: number;
   environment: string;
-  services: {
-    database: 'connected' | 'disconnected' | 'error';
-    redis?: 'connected' | 'disconnected' | 'error';
-  };
   database: {
     status: 'connected' | 'disconnected' | 'error';
     responseTime: number;
-    message?: string;
-  };
-  redis?: {
-    status: 'connected' | 'disconnected' | 'error';
-    responseTime?: number;
     message?: string;
   };
   memory: {
@@ -48,7 +39,6 @@ export class HealthService {
     let dbStatus: 'connected' | 'disconnected' | 'error' = 'disconnected';
     let dbMessage: string | undefined;
 
-    // Check database connection
     try {
       await this.db.execute(sql`SELECT 1`);
       dbStatus = 'connected';
@@ -59,42 +49,15 @@ export class HealthService {
 
     const dbResponseTime = Date.now() - startTime;
 
-    // Check Redis connection (optional - only if Redis is configured)
-    let redisStatus: 'connected' | 'disconnected' | 'error' | undefined;
-    let redisResponseTime: number | undefined;
-    let redisMessage: string | undefined;
-
-    // TODO: Add Redis health check when Redis is configured
-    // Example implementation:
-    // if (this.redis) {
-    //   const redisStartTime = Date.now();
-    //   try {
-    //     await this.redis.ping();
-    //     redisStatus = 'connected';
-    //     redisResponseTime = Date.now() - redisStartTime;
-    //   } catch (error) {
-    //     redisStatus = 'error';
-    //     redisMessage = error instanceof Error ? error.message : 'Unknown Redis error';
-    //   }
-    // }
-
     const memoryUsage = process.memoryUsage();
     const cpuUsage = process.cpuUsage();
     const environment = this.config.get('app.nodeEnv', { infer: true });
 
-    // Determine overall health status
-    const isHealthy =
-      dbStatus === 'connected' && (redisStatus === undefined || redisStatus === 'connected');
-
-    const response: HealthCheckResponse = {
-      status: isHealthy ? 'healthy' : 'unhealthy',
+    return {
+      status: dbStatus === 'connected' ? 'healthy' : 'unhealthy',
       timestamp: new Date().toISOString(),
       uptime: Math.floor(process.uptime()),
       environment,
-      services: {
-        database: dbStatus,
-        ...(redisStatus && { redis: redisStatus }),
-      },
       database: {
         status: dbStatus,
         responseTime: dbResponseTime,
@@ -110,17 +73,6 @@ export class HealthService {
         usage: cpuUsage,
       },
     };
-
-    // Add Redis info if checked
-    if (redisStatus) {
-      response.redis = {
-        status: redisStatus,
-        ...(redisResponseTime && { responseTime: redisResponseTime }),
-        ...(redisMessage && { message: redisMessage }),
-      };
-    }
-
-    return response;
   }
 
   private formatBytes(bytes: number): string {

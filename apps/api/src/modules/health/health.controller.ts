@@ -1,6 +1,5 @@
-import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
+import { Controller, Get, HttpCode, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
-import { Response } from 'express';
 import { HealthService } from './health.service';
 
 @ApiTags('health')
@@ -9,10 +8,11 @@ export class HealthController {
   constructor(private readonly healthService: HealthService) {}
 
   @Get()
+  @HttpCode(HttpStatus.OK)
   @ApiOperation({
     summary: 'Health check endpoint',
     description:
-      'Returns the health status of the application including database and Redis connectivity, memory usage, and system information. Returns 200 when healthy, 503 when unhealthy.',
+      'Returns the health status of the application including database connectivity, memory usage, and system information',
   })
   @ApiResponse({
     status: 200,
@@ -21,24 +21,9 @@ export class HealthController {
       type: 'object',
       properties: {
         status: { type: 'string', enum: ['healthy', 'unhealthy'], example: 'healthy' },
-        timestamp: { type: 'string', format: 'date-time', example: '2025-01-29T12:00:00.000Z' },
+        timestamp: { type: 'string', format: 'date-time', example: '2024-01-01T00:00:00.000Z' },
         uptime: { type: 'number', example: 3600 },
         environment: { type: 'string', example: 'production' },
-        services: {
-          type: 'object',
-          properties: {
-            database: {
-              type: 'string',
-              enum: ['connected', 'disconnected', 'error'],
-              example: 'connected',
-            },
-            redis: {
-              type: 'string',
-              enum: ['connected', 'disconnected', 'error'],
-              example: 'connected',
-            },
-          },
-        },
         database: {
           type: 'object',
           properties: {
@@ -48,17 +33,6 @@ export class HealthController {
               example: 'connected',
             },
             responseTime: { type: 'number', example: 5 },
-          },
-        },
-        redis: {
-          type: 'object',
-          properties: {
-            status: {
-              type: 'string',
-              enum: ['connected', 'disconnected', 'error'],
-              example: 'connected',
-            },
-            responseTime: { type: 'number', example: 2 },
           },
         },
         memory: {
@@ -86,13 +60,7 @@ export class HealthController {
     },
   })
   @ApiResponse({ status: 503, description: 'Service is unhealthy' })
-  async check(@Res() res: Response) {
-    const healthStatus = await this.healthService.check();
-
-    // Return 503 if unhealthy, 200 if healthy
-    const statusCode =
-      healthStatus.status === 'healthy' ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE;
-
-    return res.status(statusCode).json(healthStatus);
+  async check() {
+    return this.healthService.check();
   }
 }

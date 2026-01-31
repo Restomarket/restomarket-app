@@ -1,7 +1,4 @@
 import { config } from "@repo/eslint-config/react-internal";
 
 /** @type {import("eslint").Linter.Config} */
-export default [
-  { ignores: ["coverage/**", "**/coverage/**"] },
-  ...config,
-];
+export default config;

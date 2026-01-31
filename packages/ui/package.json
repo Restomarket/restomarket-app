@@ -10,9 +10,7 @@
     "lint": "eslint . --max-warnings 0",
     "generate:component": "turbo gen react-component",
     "type-check": "tsc --noEmit",
-    "test": "jest",
-    "test:watch": "jest --watch",
-    "test:cov": "jest --coverage"
+    "test": "jest"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
