@@ -277,7 +277,7 @@ output "load_balancer_https_url" {
 
 output "health_check_url" {
   description = "Health check endpoint via load balancer"
-  value       = "http://${digitalocean_loadbalancer.api.ip}/health"
+  value       = "http://${digitalocean_loadbalancer.api.ip}/v1/health"
 }
 
 output "quick_start" {
@@ -290,7 +290,7 @@ output "quick_start" {
        ${var.ssl_certificate_name != "" ? "https://${digitalocean_loadbalancer.api.ip}" : "http://${digitalocean_loadbalancer.api.ip}"}
 
     2. Test Health Check:
-       curl ${var.ssl_certificate_name != "" ? "https://${digitalocean_loadbalancer.api.ip}/health" : "http://${digitalocean_loadbalancer.api.ip}/health"}
+       curl ${var.ssl_certificate_name != "" ? "https://${digitalocean_loadbalancer.api.ip}/v1/health" : "http://${digitalocean_loadbalancer.api.ip}/v1/health"}
 
     3. SSH to API droplets (for maintenance):
        ${length(module.api_cluster.public_ipv4_addresses) > 0 ? "ssh root@${module.api_cluster.public_ipv4_addresses[0]}" : "No droplets available"}
