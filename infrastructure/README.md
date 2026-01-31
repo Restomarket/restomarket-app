@@ -14,19 +14,10 @@ infrastructure/
 │   │   ├── monitoring/    # Monitoring and alerting
 │   │   └── redis/         # Managed Redis cache
 │   ├── environments/      # Environment-specific configurations
-│   │   ├── dev/          # Development environment
 │   │   └── staging/      # Staging environment
 │   └── scripts/          # Terraform utility scripts
 │       ├── init-backend.sh   # Initialize remote state backend
 │       └── deploy.sh         # Deployment helper
-├── ansible/               # Configuration Management
-│   ├── playbooks/        # Ansible playbooks
-│   │   ├── setup-api.yml    # Initial server setup
-│   │   ├── update-api.yml   # API deployment with zero-downtime
-│   │   └── backup.yml       # Backup procedures
-│   └── inventory/        # Inventory files
-│       ├── dev.yml          # Development inventory
-│       └── staging.yml      # Staging inventory
 ├── docker/               # Docker configurations
 │   ├── api/             # API Dockerfile and configs
 │   └── docker-compose.yml   # Local development setup
@@ -57,19 +48,18 @@ This infrastructure supports two environments:
 3. **CI/CD Gatekeeping**: Quality checks block deployments via GitHub Actions
 4. **Zero-Downtime Deployments**: Blue-green deployment strategy with health checks
 5. **Infrastructure as Code**: Terraform for reproducible infrastructure
-6. **Configuration Management**: Ansible for server provisioning and updates
+6. **Automated Deployments**: GitHub Actions CI/CD with inline bash deployment scripts
 
 ## Prerequisites
 
 ### Required Tools
 
 - **Terraform** >= 1.6
-- **Ansible** >= 2.15
 - **Docker** >= 24.0
 - **Docker Compose** >= 2.20
 - **pnpm** >= 8.0
 - **Node.js** >= 20.18
-- **DigitalOcean CLI** (`doctl`)
+- **DigitalOcean CLI** (`doctl`) (optional)
 
 ### Required Accounts
 
@@ -312,8 +302,8 @@ terraform force-unlock <lock-id>
 When making infrastructure changes:
 
 1. Create a feature branch
-2. Update Terraform/Ansible configurations
-3. Test in dev environment first
+2. Update Terraform configurations
+3. Test changes in staging environment
 4. Run `terraform validate` and `terraform fmt`
 5. Open PR with description of changes
 6. Apply to staging after approval
