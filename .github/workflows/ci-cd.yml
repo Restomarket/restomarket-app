@@ -453,6 +453,14 @@ jobs:
             fi
             echo "✓ Image pulled successfully"
 
+            # Stop old container first (port 3002 can only be used by one container)
+            if [ -n "$CURRENT_CONTAINER" ]; then
+              echo "🛑 Stopping current container: $CURRENT_CONTAINER"
+              docker stop "$CURRENT_CONTAINER"
+              docker rm "$CURRENT_CONTAINER"
+              echo "✓ Old container removed"
+            fi
+
             # Remove existing new container if exists (from failed deployment)
             docker stop "$NEW_CONTAINER" 2>/dev/null || true
             docker rm "$NEW_CONTAINER" 2>/dev/null || true
@@ -517,14 +525,6 @@ jobs:
               docker stop "$NEW_CONTAINER"
               docker rm "$NEW_CONTAINER"
               exit 1
-            fi
-
-            # Switch traffic - stop old container
-            if [ -n "$CURRENT_CONTAINER" ]; then
-              echo "🔄 Switching traffic from $CURRENT_CONTAINER to $NEW_CONTAINER"
-              docker stop "$CURRENT_CONTAINER"
-              docker rm "$CURRENT_CONTAINER"
-              echo "✓ Old container removed"
             fi
 
             # Cleanup old images (keep last 3)
