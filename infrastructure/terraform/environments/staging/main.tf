@@ -1,6 +1,12 @@
 # Staging Environment Infrastructure Configuration
 # This configuration creates a production-like staging environment with HA setup
 
+variable "allow_github_actions_ssh" {
+  description = "Allow GitHub Actions IP ranges to SSH for CI/CD deployment. Fetches IPs from api.github.com/meta."
+  type        = bool
+  default     = true
+}
+
 terraform {
   required_version = ">= 1.0"
 
@@ -8,6 +14,10 @@ terraform {
     digitalocean = {
       source  = "digitalocean/digitalocean"
       version = "~> 2.0"
+    }
+    http = {
+      source  = "hashicorp/http"
+      version = "~> 3.0"
     }
   }
 
@@ -33,6 +43,27 @@ provider "digitalocean" {
 # Data source for SSH keys
 data "digitalocean_ssh_key" "default" {
   name = var.ssh_key_name
+}
+
+# Fetch GitHub Actions IP ranges for CI/CD SSH deployment access
+# See: https://docs.github.com/en/authentication/keeping-your-account-and-data-secure/about-githubs-ip-addresses
+data "http" "github_meta" {
+  count = var.allow_github_actions_ssh ? 1 : 0
+
+  url = "https://api.github.com/meta"
+
+  request_headers = {
+    Accept = "application/json"
+  }
+}
+
+locals {
+  # Combine admin IPs with GitHub Actions IPs when CI/CD deployment is enabled
+  # This allows GitHub Actions to SSH to droplets for deployment while keeping admin access
+  github_actions_ips = var.allow_github_actions_ssh ? try(jsondecode(data.http.github_meta[0].response_body).actions, []) : []
+  ssh_allowed_ips    = distinct(concat(var.admin_ips, local.github_actions_ips))
+  # DigitalOcean limits 1000 sources per rule - split into chunks
+  ssh_allowed_ips_chunks = chunklist(local.ssh_allowed_ips, 1000)
 }
 
 # VPC and Networking
@@ -194,13 +225,15 @@ resource "digitalocean_firewall" "api_servers" {
 
   # Inbound Rules
 
-  # Allow SSH from admin IPs only
+  # Allow SSH from admin IPs + GitHub Actions IPs (for CI/CD deployment)
+  # When allow_github_actions_ssh=true, fetches IP ranges from api.github.com/meta
+  # DigitalOcean limits 1000 sources per rule - use multiple rules if needed
   dynamic "inbound_rule" {
-    for_each = length(var.admin_ips) > 0 ? [1] : []
+    for_each = local.ssh_allowed_ips_chunks
     content {
       protocol         = "tcp"
       port_range       = "22"
-      source_addresses = var.admin_ips
+      source_addresses = inbound_rule.value
     }
   }
 
