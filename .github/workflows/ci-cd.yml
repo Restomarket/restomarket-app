@@ -446,15 +446,35 @@ jobs:
         uses: appleboy/ssh-action@v1.0.3
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NODE_VERSION: ${{ env.NODE_VERSION }}
         with:
           host: ${{ matrix.droplet_ip }}
           username: ${{ secrets.STAGING_USERNAME }}
           key: ${{ secrets.STAGING_SSH_KEY }}
-          envs: GITHUB_TOKEN
+          envs: GITHUB_TOKEN,NODE_VERSION
           script: |
             set -e
 
             echo "📊 Running database migrations on ${{ matrix.droplet_name }}..."
+
+            # Ensure Node.js is available (pnpm requires it)
+            NODE_VER="${NODE_VERSION:-24.13.0}"
+            if ! command -v node &> /dev/null; then
+              echo "Installing Node.js ${NODE_VER} via nvm..."
+              export NVM_DIR="${HOME}/.nvm"
+              curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
+              [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+              nvm install "$NODE_VER"
+              nvm use "$NODE_VER"
+            else
+              # Node present; try to use requested version via nvm if available
+              export NVM_DIR="${NVM_DIR:-${HOME}/.nvm}"
+              if [ -s "$NVM_DIR/nvm.sh" ]; then
+                \. "$NVM_DIR/nvm.sh"
+                nvm use "$NODE_VER" 2>/dev/null || nvm install "$NODE_VER" 2>/dev/null || true
+              fi
+            fi
+            export PATH="$(dirname $(command -v node)):$PATH"
 
             # Create temporary directory for migrations
             MIGRATION_DIR="/tmp/restomarket-migrations-$(date +%s)"
@@ -469,11 +489,9 @@ jobs:
               curl -fsSL https://get.pnpm.io/install.sh | sh -
               export PNPM_HOME="${HOME}/.local/share/pnpm"
               export PATH="$PNPM_HOME:$PATH"
-              # Installer only updates .bashrc; ensure current shell has pnpm on PATH
               source ~/.bashrc 2>/dev/null || source ~/.profile 2>/dev/null || true
               export PATH="$PNPM_HOME:$PATH"
             fi
-            # Ensure pnpm is on PATH (e.g. when already installed)
             export PNPM_HOME="${PNPM_HOME:-${HOME}/.local/share/pnpm}"
             export PATH="$PNPM_HOME:$PATH"
 
