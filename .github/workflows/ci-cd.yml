@@ -410,12 +410,50 @@ jobs:
           exit-code: '0' # Don't fail the build on vulnerabilities
 
   # ============================================================================
+  # Migrate Staging (run once from CI runner; single DB, no SSH)
+  # Requires: staging DB reachable from GitHub Actions (public or allowlisted IPs).
+  # ============================================================================
+  migrate-staging:
+    name: Run Staging Migrations
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    timeout-minutes: 10
+    environment:
+      name: staging
+      url: http://157.245.21.33
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run database migrations
+        run: pnpm --filter api db:migrate
+        env:
+          NODE_ENV: production
+          # Use direct URL for migrations (bypasses pooler; single connection from runner)
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_DIRECT_URL }}
+          DATABASE_DIRECT_URL: ${{ secrets.STAGING_DATABASE_DIRECT_URL }}
+
+  # ============================================================================
   # Deploy Staging
   # ============================================================================
   deploy-staging:
     name: Deploy to Staging (Droplet ${{ matrix.droplet_name }})
     runs-on: ubuntu-latest
-    needs: docker-build
+    needs: [docker-build, migrate-staging]
     if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
     timeout-minutes: 15
     environment:
@@ -441,80 +479,6 @@ jobs:
       - name: Set short SHA for image tag
         id: short_sha
         run: echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
-
-      - name: Run database migrations
-        uses: appleboy/ssh-action@v1.0.3
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          NODE_VERSION: ${{ env.NODE_VERSION }}
-        with:
-          host: ${{ matrix.droplet_ip }}
-          username: ${{ secrets.STAGING_USERNAME }}
-          key: ${{ secrets.STAGING_SSH_KEY }}
-          envs: GITHUB_TOKEN,NODE_VERSION
-          script: |
-            set -e
-
-            echo "📊 Running database migrations on ${{ matrix.droplet_name }}..."
-
-            # Ensure Node.js is available (pnpm requires it)
-            NODE_VER="${NODE_VERSION:-24.13.0}"
-            if ! command -v node &> /dev/null; then
-              echo "Installing Node.js ${NODE_VER} via nvm..."
-              export NVM_DIR="${HOME}/.nvm"
-              curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.40.1/install.sh | bash
-              [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-              nvm install "$NODE_VER"
-              nvm use "$NODE_VER"
-            else
-              # Node present; try to use requested version via nvm if available
-              export NVM_DIR="${NVM_DIR:-${HOME}/.nvm}"
-              if [ -s "$NVM_DIR/nvm.sh" ]; then
-                \. "$NVM_DIR/nvm.sh"
-                nvm use "$NODE_VER" 2>/dev/null || nvm install "$NODE_VER" 2>/dev/null || true
-              fi
-            fi
-            export PATH="$(dirname $(command -v node)):$PATH"
-
-            # Create temporary directory for migrations
-            MIGRATION_DIR="/tmp/restomarket-migrations-$(date +%s)"
-            mkdir -p "$MIGRATION_DIR"
-            cd "$MIGRATION_DIR"
-
-            # Clone repository (only migrations needed; token from runner env)
-            git clone --depth 1 --branch ${{ github.ref_name }} "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git" .
-
-            # Install pnpm if not already installed
-            if ! command -v pnpm &> /dev/null; then
-              curl -fsSL https://get.pnpm.io/install.sh | sh -
-              export PNPM_HOME="${HOME}/.local/share/pnpm"
-              export PATH="$PNPM_HOME:$PATH"
-              source ~/.bashrc 2>/dev/null || source ~/.profile 2>/dev/null || true
-              export PATH="$PNPM_HOME:$PATH"
-            fi
-            export PNPM_HOME="${PNPM_HOME:-${HOME}/.local/share/pnpm}"
-            export PATH="$PNPM_HOME:$PATH"
-
-            # Install dependencies and run migrations
-            cd apps/api
-            pnpm install --frozen-lockfile --prod
-
-            # Run migrations using direct connection (bypasses pooler)
-            DATABASE_URL="${{ secrets.STAGING_DATABASE_DIRECT_URL }}" \
-            DATABASE_DIRECT_URL="${{ secrets.STAGING_DATABASE_DIRECT_URL }}" \
-            NODE_ENV=production \
-            pnpm db:migrate
-
-            if [ $? -eq 0 ]; then
-              echo "✅ Migrations completed successfully on ${{ matrix.droplet_name }}"
-            else
-              echo "❌ Migration failed on ${{ matrix.droplet_name }}!"
-              exit 1
-            fi
-
-            # Cleanup
-            cd /
-            rm -rf "$MIGRATION_DIR"
 
       - name: Deploy to staging droplet (${{ matrix.droplet_name }})
         uses: appleboy/ssh-action@v1.0.3
