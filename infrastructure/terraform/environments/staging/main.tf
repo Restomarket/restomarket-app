@@ -75,35 +75,24 @@ module "networking" {
   region                   = var.region
   ip_range                 = var.vpc_ip_range
   vpc_description          = "VPC for ${var.project_name} ${var.environment} environment"
-  enable_firewall          = false # Will be enabled after droplets are created
-  firewall_droplet_tags    = ["${var.project_name}-${var.environment}-api"]
-  admin_ssh_ips            = var.admin_ips
-  api_port                 = var.api_port
-  custom_inbound_rules     = var.custom_inbound_rules
-  custom_outbound_rules    = var.custom_outbound_rules
-  enable_database_firewall = false # Will be enabled after databases are created
-  database_firewall_tags   = ["${var.project_name}-${var.environment}-db"]
+  enable_firewall       = false # Will be enabled after droplets are created
+  firewall_droplet_tags = ["${var.project_name}-${var.environment}-api"]
+  admin_ssh_ips         = var.admin_ips
+  api_port              = var.api_port
+  custom_inbound_rules  = var.custom_inbound_rules
+  custom_outbound_rules = var.custom_outbound_rules
 }
 
-# PostgreSQL Database (HA with 2 nodes)
-module "database" {
-  source = "../../modules/database"
-
-  environment            = var.environment
-  project_name           = var.project_name
-  region                 = var.region
-  postgres_version       = var.db_version
-  node_size              = var.db_node_size
-  node_count             = var.db_node_count
-  database_name          = var.db_name
-  database_user          = var.db_user
-  vpc_id                 = module.networking.vpc_id
-  allowed_ip_ranges      = []
-  allowed_droplet_tags   = ["${var.project_name}-${var.environment}-api"]
-  enable_connection_pool = var.db_enable_pool
-  connection_pool_mode   = var.db_pool_mode
-  connection_pool_size   = var.db_pool_size
-}
+# ============================================================================
+# PostgreSQL Database (REMOVED - Migrated to Supabase)
+# ============================================================================
+# Database is now managed by Supabase cloud service (Free tier)
+# Connection strings stored in GitHub Secrets:
+# - STAGING_DATABASE_URL (pooler, port 6543)
+# - STAGING_DATABASE_DIRECT_URL (direct, port 5432)
+#
+# See: infrastructure/terraform/environments/staging/supabase.tf
+# ============================================================================
 
 # Redis Cache
 module "redis" {
@@ -152,7 +141,6 @@ module "api_cluster" {
   # Dependencies
   depends_on = [
     module.networking,
-    module.database,
     module.redis
   ]
 }
