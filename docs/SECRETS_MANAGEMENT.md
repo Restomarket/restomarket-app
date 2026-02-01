@@ -52,7 +52,7 @@ REDIS_URL                 # Redis connection string
 SNYK_TOKEN               # Snyk security scanning (optional)
 
 # Notifications
-SLACK_WEBHOOK_URL        # Slack notifications (optional)
+SLACK_WEBHOOK            # Slack webhook URL (required for deploy notifications)
 SENTRY_DSN               # Error tracking (optional)
 
 # Code Coverage
