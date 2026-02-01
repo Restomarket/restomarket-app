@@ -102,15 +102,13 @@ variable "custom_outbound_rules" {
   default = []
 }
 
-# Database Firewall Configuration
-variable "enable_database_firewall" {
-  description = "Enable firewall for database servers"
-  type        = bool
-  default     = true
-}
-
-variable "database_firewall_tags" {
-  description = "List of tags for database firewall (e.g., ['database', 'staging'])"
-  type        = list(string)
-  default     = []
-}
+# ============================================================================
+# Database Firewall Configuration (REMOVED - Migrated to Supabase)
+# ============================================================================
+# Database firewall variables removed as database is now managed by Supabase
+# Supabase provides built-in security features:
+# - Connection pooling with authentication
+# - SSL/TLS encryption by default
+# - IP allowlisting via Supabase dashboard
+# - Row Level Security (RLS) policies
+# ============================================================================

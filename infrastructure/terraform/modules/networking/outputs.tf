@@ -47,26 +47,16 @@ output "api_firewall_status" {
   value       = var.enable_firewall ? digitalocean_firewall.api_servers[0].status : null
 }
 
-output "database_firewall_id" {
-  description = "The ID of the database firewall (empty if disabled)"
-  value       = var.enable_database_firewall ? digitalocean_firewall.database_servers[0].id : null
-}
-
-output "database_firewall_name" {
-  description = "The name of the database firewall (empty if disabled)"
-  value       = var.enable_database_firewall ? digitalocean_firewall.database_servers[0].name : null
-}
-
-output "database_firewall_status" {
-  description = "The status of the database firewall (empty if disabled)"
-  value       = var.enable_database_firewall ? digitalocean_firewall.database_servers[0].status : null
-}
+# ============================================================================
+# Database Firewall Outputs (REMOVED - Migrated to Supabase)
+# ============================================================================
+# Database firewall outputs removed as database is now managed by Supabase
+# ============================================================================
 
 # Convenience Outputs
 output "firewall_tags" {
   description = "Tags used for firewall assignment"
   value = {
-    api_servers      = var.firewall_droplet_tags
-    database_servers = var.database_firewall_tags
+    api_servers = var.firewall_droplet_tags
   }
 }

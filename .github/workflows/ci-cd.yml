@@ -170,35 +170,13 @@ jobs:
 
       - name: Setup test database schema
         run: |
-          # Install postgresql client
-          sudo apt-get update && sudo apt-get install -y postgresql-client
-
-          # Create database schema using SQL (non-interactive)
-          PGPASSWORD=postgres psql -h localhost -U postgres -d restomarket_test <<'EOF'
-          -- Enable UUID extension
-          CREATE EXTENSION IF NOT EXISTS "pgcrypto";
-
-          -- Create users table with UUID
-          CREATE TABLE IF NOT EXISTS "users" (
-            "id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
-            "created_at" timestamp with time zone DEFAULT now() NOT NULL,
-            "updated_at" timestamp with time zone DEFAULT now() NOT NULL,
-            "deleted_at" timestamp with time zone,
-            "email" varchar(255) NOT NULL,
-            "first_name" varchar(100) NOT NULL,
-            "last_name" varchar(100) NOT NULL,
-            "is_active" boolean DEFAULT true NOT NULL,
-            CONSTRAINT "users_email_unique" UNIQUE("email"),
-            CONSTRAINT "users_email_length_check" CHECK (length("users"."email") >= 3),
-            CONSTRAINT "users_email_normalized_check" CHECK ("users"."email" = lower("users"."email")),
-            CONSTRAINT "users_first_name_length_check" CHECK (length("users"."first_name") >= 1),
-            CONSTRAINT "users_last_name_length_check" CHECK (length("users"."last_name") >= 1)
-          );
-
-          CREATE INDEX IF NOT EXISTS "users_active_query_idx" ON "users" USING btree ("deleted_at","is_active","created_at");
-          CREATE INDEX IF NOT EXISTS "users_email_idx" ON "users" USING btree ("email");
-          CREATE INDEX IF NOT EXISTS "users_name_idx" ON "users" USING btree ("first_name","last_name");
-          EOF
+          cd apps/api
+          pnpm db:migrate
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restomarket_test
+          DATABASE_DIRECT_URL: postgresql://postgres:postgres@localhost:5432/restomarket_test
+          DATABASE_SSL: false
 
       - name: Run E2E tests
         run: pnpm --filter api test:e2e
@@ -235,11 +213,70 @@ jobs:
           echo "Coverage threshold check - implement with actual coverage tool"
         continue-on-error: true # Allow failure until proper threshold checking is implemented
 
+  validate-migrations:
+    name: Validate Database Migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: test
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: restomarket_migration_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run migrations
+        run: |
+          cd apps/api
+          pnpm db:migrate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restomarket_migration_test
+          DATABASE_DIRECT_URL: postgresql://postgres:postgres@localhost:5432/restomarket_migration_test
+
+      - name: Verify schema integrity
+        run: |
+          cd apps/api
+          # Generate schema from current code
+          pnpm db:generate
+
+          # Check if generated migrations match committed migrations
+          if [ -n "$(git status --porcelain drizzle/migrations/)" ]; then
+            echo "❌ Schema drift detected! Generated migrations differ from committed."
+            git diff drizzle/migrations/
+            exit 1
+          fi
+          echo "✅ Schema is in sync with migrations"
+
   build:
     name: Build Packages
     runs-on: ubuntu-latest
     timeout-minutes: 15
-    needs: test
+    needs: [test, validate-migrations]
 
     steps:
       - name: Checkout repository
@@ -405,6 +442,53 @@ jobs:
         id: short_sha
         run: echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
 
+      - name: Run database migrations
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ matrix.droplet_ip }}
+          username: ${{ secrets.STAGING_USERNAME }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            set -e
+
+            echo "📊 Running database migrations on ${{ matrix.droplet_name }}..."
+
+            # Create temporary directory for migrations
+            MIGRATION_DIR="/tmp/restomarket-migrations-$(date +%s)"
+            mkdir -p "$MIGRATION_DIR"
+            cd "$MIGRATION_DIR"
+
+            # Clone repository (only migrations needed)
+            git clone --depth 1 --branch ${{ github.ref_name }} https://github.com/${{ github.repository }}.git .
+
+            # Install pnpm if not already installed
+            if ! command -v pnpm &> /dev/null; then
+              curl -fsSL https://get.pnpm.io/install.sh | sh -
+              export PNPM_HOME="/root/.local/share/pnpm"
+              export PATH="$PNPM_HOME:$PATH"
+            fi
+
+            # Install dependencies and run migrations
+            cd apps/api
+            pnpm install --frozen-lockfile --prod
+
+            # Run migrations using direct connection (bypasses pooler)
+            DATABASE_URL="${{ secrets.STAGING_DATABASE_DIRECT_URL }}" \
+            DATABASE_DIRECT_URL="${{ secrets.STAGING_DATABASE_DIRECT_URL }}" \
+            NODE_ENV=production \
+            pnpm db:migrate
+
+            if [ $? -eq 0 ]; then
+              echo "✅ Migrations completed successfully on ${{ matrix.droplet_name }}"
+            else
+              echo "❌ Migration failed on ${{ matrix.droplet_name }}!"
+              exit 1
+            fi
+
+            # Cleanup
+            cd /
+            rm -rf "$MIGRATION_DIR"
+
       - name: Deploy to staging droplet (${{ matrix.droplet_name }})
         uses: appleboy/ssh-action@v1.0.3
         with:
@@ -473,6 +557,7 @@ jobs:
               -p 3002:3002 \
               -e NODE_ENV="production" \
               -e DATABASE_URL="$DATABASE_URL" \
+              -e DATABASE_SSL="true" \
               -e REDIS_URL="$REDIS_URL" \
               -e APP_PORT="3002" \
               -e CORS_ORIGINS="$CORS_ORIGINS" \

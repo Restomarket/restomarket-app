@@ -13,6 +13,7 @@ export interface AppConfig {
 
 export interface DatabaseConfig {
   url: string;
+  directUrl: string;
   poolMax: number;
   ssl:
     | false
