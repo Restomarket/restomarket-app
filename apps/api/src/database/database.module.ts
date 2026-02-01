@@ -29,6 +29,9 @@ export type DatabaseConnection = PostgresJsDatabase<typeof schema>;
           max: configService.get<number>('database.poolMax', 10),
           idle_timeout: configService.get<number>('database.idleTimeout', 20),
           connect_timeout: configService.get<number>('database.connectTimeout', 10),
+          // CRITICAL: Disable prepared statements for Supabase transaction mode pooler
+          // Supabase pooler in transaction mode does not support prepared statements
+          prepare: false,
           ...(sslConfig && typeof sslConfig === 'object' ? { ssl: sslConfig } : {}),
         });
       },

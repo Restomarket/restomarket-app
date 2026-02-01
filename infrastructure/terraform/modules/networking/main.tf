@@ -136,36 +136,14 @@ resource "digitalocean_firewall" "api_servers" {
   }
 }
 
-# Firewall for Database Servers
-resource "digitalocean_firewall" "database_servers" {
-  count = var.enable_database_firewall ? 1 : 0
-
-  name = "${var.environment}-database-firewall"
-
-  # Tag-based assignment
-  tags = var.database_firewall_tags
-
-  # Inbound Rules
-
-  # PostgreSQL access from API servers only (within VPC)
-  inbound_rule {
-    protocol         = "tcp"
-    port_range       = "5432"
-    source_addresses = [var.ip_range]
-  }
-
-  # Outbound Rules
-
-  # Allow responses back to VPC
-  outbound_rule {
-    protocol              = "tcp"
-    port_range            = "1-65535"
-    destination_addresses = [var.ip_range]
-  }
-
-  outbound_rule {
-    protocol              = "udp"
-    port_range            = "1-65535"
-    destination_addresses = [var.ip_range]
-  }
-}
+# ============================================================================
+# Database Firewall (REMOVED - Migrated to Supabase)
+# ============================================================================
+# Database is now managed by Supabase cloud service
+# No local database firewall needed
+# Supabase provides:
+# - Built-in connection pooling
+# - Automatic SSL/TLS encryption
+# - IP allowlisting via Supabase dashboard (if needed)
+# - DDoS protection
+# ============================================================================

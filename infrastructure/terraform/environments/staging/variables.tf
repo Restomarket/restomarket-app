@@ -100,77 +100,14 @@ variable "custom_outbound_rules" {
 }
 
 # ============================================================================
-# Database Configuration (HA with 2 nodes)
+# Database Configuration (REMOVED - Migrated to Supabase)
 # ============================================================================
-
-variable "db_version" {
-  description = "PostgreSQL version"
-  type        = string
-  default     = "16"
-
-  validation {
-    condition     = contains(["12", "13", "14", "15", "16"], var.db_version)
-    error_message = "PostgreSQL version must be one of: 12, 13, 14, 15, 16."
-  }
-}
-
-variable "db_node_size" {
-  description = "Database node size (slug)"
-  type        = string
-  default     = "db-s-2vcpu-4gb" # $60/month - suitable for staging
-}
-
-variable "db_node_count" {
-  description = "Number of database nodes (2 for HA in staging)"
-  type        = number
-  default     = 2
-
-  validation {
-    condition     = var.db_node_count >= 1 && var.db_node_count <= 3
-    error_message = "Database node count must be between 1 and 3."
-  }
-}
-
-variable "db_name" {
-  description = "Name of the database to create"
-  type        = string
-  default     = "restomarket_staging"
-}
-
-variable "db_user" {
-  description = "Name of the database user to create"
-  type        = string
-  default     = "restomarket_app"
-}
-
-variable "db_enable_pool" {
-  description = "Enable connection pooling"
-  type        = bool
-  default     = true # Enable in staging to test production config
-}
-
-variable "db_pool_mode" {
-  description = "Connection pool mode (transaction, session, statement)"
-  type        = string
-  default     = "transaction"
-
-  validation {
-    condition     = contains(["transaction", "session", "statement"], var.db_pool_mode)
-    error_message = "Pool mode must be one of: transaction, session, statement."
-  }
-}
-
-variable "db_pool_size" {
-  description = "Connection pool size"
-  type        = number
-  default     = 25
-
-  validation {
-    condition     = var.db_pool_size >= 1 && var.db_pool_size <= 100
-    error_message = "Pool size must be between 1 and 100."
-  }
-}
-
+# Database is now managed by Supabase cloud service (Free tier)
+# Connection strings stored in GitHub Secrets:
+# - STAGING_DATABASE_URL (pooler, port 6543)
+# - STAGING_DATABASE_DIRECT_URL (direct, port 5432)
+#
+# All database variables removed as they're no longer needed
 # ============================================================================
 # Redis Configuration
 # ============================================================================

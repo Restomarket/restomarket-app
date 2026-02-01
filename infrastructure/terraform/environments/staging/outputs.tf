@@ -25,64 +25,16 @@ output "api_firewall_id" {
   value       = module.networking.api_firewall_id
 }
 
-output "db_firewall_id" {
-  description = "Database firewall ID"
-  value       = module.networking.database_firewall_id
-}
-
 # ============================================================================
-# Database Outputs
+# Database Outputs (REMOVED - Migrated to Supabase)
 # ============================================================================
-
-output "database_id" {
-  description = "Database cluster ID"
-  value       = module.database.cluster_id
-}
-
-output "database_host" {
-  description = "Database host (private network)"
-  value       = module.database.cluster_host
-  sensitive   = true
-}
-
-output "database_port" {
-  description = "Database port"
-  value       = module.database.cluster_port
-}
-
-output "database_name" {
-  description = "Database name"
-  value       = module.database.database_name
-}
-
-output "database_user" {
-  description = "Database user"
-  value       = module.database.database_user
-}
-
-output "database_password" {
-  description = "Database password"
-  value       = module.database.database_password
-  sensitive   = true
-}
-
-output "database_connection_string" {
-  description = "Database connection string (private network)"
-  value       = module.database.connection_string
-  sensitive   = true
-}
-
-output "database_uri" {
-  description = "Complete database URI for application configuration"
-  value       = "postgresql://${module.database.database_user}:${module.database.database_password}@${module.database.cluster_host}:${module.database.cluster_port}/${module.database.database_name}?sslmode=require"
-  sensitive   = true
-}
-
-output "database_pool_uri" {
-  description = "Database connection pool URI (if enabled)"
-  value       = var.db_enable_pool ? module.database.connection_pool_uri : null
-  sensitive   = true
-}
+# Database connection details are now stored in GitHub Secrets
+# - STAGING_DATABASE_URL
+# - STAGING_DATABASE_DIRECT_URL
+#
+# View secrets at: Repository → Settings → Secrets → Actions
+# Manage database at: https://app.supabase.com
+# ============================================================================
 
 # ============================================================================
 # Redis Outputs
@@ -218,12 +170,9 @@ output "environment_summary" {
       ip_range = module.networking.vpc_ip_range
     }
     database = {
-      id      = module.database.cluster_id
-      engine  = module.database.cluster_engine
-      version = module.database.cluster_version
-      nodes   = var.db_node_count
-      size    = var.db_node_size
-      ha      = var.db_node_count > 1
+      provider = "Supabase"
+      plan     = "Free tier"
+      note     = "Connection strings in GitHub Secrets"
     }
     redis = {
       id      = module.redis.cluster_id
@@ -295,21 +244,19 @@ output "quick_start" {
     3. SSH to API droplets (for maintenance):
        ${length(module.api_cluster.public_ipv4_addresses) > 0 ? "ssh root@${module.api_cluster.public_ipv4_addresses[0]}" : "No droplets available"}
 
-    4. Database connection (use private host from VPC):
-       Host: ${module.database.cluster_host}
-       Port: ${module.database.cluster_port}
-       Database: ${module.database.database_name}
-       User: ${module.database.database_user}
-       ${var.db_enable_pool ? "Pool URI available via output 'database_pool_uri'" : ""}
+    4. Database connection (Supabase):
+       Provider: Supabase Free tier
+       Connection strings stored in GitHub Secrets:
+       - STAGING_DATABASE_URL (pooler, port 6543)
+       - STAGING_DATABASE_DIRECT_URL (direct, port 5432)
+       Access: https://app.supabase.com
 
     5. Redis connection (use private host from VPC):
        Host: ${module.redis.private_host}
        Port: ${module.redis.port}
 
-    6. To get sensitive values (passwords, connection strings):
-       terraform output -json | jq '.database_password.value' -r
+    6. To get sensitive values (Redis password, connection string):
        terraform output -json | jq '.redis_password.value' -r
-       terraform output database_uri
        terraform output redis_uri
 
     7. View monitoring alerts:
@@ -338,17 +285,18 @@ output "deployment_notes" {
 
     Infrastructure Configuration:
     - ${var.api_droplet_count} API droplets (${var.api_droplet_size})
-    - ${var.db_node_count} PostgreSQL nodes (${var.db_node_size}) - ${var.db_node_count > 1 ? "HA enabled" : "Single node"}
+    - PostgreSQL database: Supabase Free tier (managed externally)
     - Redis cache (${var.redis_node_size})
     - Load balancer with health checks
     - ${var.enable_monitoring_alerts ? "Monitoring alerts ENABLED" : "Monitoring alerts DISABLED"}
 
     Estimated Monthly Cost:
     - API droplets: ~$${var.api_droplet_count * 24}
-    - Database: ~$${var.db_node_count * 60}
+    - Database (Supabase): $0 (Free tier)
     - Redis: ~$60
     - Load balancer: ~$12
-    - Total: ~$${(var.api_droplet_count * 24) + (var.db_node_count * 60) + 60 + 12}/month (excluding bandwidth)
+    - Total: ~$${(var.api_droplet_count * 24) + 60 + 12}/month (excluding bandwidth)
+    - Savings from Supabase: ~$120/month
 
     Next Steps:
     1. Configure DNS A record for your domain
