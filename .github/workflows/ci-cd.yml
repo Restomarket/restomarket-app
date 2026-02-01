@@ -444,10 +444,13 @@ jobs:
 
       - name: Run database migrations
         uses: appleboy/ssh-action@v1.0.3
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           host: ${{ matrix.droplet_ip }}
           username: ${{ secrets.STAGING_USERNAME }}
           key: ${{ secrets.STAGING_SSH_KEY }}
+          envs: GITHUB_TOKEN
           script: |
             set -e
 
@@ -458,8 +461,8 @@ jobs:
             mkdir -p "$MIGRATION_DIR"
             cd "$MIGRATION_DIR"
 
-            # Clone repository (only migrations needed)
-            git clone --depth 1 --branch ${{ github.ref_name }} https://github.com/${{ github.repository }}.git .
+            # Clone repository (only migrations needed; token from runner env)
+            git clone --depth 1 --branch ${{ github.ref_name }} "https://x-access-token:${GITHUB_TOKEN}@github.com/${{ github.repository }}.git" .
 
             # Install pnpm if not already installed
             if ! command -v pnpm &> /dev/null; then
