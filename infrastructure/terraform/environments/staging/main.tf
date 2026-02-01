@@ -94,22 +94,22 @@ module "networking" {
 # See: infrastructure/terraform/environments/staging/supabase.tf
 # ============================================================================
 
-# Redis Cache
-module "redis" {
-  source = "../../modules/redis"
-
-  environment             = var.environment
-  project_name            = var.project_name
-  region                  = var.region
-  redis_version           = var.redis_version
-  node_size               = var.redis_node_size
-  vpc_id                  = module.networking.vpc_id
-  allowed_droplet_tags    = ["${var.project_name}-${var.environment}-api"]
-  enable_firewall         = true
-  eviction_policy         = var.redis_eviction_policy
-  maintenance_window_day  = var.redis_maintenance_day
-  maintenance_window_hour = var.redis_maintenance_hour
-}
+# Redis Cache (DISABLED - comment out module and uncomment to re-enable)
+# module "redis" {
+#   source = "../../modules/redis"
+#
+#   environment             = var.environment
+#   project_name            = var.project_name
+#   region                  = var.region
+#   redis_version           = var.redis_version
+#   node_size               = var.redis_node_size
+#   vpc_id                  = module.networking.vpc_id
+#   allowed_droplet_tags    = ["${var.project_name}-${var.environment}-api"]
+#   enable_firewall         = true
+#   eviction_policy         = var.redis_eviction_policy
+#   maintenance_window_day  = var.redis_maintenance_day
+#   maintenance_window_hour = var.redis_maintenance_hour
+# }
 
 # API Droplet Cluster (2 droplets for redundancy)
 module "api_cluster" {
@@ -140,8 +140,8 @@ module "api_cluster" {
 
   # Dependencies
   depends_on = [
-    module.networking,
-    module.redis
+    module.networking
+    # module.redis  # Uncomment when Redis module is enabled
   ]
 }
 
@@ -232,7 +232,7 @@ resource "digitalocean_firewall" "api_servers" {
     source_load_balancer_uids = [digitalocean_loadbalancer.api.id]
   }
 
-  # Allow all traffic from within VPC (for database, Redis, inter-droplet communication)
+  # Allow all traffic from within VPC (for database, inter-droplet communication)
   inbound_rule {
     protocol         = "tcp"
     port_range       = "1-65535"
