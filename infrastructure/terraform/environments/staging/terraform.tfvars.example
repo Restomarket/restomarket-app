@@ -64,16 +64,13 @@ db_pool_mode   = "transaction" # transaction, session, or statement
 db_pool_size   = 25
 
 # ============================================================================
-# REDIS CONFIGURATION
+# REDIS CONFIGURATION (DISABLED - uncomment in variables.tf and main.tf first)
 # ============================================================================
-
-redis_version        = "7"
-redis_node_size      = "db-s-2vcpu-4gb" # $60/month
-redis_eviction_policy = "allkeys-lru"
-
-# Maintenance window (UTC)
-redis_maintenance_day  = "sunday"
-redis_maintenance_hour = "02:00"
+# redis_version        = "7"
+# redis_node_size      = "db-s-2vcpu-4gb" # $60/month
+# redis_eviction_policy = "allkeys-lru"
+# redis_maintenance_day  = "sunday"
+# redis_maintenance_hour = "02:00"
 
 # ============================================================================
 # API DROPLET CONFIGURATION (2 droplets for redundancy)
@@ -152,9 +149,8 @@ alert_slack_channel = "#alerts-staging"
 # ============================================================================
 
 # API droplets: 2 × $24 = $48
-# Database: 2 × $60 = $120 (HA)
-# Redis: $60
+# Database: 2 × $60 = $120 (HA) - or $0 with Supabase
 # Load balancer: $12
 # Backups: ~$5-10 (20% of droplet cost)
 # -----------------------------
-# Total: ~$245/month (excluding bandwidth)
+# Total: ~$60-72/month without Redis (excluding bandwidth)

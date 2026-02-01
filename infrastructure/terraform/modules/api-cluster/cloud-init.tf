@@ -262,11 +262,11 @@ EOF
     # Allow Docker daemon (only from localhost)
     ufw allow from 127.0.0.1 to any port 2375 proto tcp
 
-    # Allow internal VPC traffic for database and Redis connections
+    # Allow internal VPC traffic for database (Redis ports commented when Redis disabled)
     ${length(var.vpc_cidr) > 0 ? "ufw allow from ${var.vpc_cidr} to any port 5432 proto tcp comment 'PostgreSQL from VPC'" : ""}
     ${length(var.vpc_cidr) > 0 ? "ufw allow from ${var.vpc_cidr} to any port 25060 proto tcp comment 'Managed PostgreSQL from VPC'" : ""}
-    ${length(var.vpc_cidr) > 0 ? "ufw allow from ${var.vpc_cidr} to any port 6379 proto tcp comment 'Redis from VPC'" : ""}
-    ${length(var.vpc_cidr) > 0 ? "ufw allow from ${var.vpc_cidr} to any port 25061 proto tcp comment 'Managed Redis from VPC'" : ""}
+    # ${length(var.vpc_cidr) > 0 ? "ufw allow from ${var.vpc_cidr} to any port 6379 proto tcp comment 'Redis from VPC'" : ""}
+    # ${length(var.vpc_cidr) > 0 ? "ufw allow from ${var.vpc_cidr} to any port 25061 proto tcp comment 'Managed Redis from VPC'" : ""}
 
     # Allow ICMP from VPC (for health checks and diagnostics)
     ${length(var.vpc_cidr) > 0 ? "ufw allow from ${var.vpc_cidr} proto icmp" : ""}
@@ -372,7 +372,7 @@ API_PREFIX=v1
 # Database (set by CI/CD)
 DATABASE_URL=
 
-# Redis (set by CI/CD)
+# Redis (set by CI/CD - leave empty when Redis is disabled)
 REDIS_URL=
 
 # CORS (set by CI/CD)

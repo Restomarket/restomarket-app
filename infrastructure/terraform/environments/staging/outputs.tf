@@ -37,42 +37,36 @@ output "api_firewall_id" {
 # ============================================================================
 
 # ============================================================================
-# Redis Outputs
+# Redis Outputs (DISABLED - uncomment when Redis module is enabled)
 # ============================================================================
-
-output "redis_id" {
-  description = "Redis cluster ID"
-  value       = module.redis.cluster_id
-}
-
-output "redis_host" {
-  description = "Redis host (private network)"
-  value       = module.redis.private_host
-  sensitive   = true
-}
-
-output "redis_port" {
-  description = "Redis port"
-  value       = module.redis.port
-}
-
-output "redis_password" {
-  description = "Redis password"
-  value       = module.redis.password
-  sensitive   = true
-}
-
-output "redis_connection_string" {
-  description = "Redis connection string (private network)"
-  value       = module.redis.connection_string_private
-  sensitive   = true
-}
-
-output "redis_uri" {
-  description = "Complete Redis URI for application configuration"
-  value       = module.redis.redis_uri_private
-  sensitive   = true
-}
+# output "redis_id" {
+#   description = "Redis cluster ID"
+#   value       = module.redis.cluster_id
+# }
+# output "redis_host" {
+#   description = "Redis host (private network)"
+#   value       = module.redis.private_host
+#   sensitive   = true
+# }
+# output "redis_port" {
+#   description = "Redis port"
+#   value       = module.redis.port
+# }
+# output "redis_password" {
+#   description = "Redis password"
+#   value       = module.redis.password
+#   sensitive   = true
+# }
+# output "redis_connection_string" {
+#   description = "Redis connection string (private network)"
+#   value       = module.redis.connection_string_private
+#   sensitive   = true
+# }
+# output "redis_uri" {
+#   description = "Complete Redis URI for application configuration"
+#   value       = module.redis.redis_uri_private
+#   sensitive   = true
+# }
 
 # ============================================================================
 # API Cluster Outputs
@@ -174,12 +168,12 @@ output "environment_summary" {
       plan     = "Free tier"
       note     = "Connection strings in GitHub Secrets"
     }
-    redis = {
-      id      = module.redis.cluster_id
-      engine  = module.redis.engine
-      version = module.redis.version
-      size    = var.redis_node_size
-    }
+    # redis = {  # Uncomment when Redis module is enabled
+    #   id      = module.redis.cluster_id
+    #   engine  = module.redis.engine
+    #   version = module.redis.version
+    #   size    = var.redis_node_size
+    # }
     api_cluster = {
       count       = var.api_droplet_count
       size        = var.api_droplet_size
@@ -251,25 +245,17 @@ output "quick_start" {
        - STAGING_DATABASE_DIRECT_URL (direct, port 5432)
        Access: https://app.supabase.com
 
-    5. Redis connection (use private host from VPC):
-       Host: ${module.redis.private_host}
-       Port: ${module.redis.port}
-
-    6. To get sensitive values (Redis password, connection string):
-       terraform output -json | jq '.redis_password.value' -r
-       terraform output redis_uri
-
-    7. View monitoring alerts:
+    5. View monitoring alerts:
        doctl monitoring alert list --format ID,Type,Description
 
-    8. View complete summary:
+    6. View complete summary:
        terraform output environment_summary
 
-    9. DNS Setup (after configuring domain):
+    7. DNS Setup (after configuring domain):
        Add A record: staging-api.yourdomain.com -> ${digitalocean_loadbalancer.api.ip}
        Then configure SSL certificate via DigitalOcean console
 
-    10. Monitoring Dashboard:
+    8. Monitoring Dashboard:
         https://cloud.digitalocean.com/monitoring/droplets
   EOT
 }
@@ -286,16 +272,14 @@ output "deployment_notes" {
     Infrastructure Configuration:
     - ${var.api_droplet_count} API droplets (${var.api_droplet_size})
     - PostgreSQL database: Supabase Free tier (managed externally)
-    - Redis cache (${var.redis_node_size})
     - Load balancer with health checks
     - ${var.enable_monitoring_alerts ? "Monitoring alerts ENABLED" : "Monitoring alerts DISABLED"}
 
     Estimated Monthly Cost:
     - API droplets: ~$${var.api_droplet_count * 24}
     - Database (Supabase): $0 (Free tier)
-    - Redis: ~$60
     - Load balancer: ~$12
-    - Total: ~$${(var.api_droplet_count * 24) + 60 + 12}/month (excluding bandwidth)
+    - Total: ~$${(var.api_droplet_count * 24) + 12}/month (excluding bandwidth)
     - Savings from Supabase: ~$120/month
 
     Next Steps:

@@ -109,57 +109,44 @@ variable "custom_outbound_rules" {
 #
 # All database variables removed as they're no longer needed
 # ============================================================================
-# Redis Configuration
+# Redis Configuration (DISABLED - uncomment when Redis module is enabled)
 # ============================================================================
-
-variable "redis_version" {
-  description = "Redis version"
-  type        = string
-  default     = "7"
-
-  validation {
-    condition     = contains(["6", "7", "8"], var.redis_version)
-    error_message = "Redis/Valkey version must be 6, 7, or 8 (Valkey)."
-  }
-}
-
-variable "redis_node_size" {
-  description = "Redis node size (slug)"
-  type        = string
-  default     = "db-s-2vcpu-4gb" # $60/month - suitable for staging
-}
-
-variable "redis_eviction_policy" {
-  description = "Redis eviction policy"
-  type        = string
-  default     = "allkeys-lru"
-
-  validation {
-    condition = contains([
-      "noeviction",
-      "allkeys-lru",
-      "allkeys-lfu",
-      "allkeys-random",
-      "volatile-lru",
-      "volatile-lfu",
-      "volatile-random",
-      "volatile-ttl"
-    ], var.redis_eviction_policy)
-    error_message = "Invalid Redis eviction policy."
-  }
-}
-
-variable "redis_maintenance_day" {
-  description = "Day of week for maintenance (monday, tuesday, etc.)"
-  type        = string
-  default     = "sunday"
-}
-
-variable "redis_maintenance_hour" {
-  description = "Hour of day for maintenance (0-23)"
-  type        = string
-  default     = "02:00"
-}
+# variable "redis_version" {
+#   description = "Redis version"
+#   type        = string
+#   default     = "7"
+#   validation {
+#     condition     = contains(["6", "7", "8"], var.redis_version)
+#     error_message = "Redis/Valkey version must be 6, 7, or 8 (Valkey)."
+#   }
+# }
+# variable "redis_node_size" {
+#   description = "Redis node size (slug)"
+#   type        = string
+#   default     = "db-s-2vcpu-4gb" # $60/month - suitable for staging
+# }
+# variable "redis_eviction_policy" {
+#   description = "Redis eviction policy"
+#   type        = string
+#   default     = "allkeys-lru"
+#   validation {
+#     condition = contains([
+#       "noeviction", "allkeys-lru", "allkeys-lfu", "allkeys-random",
+#       "volatile-lru", "volatile-lfu", "volatile-random", "volatile-ttl"
+#     ], var.redis_eviction_policy)
+#     error_message = "Invalid Redis eviction policy."
+#   }
+# }
+# variable "redis_maintenance_day" {
+#   description = "Day of week for maintenance (monday, tuesday, etc.)"
+#   type        = string
+#   default     = "sunday"
+# }
+# variable "redis_maintenance_hour" {
+#   description = "Hour of day for maintenance (0-23)"
+#   type        = string
+#   default     = "02:00"
+# }
 
 # ============================================================================
 # API Droplet Configuration (2 droplets for redundancy)
