@@ -467,9 +467,15 @@ jobs:
             # Install pnpm if not already installed
             if ! command -v pnpm &> /dev/null; then
               curl -fsSL https://get.pnpm.io/install.sh | sh -
-              export PNPM_HOME="/root/.local/share/pnpm"
+              export PNPM_HOME="${HOME}/.local/share/pnpm"
+              export PATH="$PNPM_HOME:$PATH"
+              # Installer only updates .bashrc; ensure current shell has pnpm on PATH
+              source ~/.bashrc 2>/dev/null || source ~/.profile 2>/dev/null || true
               export PATH="$PNPM_HOME:$PATH"
             fi
+            # Ensure pnpm is on PATH (e.g. when already installed)
+            export PNPM_HOME="${PNPM_HOME:-${HOME}/.local/share/pnpm}"
+            export PATH="$PNPM_HOME:$PATH"
 
             # Install dependencies and run migrations
             cd apps/api
