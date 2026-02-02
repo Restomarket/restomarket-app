@@ -46,6 +46,7 @@
     "CI",
     "PORT",
     "DATABASE_URL",
+    "DATABASE_DIRECT_URL",
     "LOG_LEVEL",
     "SWAGGER_TITLE",
     "SWAGGER_DESCRIPTION",
@@ -65,7 +66,10 @@
     "APP_HOST",
     "API_PREFIX",
     "API_VERSION",
-    "REQUEST_TIMEOUT"
+    "REQUEST_TIMEOUT",
+    "SUPABASE_PROJECT_REF",
+    "SUPABASE_URL",
+    "SUPABASE_ANON_KEY"
   ],
   "globalDependencies": ["tsconfig.json", "eslint.config.mjs", ".prettierrc"]
 }

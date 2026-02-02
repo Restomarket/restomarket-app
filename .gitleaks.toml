@@ -1,0 +1,53 @@
+# Gitleaks configuration file
+# See: https://github.com/gitleaks/gitleaks#configuration
+
+title = "RestoMarket Gitleaks Config"
+
+[extend]
+# useDefault will extend the base configuration with the default gitleaks config:
+# https://github.com/gitleaks/gitleaks/blob/master/config/gitleaks.toml
+useDefault = true
+
+[allowlist]
+description = "Allowlisted files and patterns"
+paths = [
+  # Example and test files
+  '''\.env\.example$''',
+  '''\.env\.test$''',
+  '''test/.*''',
+  '''tests/.*''',
+  '''__tests__/.*''',
+
+  # Documentation
+  '''README\.md$''',
+  '''CLAUDE\.md$''',
+  '''IMPLEMENTATION_PLAN\.md$''',
+  '''specs/.*''',
+
+  # Lock files
+  '''pnpm-lock\.yaml$''',
+  '''package-lock\.json$''',
+
+  # Build artifacts
+  '''node_modules/.*''',
+  '''dist/.*''',
+  '''build/.*''',
+  '''.next/.*''',
+]
+
+regexes = [
+  # Allow example/dummy values
+  '''(example|dummy|placeholder|your_|changeme|insert_here)''',
+
+  # Allow localhost URLs
+  '''localhost''',
+  '''127\.0\.0\.1''',
+
+  # Allow common test values
+  '''MyStrongPass123''',
+  '''postgres:postgres''',
+  '''test_secret''',
+]
+
+# Allowlist specific commits (useful for initial setup)
+# commits = [ "commit-hash-here" ]
