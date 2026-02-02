@@ -1,90 +1,128 @@
-import Image, { type ImageProps } from 'next/image';
-import { Button } from '@repo/ui/button';
-import styles from './page.module.css';
+'use client';
 
-type Props = Omit<ImageProps, 'src'> & {
-  srcLight: string;
-  srcDark: string;
-};
-
-const ThemeImage = (props: Props) => {
-  const { srcLight, srcDark, ...rest } = props;
-
-  return (
-    <>
-      <Image {...rest} src={srcLight} className="imgLight" />
-      <Image {...rest} src={srcDark} className="imgDark" />
-    </>
-  );
-};
+import { useState } from 'react';
+import { Avatar, AvatarImage, AvatarFallback } from '@repo/ui/avatar';
+import { Input } from '@repo/ui/input';
+import { Label } from '@repo/ui/label';
+import { Separator } from '@repo/ui/separator';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@repo/ui/select';
+import { Badge } from '@repo/ui/badge';
 
 export default function Home() {
-  return (
-    <div className={styles.page}>
-      <main className={styles.main}>
-        <ThemeImage
-          className={styles.logo}
-          srcLight="turborepo-dark.svg"
-          srcDark="turborepo-light.svg"
-          alt="Turborepo logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol>
-          <li>
-            Get started by editing <code>apps/web/app/page.tsx</code>
-          </li>
-          <li>Save and see your changes instantly.</li>
-        </ol>
+  const [name, setName] = useState('');
+  const [selectedRole, setSelectedRole] = useState('');
 
-        <div className={styles.ctas}>
-          <a
-            className={styles.primary}
-            href="https://vercel.com/new/clone?demo-description=Learn+to+implement+a+monorepo+with+a+two+Next.js+sites+that+has+installed+three+local+packages.&demo-image=%2F%2Fimages.ctfassets.net%2Fe5382hct74si%2F4K8ZISWAzJ8X1504ca0zmC%2F0b21a1c6246add355e55816278ef54bc%2FBasic.png&demo-title=Monorepo+with+Turborepo&demo-url=https%3A%2F%2Fexamples-basic-web.vercel.sh%2F&from=templates&project-name=Monorepo+with+Turborepo&repository-name=monorepo-turborepo&repository-url=https%3A%2F%2Fgithub.com%2Fvercel%2Fturborepo%2Ftree%2Fmain%2Fexamples%2Fbasic&root-directory=apps%2Fdocs&skippable-integrations=1&teamSlug=vercel&utm_source=create-turbo"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            <Image
-              className={styles.logo}
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            href="https://turborepo.dev/docs?utm_source"
-            target="_blank"
-            rel="noopener noreferrer"
-            className={styles.secondary}
-          >
-            Read our docs
-          </a>
+  return (
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 p-8">
+      <div className="max-w-4xl mx-auto">
+        {/* Header Section */}
+        <div className="text-center mb-12">
+          <div className="flex justify-center mb-4">
+            <Avatar className="h-24 w-24">
+              <AvatarImage src="https://github.com/shadcn.png" alt="User" />
+              <AvatarFallback>RM</AvatarFallback>
+            </Avatar>
+          </div>
+          <h1 className="text-4xl font-bold text-gray-900 dark:text-white mb-2">
+            Welcome to RestoMarket
+          </h1>
+          <p className="text-gray-600 dark:text-gray-300">
+            Built with Next.js, Turborepo, and shadcn/ui components
+          </p>
+          <div className="flex justify-center gap-2 mt-4">
+            <Badge variant="default">Active</Badge>
+            <Badge variant="secondary">Monorepo</Badge>
+            <Badge variant="outline">TypeScript</Badge>
+          </div>
         </div>
-        <Button appName="web" className={styles.secondary}>
-          Open alert
-        </Button>
-      </main>
-      <footer className={styles.footer}>
-        <a
-          href="https://vercel.com/templates?search=turborepo&utm_source=create-next-app&utm_medium=appdir-template&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image aria-hidden src="/window.svg" alt="Window icon" width={16} height={16} />
-          Examples
-        </a>
-        <a
-          href="https://turborepo.dev?utm_source=create-turbo"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image aria-hidden src="/globe.svg" alt="Globe icon" width={16} height={16} />
-          Go to turborepo.dev →
-        </a>
-      </footer>
+
+        <Separator className="my-8" />
+
+        {/* Form Section */}
+        <div className="bg-white dark:bg-gray-800 rounded-lg shadow-lg p-8 mb-8">
+          <h2 className="text-2xl font-semibold mb-6 text-gray-900 dark:text-white">
+            User Profile
+          </h2>
+
+          <div className="space-y-6">
+            <div className="space-y-2">
+              <Label htmlFor="name">Full Name</Label>
+              <Input
+                id="name"
+                type="text"
+                placeholder="Enter your name"
+                value={name}
+                onChange={e => setName(e.target.value)}
+              />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="email">Email Address</Label>
+              <Input id="email" type="email" placeholder="your.email@example.com" />
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="role">Select Role</Label>
+              <Select value={selectedRole} onValueChange={setSelectedRole}>
+                <SelectTrigger id="role">
+                  <SelectValue placeholder="Choose your role" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="admin">Administrator</SelectItem>
+                  <SelectItem value="manager">Restaurant Manager</SelectItem>
+                  <SelectItem value="staff">Staff Member</SelectItem>
+                  <SelectItem value="customer">Customer</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {name && (
+              <div className="pt-4">
+                <Badge variant="secondary" className="text-lg px-4 py-2">
+                  Hello, {name}! 👋
+                </Badge>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {/* Features Section */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <FeatureCard
+            title="Fast Development"
+            description="Turborepo enables lightning-fast builds and hot reloading"
+            badge="Performance"
+          />
+          <FeatureCard
+            title="Type Safety"
+            description="Full TypeScript support across all packages"
+            badge="TypeScript"
+          />
+          <FeatureCard
+            title="Modern UI"
+            description="Beautiful components powered by shadcn/ui"
+            badge="Design"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function FeatureCard({
+  title,
+  description,
+  badge,
+}: {
+  title: string;
+  description: string;
+  badge: string;
+}) {
+  return (
+    <div className="bg-white dark:bg-gray-800 rounded-lg shadow-md p-6 hover:shadow-xl transition-shadow">
+      <Badge className="mb-3">{badge}</Badge>
+      <h3 className="text-xl font-semibold mb-2 text-gray-900 dark:text-white">{title}</h3>
+      <p className="text-gray-600 dark:text-gray-300">{description}</p>
     </div>
   );
 }
