@@ -72,12 +72,12 @@ jobs:
         continue-on-error: true # Don't fail on audit, but report
 
       - name: TruffleHog Secret Scan
-        uses: trufflesecurity/trufflehog@main
+        uses: trufflesecurity/trufflehog@v3.88.7
         with:
           path: ./
           base: ${{ github.event.repository.default_branch }}
           head: HEAD
-          extra_args: --debug --only-verified
+          extra_args: --only-verified
 
       - name: Security scan with Trivy
         uses: aquasecurity/trivy-action@master
