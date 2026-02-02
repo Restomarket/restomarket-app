@@ -17,6 +17,9 @@ concurrency:
 
 env:
   NODE_VERSION: '24.13.0'
+  # Turborepo Remote Caching (set these in GitHub: Settings → Secrets → Actions)
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
 
 jobs:
   code-quality:
@@ -48,24 +51,13 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Cache Turbo build outputs
-        uses: actions/cache@v4
-        with:
-          path: |
-            .turbo
-            node_modules/.cache/turbo
-          key: ${{ runner.os }}-turbo-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-turbo-
-
-      - name: Run linter
-        run: pnpm turbo lint --filter=...[origin/${{ github.base_ref || 'main' }}]
+      # Run lint and type-check in parallel using Turborepo
+      # Remote caching will skip already-built packages
+      - name: Run linter and type check
+        run: pnpm turbo lint type-check --filter=...[origin/${{ github.base_ref || 'main' }}]
 
       - name: Check formatting
         run: pnpm format:check
-
-      - name: Run type check
-        run: pnpm turbo type-check
 
       - name: Dependency audit
         run: pnpm audit --audit-level=high
@@ -138,17 +130,7 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Cache Turbo build outputs
-        uses: actions/cache@v4
-        with:
-          path: |
-            .turbo
-            node_modules/.cache/turbo
-          key: ${{ runner.os }}-turbo-test-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-turbo-test-
-            ${{ runner.os }}-turbo-
-
+      # Remote caching handles build artifacts automatically
       - name: Run unit tests
         run: pnpm turbo test --filter=...[origin/${{ github.base_ref || 'main' }}]
         env:
@@ -298,19 +280,18 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Cache Turbo build outputs
-        uses: actions/cache@v4
-        with:
-          path: |
-            .turbo
-            node_modules/.cache/turbo
-          key: ${{ runner.os }}-turbo-build-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-turbo-build-
-            ${{ runner.os }}-turbo-
-
+      # Build with Turborepo remote caching
       - name: Build all packages
-        run: pnpm turbo build
+        run: pnpm turbo build --summarize
+
+      - name: Upload Turbo summary
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: turbo-summary-build
+          path: .turbo/runs/*.json
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Upload build artifacts (API)
         uses: actions/upload-artifact@v4
