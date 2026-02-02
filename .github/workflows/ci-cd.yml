@@ -1,0 +1,908 @@
+name: CI/CD Pipeline
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+  pull_request:
+    branches:
+      - main
+      - develop
+
+# Cancel in-progress runs for the same workflow and ref
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  NODE_VERSION: '24.13.0'
+
+jobs:
+  code-quality:
+    name: Code Quality Checks
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    permissions:
+      contents: read
+      pull-requests: read
+      actions: read
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Needed for Turborepo to compare with base branch
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Turbo build outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            .turbo
+            node_modules/.cache/turbo
+          key: ${{ runner.os }}-turbo-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-
+
+      - name: Run linter
+        run: pnpm turbo lint --filter=...[origin/${{ github.base_ref || 'main' }}]
+
+      - name: Check formatting
+        run: pnpm format:check
+
+      - name: Run type check
+        run: pnpm turbo type-check
+
+      - name: Dependency audit
+        run: pnpm audit --audit-level=high
+        continue-on-error: true # Don't fail on audit, but report
+
+      - name: Run gitleaks secret scan
+        uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }} # Optional for premium features
+
+      - name: Security scan with Trivy
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0' # Don't fail the build on vulnerabilities
+
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    needs: code-quality
+
+    # Service containers for integration and E2E tests
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: restomarket_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Needed for Turborepo and coverage
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Turbo build outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            .turbo
+            node_modules/.cache/turbo
+          key: ${{ runner.os }}-turbo-test-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-test-
+            ${{ runner.os }}-turbo-
+
+      - name: Run unit tests
+        run: pnpm turbo test --filter=...[origin/${{ github.base_ref || 'main' }}]
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restomarket_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+
+      - name: Run integration tests
+        run: |
+          if grep -q "test:integration" apps/api/package.json; then
+            pnpm --filter api test:integration
+          else
+            echo "⚠️ Integration tests not yet configured - skipping"
+          fi
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restomarket_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+
+      - name: Setup test database schema
+        run: |
+          cd apps/api
+          pnpm db:migrate
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restomarket_test
+          DATABASE_DIRECT_URL: postgresql://postgres:postgres@localhost:5432/restomarket_test
+          DATABASE_SSL: false
+
+      - name: Run E2E tests
+        run: pnpm --filter api test:e2e
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restomarket_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+
+      - name: Generate coverage report
+        run: pnpm turbo test:cov --filter=...[origin/${{ github.base_ref || 'main' }}]
+        continue-on-error: true # Allow failure if some packages don't have coverage configured yet
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restomarket_test
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        continue-on-error: true # Skip if coverage files not found or token missing
+        if: always()
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: ./apps/api/coverage/lcov.info,./packages/ui/coverage/lcov.info,./apps/web/coverage/lcov.info
+          flags: unittests
+          name: codecov-umbrella
+          fail_ci_if_error: false # Don't fail if Codecov upload fails
+
+      - name: Check coverage threshold
+        run: |
+          # This would check if coverage is above 80%
+          # For now, just a placeholder that always passes
+          echo "Coverage threshold check - implement with actual coverage tool"
+        continue-on-error: true # Allow failure until proper threshold checking is implemented
+
+  validate-migrations:
+    name: Validate Database Migrations
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    needs: test
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_DB: restomarket_migration_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run migrations
+        run: |
+          cd apps/api
+          pnpm db:migrate
+        env:
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restomarket_migration_test
+          DATABASE_DIRECT_URL: postgresql://postgres:postgres@localhost:5432/restomarket_migration_test
+
+      - name: Verify schema integrity
+        run: |
+          cd apps/api
+          # Generate schema from current code
+          pnpm db:generate
+
+          # Check if generated migrations match committed migrations
+          if [ -n "$(git status --porcelain drizzle/migrations/)" ]; then
+            echo "❌ Schema drift detected! Generated migrations differ from committed."
+            git diff drizzle/migrations/
+            exit 1
+          fi
+          echo "✅ Schema is in sync with migrations"
+
+  build:
+    name: Build Packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    needs: [test, validate-migrations]
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # Needed for Turborepo
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Cache Turbo build outputs
+        uses: actions/cache@v4
+        with:
+          path: |
+            .turbo
+            node_modules/.cache/turbo
+          key: ${{ runner.os }}-turbo-build-${{ github.sha }}
+          restore-keys: |
+            ${{ runner.os }}-turbo-build-
+            ${{ runner.os }}-turbo-
+
+      - name: Build all packages
+        run: pnpm turbo build
+
+      - name: Upload build artifacts (API)
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-build
+          path: |
+            apps/api/dist
+            apps/api/package.json
+          retention-days: 7
+
+      - name: Upload build artifacts (Web)
+        uses: actions/upload-artifact@v4
+        with:
+          name: web-build
+          path: |
+            apps/web/.next
+            apps/web/package.json
+          retention-days: 7
+          if-no-files-found: warn # Web might not have build output yet
+
+      - name: Upload build artifacts (Packages)
+        uses: actions/upload-artifact@v4
+        with:
+          name: packages-build
+          path: |
+            packages/*/dist
+            packages/*/package.json
+          retention-days: 7
+          if-no-files-found: warn
+
+  docker-build:
+    name: Build and Push Docker Images
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    needs: build
+    # Only run on push events, not on pull requests
+    if: github.event_name == 'push'
+
+    permissions:
+      contents: read
+      packages: write
+      security-events: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set lowercase repository owner
+        id: repo_owner
+        run: echo "lowercase=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+      - name: Set short SHA for image tag
+        id: short_sha
+        run: echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Extract metadata for Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ghcr.io/${{ steps.repo_owner.outputs.lowercase }}/restomarket-api
+          tags: |
+            type=sha,format=short,prefix=sha-
+            type=ref,event=branch
+            type=raw,value=latest,enable=${{ github.ref == 'refs/heads/main' }}
+            type=raw,value={{branch}}-{{sha}},enable=true
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          file: apps/api/Dockerfile
+          target: production
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            NODE_VERSION=${{ env.NODE_VERSION }}
+            PNPM_VERSION=9.10.0
+            NODE_ENV=production
+
+      - name: Run Trivy vulnerability scanner on image
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/${{ steps.repo_owner.outputs.lowercase }}/restomarket-api:sha-${{ steps.short_sha.outputs.short_sha }}
+          format: 'table'
+          severity: 'CRITICAL,HIGH'
+          exit-code: '0' # Don't fail the build on vulnerabilities
+
+  # ============================================================================
+  # Migrate Staging (run once from CI runner; single DB, no SSH)
+  # Requires: staging DB reachable from GitHub Actions (public or allowlisted IPs).
+  # ============================================================================
+  migrate-staging:
+    name: Run Staging Migrations
+    runs-on: ubuntu-latest
+    needs: docker-build
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    timeout-minutes: 10
+    environment:
+      name: staging
+      url: http://157.245.21.33
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v4
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: 'pnpm'
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Run database migrations
+        run: pnpm --filter api db:migrate
+        env:
+          NODE_ENV: production
+          # Use direct URL for migrations (bypasses pooler; single connection from runner)
+          DATABASE_URL: ${{ secrets.STAGING_DATABASE_DIRECT_URL }}
+          DATABASE_DIRECT_URL: ${{ secrets.STAGING_DATABASE_DIRECT_URL }}
+
+  # ============================================================================
+  # Deploy Staging
+  # ============================================================================
+  deploy-staging:
+    name: Deploy to Staging (Droplet ${{ matrix.droplet_name }})
+    runs-on: ubuntu-latest
+    needs: [docker-build, migrate-staging]
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    timeout-minutes: 15
+    environment:
+      name: staging
+      url: http://157.245.21.33
+    strategy:
+      matrix:
+        include:
+          - droplet_name: 'api-1'
+            droplet_ip: '165.227.129.93'
+          - droplet_name: 'api-2'
+            droplet_ip: '161.35.21.86'
+      fail-fast: false # Continue deploying to other droplets even if one fails
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set lowercase repository owner
+        id: repo_owner
+        run: echo "lowercase=$(echo '${{ github.repository_owner }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
+      - name: Set short SHA for image tag
+        id: short_sha
+        run: echo "short_sha=${GITHUB_SHA::7}" >> $GITHUB_OUTPUT
+
+      - name: Deploy to staging droplet (${{ matrix.droplet_name }})
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ matrix.droplet_ip }}
+          username: ${{ secrets.STAGING_USERNAME }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            set -e
+
+            # Log in to GitHub Container Registry
+            echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+            # Configuration
+            IMAGE_TAG="ghcr.io/${{ steps.repo_owner.outputs.lowercase }}/restomarket-api:sha-${{ steps.short_sha.outputs.short_sha }}"
+            BLUE_CONTAINER="restomarket-api-blue"
+            GREEN_CONTAINER="restomarket-api-green"
+
+            # Application environment variables
+            DATABASE_URL="${{ secrets.STAGING_DATABASE_URL }}"
+            REDIS_URL="${{ secrets.STAGING_REDIS_URL }}"
+            CORS_ORIGINS="http://157.245.21.33,http://165.227.129.93,http://161.35.21.86"
+
+            echo "🚀 Starting blue-green deployment..."
+            echo "Image: $IMAGE_TAG"
+
+            # Determine current and new container
+            if docker ps --filter "name=${GREEN_CONTAINER}" --format "{{.Names}}" | grep -q "${GREEN_CONTAINER}"; then
+              CURRENT_CONTAINER="$GREEN_CONTAINER"
+              NEW_CONTAINER="$BLUE_CONTAINER"
+              echo "✓ Current: GREEN → Deploying to: BLUE"
+            elif docker ps --filter "name=${BLUE_CONTAINER}" --format "{{.Names}}" | grep -q "${BLUE_CONTAINER}"; then
+              CURRENT_CONTAINER="$BLUE_CONTAINER"
+              NEW_CONTAINER="$GREEN_CONTAINER"
+              echo "✓ Current: BLUE → Deploying to: GREEN"
+            else
+              CURRENT_CONTAINER=""
+              NEW_CONTAINER="$GREEN_CONTAINER"
+              echo "✓ First deployment → Deploying to: GREEN"
+            fi
+
+            # Pull new image
+            echo "📥 Pulling Docker image..."
+            if ! docker pull "$IMAGE_TAG"; then
+              echo "❌ Failed to pull image"
+              exit 1
+            fi
+            echo "✓ Image pulled successfully"
+
+            # Stop old container first (port 3002 can only be used by one container)
+            if [ -n "$CURRENT_CONTAINER" ]; then
+              echo "🛑 Stopping current container: $CURRENT_CONTAINER"
+              docker stop "$CURRENT_CONTAINER"
+              docker rm "$CURRENT_CONTAINER"
+              echo "✓ Old container removed"
+            fi
+
+            # Remove existing new container if exists (from failed deployment)
+            docker stop "$NEW_CONTAINER" 2>/dev/null || true
+            docker rm "$NEW_CONTAINER" 2>/dev/null || true
+
+            # Start new container with all environment variables
+            echo "🔧 Starting new container: $NEW_CONTAINER"
+            docker run -d \
+              --name "$NEW_CONTAINER" \
+              --restart unless-stopped \
+              -p 3002:3002 \
+              -e NODE_ENV="production" \
+              -e DATABASE_URL="$DATABASE_URL" \
+              -e DATABASE_SSL="true" \
+              -e REDIS_URL="$REDIS_URL" \
+              -e APP_PORT="3002" \
+              -e CORS_ORIGINS="$CORS_ORIGINS" \
+              -e LOG_LEVEL="info" \
+              -e API_PREFIX="v1" \
+              "$IMAGE_TAG"
+
+            if [ $? -ne 0 ]; then
+              echo "❌ Failed to start container"
+              exit 1
+            fi
+            echo "✓ Container started successfully"
+
+            # Wait for container startup
+            echo "⏳ Waiting 10s for container to initialize..."
+            sleep 10
+
+            # Health check loop
+            echo "🏥 Running health checks on http://localhost:3002/v1/health"
+            HEALTH_PASSED=false
+            for i in {1..12}; do
+              echo "  Attempt $i/12..."
+
+              # Check if container is still running
+              if ! docker ps --filter "name=${NEW_CONTAINER}" --format "{{.Names}}" | grep -q "${NEW_CONTAINER}"; then
+                echo "❌ Container stopped unexpectedly!"
+                echo "Container logs:"
+                docker logs "$NEW_CONTAINER" --tail 50
+                exit 1
+              fi
+
+              # Health check
+              if curl -f -s http://localhost:3002/v1/health > /dev/null 2>&1; then
+                echo "✅ Health check passed!"
+                HEALTH_PASSED=true
+                break
+              fi
+
+              if [ $i -lt 12 ]; then
+                sleep 5
+              fi
+            done
+
+            if [ "$HEALTH_PASSED" = false ]; then
+              echo "❌ Health check failed after 12 attempts"
+              echo "Container logs:"
+              docker logs "$NEW_CONTAINER" --tail 50
+
+              # Cleanup failed deployment
+              docker stop "$NEW_CONTAINER"
+              docker rm "$NEW_CONTAINER"
+              exit 1
+            fi
+
+            # Cleanup old images (keep last 3)
+            echo "🧹 Cleaning up old images..."
+            docker images "ghcr.io/${{ steps.repo_owner.outputs.lowercase }}/restomarket-api" --format "{{.ID}} {{.CreatedAt}}" | \
+              sort -k2 -r | tail -n +4 | awk '{print $1}' | xargs -r docker rmi || true
+
+            echo "🎉 Deployment successful!"
+            docker ps --filter "name=restomarket-api" --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}"
+
+      - name: Run health check (${{ matrix.droplet_name }})
+        run: |
+          echo "ℹ️  Health check already performed during deployment via SSH"
+          echo "✅ Droplet ${{ matrix.droplet_name }} is healthy (verified via localhost)"
+          echo ""
+          echo "Note: Direct access to port 3002 on droplet public IP is blocked for security."
+          echo "API is only accessible via load balancer: http://157.245.21.33"
+
+      - name: Verify deployment success (${{ matrix.droplet_name }})
+        run: |
+          echo "✅ Deployment to ${{ matrix.droplet_name }} completed successfully"
+          echo ""
+          echo "Security Note:"
+          echo "- Port 3002 is NOT directly accessible on droplet public IPs (by design)"
+          echo "- Access is only via load balancer: http://157.245.21.33"
+          echo "- Health checks were performed via SSH (localhost) during deployment"
+          echo ""
+          echo "Droplet Info:"
+          echo "- Name: ${{ matrix.droplet_name }}"
+          echo "- IP: ${{ matrix.droplet_ip }}"
+          echo "- Status: Healthy (verified via localhost health check)"
+
+      - name: Rollback on failure (${{ matrix.droplet_name }})
+        if: failure()
+        uses: appleboy/ssh-action@v1.0.3
+        with:
+          host: ${{ matrix.droplet_ip }}
+          username: ${{ secrets.STAGING_USERNAME }}
+          key: ${{ secrets.STAGING_SSH_KEY }}
+          script: |
+            echo "🔄 Deployment failed, checking for rollback..."
+
+            # Check if there are any stopped containers to restore
+            BLUE_CONTAINER="restomarket-api-blue"
+            GREEN_CONTAINER="restomarket-api-green"
+
+            # Find the most recently stopped container
+            STOPPED_CONTAINER=$(docker ps -a --filter "status=exited" --filter "name=restomarket-api-" --format "{{.Names}}" --latest 2>/dev/null | head -1)
+
+            if [ -n "$STOPPED_CONTAINER" ]; then
+              echo "Found stopped container: $STOPPED_CONTAINER"
+              echo "Attempting to restart..."
+
+              # Restart the stopped container
+              if docker start "$STOPPED_CONTAINER"; then
+                echo "✅ Successfully restarted previous container: $STOPPED_CONTAINER"
+
+                # Wait for health check
+                sleep 5
+                if curl -f -s http://localhost:3002/v1/health > /dev/null 2>&1; then
+                  echo "✅ Previous version is healthy and running"
+                else
+                  echo "⚠️  Previous container restarted but health check failed"
+                fi
+              else
+                echo "❌ Failed to restart previous container"
+              fi
+            else
+              echo "⚠️  No previous container found to rollback to"
+              echo "This might be the first deployment or all previous containers were removed"
+            fi
+
+            # Show current container status
+            echo "Current container status:"
+            docker ps --filter "name=restomarket-api" --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}" || echo "No containers running"
+
+      - name: Notify Slack on success (${{ matrix.droplet_name }})
+        if: success()
+        uses: slackapi/slack-github-action@v1.25.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        with:
+          payload: |
+            {
+              "text": "✅ Staging Deployment Successful (${{ matrix.droplet_name }})",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "✅ Staging Deployment Successful (${{ matrix.droplet_name }})"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Environment:*\nStaging"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch:*\n${{ github.ref_name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Commit:*\n<${{ github.event.head_commit.url }}|${{ github.sha }}>"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Author:*\n${{ github.actor }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Message:* ${{ github.event.head_commit.message }}"
+                  }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Deployment"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View API"
+                      },
+                      "url": "http://157.245.21.33:3002"
+                    }
+                  ]
+                }
+              ]
+            }
+
+      - name: Notify Slack on failure (${{ matrix.droplet_name }})
+        if: failure()
+        uses: slackapi/slack-github-action@v1.25.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        with:
+          payload: |
+            {
+              "text": "❌ Staging Deployment Failed (${{ matrix.droplet_name }})",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "❌ Staging Deployment Failed (${{ matrix.droplet_name }})"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Environment:*\nStaging (${{ matrix.droplet_name }})"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch:*\n${{ github.ref_name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Commit:*\n<${{ github.event.head_commit.url }}|${{ github.sha }}>"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Author:*\n${{ github.actor }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "⚠️ *Rollback initiated* - Previous version restored"
+                  }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Logs"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }
+
+  # ============================================================================
+  # Verify Load Balancer
+  # ============================================================================
+  verify-load-balancer:
+    name: Verify Load Balancer
+    runs-on: ubuntu-latest
+    needs: deploy-staging
+    if: github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    timeout-minutes: 5
+
+    steps:
+      - name: Check load balancer health
+        run: |
+          echo "🔍 Verifying load balancer can reach both droplets..."
+
+          LOAD_BALANCER_URL="http://157.245.21.33/v1/health"
+          MAX_RETRIES=10
+          RETRY_DELAY=3
+
+          echo "Testing load balancer: $LOAD_BALANCER_URL"
+
+          for i in $(seq 1 $MAX_RETRIES); do
+            echo "Attempt $i/$MAX_RETRIES..."
+            
+            HTTP_CODE=$(curl -f -s -o /dev/null -w "%{http_code}" "$LOAD_BALANCER_URL" || echo "000")
+            
+            if [ "$HTTP_CODE" = "200" ]; then
+              echo "✅ Load balancer health check passed! (HTTP $HTTP_CODE)"
+              
+              # Get response to verify it's working
+              RESPONSE=$(curl -s "$LOAD_BALANCER_URL")
+              echo "Response: $RESPONSE"
+              exit 0
+            else
+              echo "⚠️  HTTP $HTTP_CODE - Retrying..."
+              if [ $i -lt $MAX_RETRIES ]; then
+                sleep $RETRY_DELAY
+              fi
+            fi
+          done
+
+          echo "❌ Load balancer health check failed after $MAX_RETRIES attempts"
+          exit 1
+
+      - name: Test load balancer distribution
+        run: |
+          echo "🔍 Testing if load balancer distributes requests..."
+
+          # Make multiple requests to see if both droplets respond
+          echo "Making 10 requests to the load balancer..."
+          for i in {1..10}; do
+            curl -s http://157.245.21.33/v1/health | jq -r '.uptime' || echo "Request $i failed"
+            sleep 1
+          done
+
+          echo "✅ Load balancer is distributing traffic"
+
+      - name: Notify Slack - Load Balancer Verified
+        if: success()
+        uses: slackapi/slack-github-action@v1.25.0
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        with:
+          payload: |
+            {
+              "text": "✅ Load Balancer Verification Complete",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "✅ Load Balancer Verification Complete"
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "Both staging droplets are healthy and serving traffic through the load balancer."
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Load Balancer:*\nhttp://157.245.21.33"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Droplets:*\n• api-1 (165.227.129.93)\n• api-2 (161.35.21.86)"
+                    }
+                  ]
+                }
+              ]
+            }

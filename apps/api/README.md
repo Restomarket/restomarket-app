@@ -361,12 +361,14 @@ THROTTLE_LIMIT=100
 
 ### Database
 
-| Command            | Description                             |
-| ------------------ | --------------------------------------- |
-| `pnpm db:generate` | Generate migration files from schema    |
-| `pnpm db:migrate`  | Apply migrations to database            |
-| `pnpm db:push`     | Push schema changes directly (dev only) |
-| `pnpm db:studio`   | Open Drizzle Studio (GUI)               |
+| Command                 | Description                             |
+| ----------------------- | --------------------------------------- |
+| `pnpm db:generate`      | Generate migration files from schema    |
+| `pnpm db:migrate`       | Apply migrations to database            |
+| `pnpm db:migrate:prod`  | Apply migrations in production mode     |
+| `pnpm db:migrate:check` | Check for pending migrations            |
+| `pnpm db:push`          | Push schema changes directly (dev only) |
+| `pnpm db:studio`        | Open Drizzle Studio (GUI)               |
 
 ### Utilities
 
@@ -712,6 +714,82 @@ pnpm build
 
 ---
 
+## 🗄️ Database Configuration (Supabase)
+
+### Connection Modes
+
+This application uses **Supabase** as the PostgreSQL provider with two connection modes:
+
+**1. Pooler Connection (Port 6543)** - For Application Runtime
+
+- Set in `DATABASE_URL`
+- Uses Supavisor in transaction mode
+- Handles connection pooling automatically
+- Recommended for production
+
+**2. Direct Connection (Port 5432)** - For Migrations
+
+- Set in `DATABASE_DIRECT_URL`
+- Bypasses connection pooler
+- Required for DDL statements (schema changes)
+- Used by Drizzle migrations
+
+### Environment Variables
+
+```bash
+# Pooler connection (application runtime)
+DATABASE_URL=postgresql://postgres.PROJECT_REF:PASSWORD@aws-0-eu-central-1.pooler.supabase.com:6543/postgres?sslmode=require
+
+# Direct connection (migrations)
+DATABASE_DIRECT_URL=postgresql://postgres.PROJECT_REF:PASSWORD@aws-0-eu-central-1.pooler.supabase.com:5432/postgres?sslmode=require
+
+# SSL is required for Supabase
+DATABASE_SSL=true
+
+# Optional: Supabase project info
+SUPABASE_PROJECT_REF=abcdefghijklmnop
+SUPABASE_URL=https://PROJECT_REF.supabase.co
+SUPABASE_ANON_KEY=eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9...
+```
+
+### Migration Best Practices
+
+1. **Always test migrations locally first**
+
+   ```bash
+   pnpm db:generate  # Generate migration files
+   pnpm db:migrate   # Apply to local/staging
+   ```
+
+2. **Migrations run automatically in CI/CD**
+   - CI/CD validates migrations before deployment
+   - Pre-deployment step applies migrations to staging
+   - Rollback capability built-in
+
+3. **After schema changes:**
+
+   ```bash
+   pnpm db:generate  # Generate new migration
+   git add drizzle/migrations/
+   git commit -m "feat(db): add new table"
+   ```
+
+4. **Never edit migration files manually**
+   - Always use `pnpm db:generate`
+   - Commit generated files to version control
+   - Migrations are idempotent and version-controlled
+
+### Supabase Dashboard
+
+Access your database:
+
+- Dashboard: https://app.supabase.com
+- Table Editor: View and edit data
+- SQL Editor: Run custom queries
+- Database Metrics: Monitor performance
+
+---
+
 ## 💡 Tips & Best Practices
 
 1. **Always use ConfigService** instead of `process.env` for type safety
@@ -724,6 +802,7 @@ pnpm build
 8. **Handle errors gracefully** with custom exceptions
 9. **Document APIs** with Swagger decorators
 10. **Keep modules focused** on single responsibility
+11. **Use DATABASE_DIRECT_URL for migrations** - Never use pooler for schema changes
 
 ---
 

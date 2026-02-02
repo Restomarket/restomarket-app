@@ -1,0 +1,156 @@
+# Staging Environment - Terraform Variables Example
+# Copy this file to terraform.tfvars and fill in your actual values
+
+# ============================================================================
+# REQUIRED VARIABLES
+# ============================================================================
+
+# DigitalOcean API token (get from: https://cloud.digitalocean.com/account/api/tokens)
+# do_token = "dop_v1_..."
+
+# SSH key name in DigitalOcean (get from: doctl compute ssh-key list)
+# ssh_key_name = "your-ssh-key-name"
+
+# ============================================================================
+# GENERAL CONFIGURATION
+# ============================================================================
+
+environment  = "staging"
+project_name = "restomarket"
+region       = "nyc3" # Choose: nyc1, nyc3, sfo3, ams3, sgp1, lon1, fra1, tor1, blr1
+
+# ============================================================================
+# NETWORKING CONFIGURATION
+# ============================================================================
+
+vpc_ip_range = "10.20.0.0/16" # Different from dev (10.10.0.0/16)
+
+# IMPORTANT: Restrict SSH access to your IP addresses in staging
+# Get your IP: curl ifconfig.me
+admin_ips = [
+  # "1.2.3.4/32",  # Office IP
+  # "5.6.7.8/32",  # Home IP
+]
+
+# Allow GitHub Actions to SSH for CI/CD deployment (fetches IPs from api.github.com/meta)
+# Set to false if not using GitHub Actions for deployment
+allow_github_actions_ssh = true
+
+api_port = 3002
+
+# Timezone for all droplets (Morocco - Western European Summer Time)
+timezone = "Africa/Casablanca" # UTC+1 (WEST)
+
+# Alert email for security notifications (fail2ban, etc.)
+alert_email = "nmiliali8@gmail.com"
+
+# VPC CIDR for firewall rules (same as vpc_ip_range)
+vpc_cidr = "10.20.0.0/16"
+
+# ============================================================================
+# DATABASE CONFIGURATION (HA with 2 nodes)
+# ============================================================================
+
+db_version    = "16"
+db_node_size  = "db-s-2vcpu-4gb" # $60/month per node
+db_node_count = 2                # HA configuration
+
+db_name = "restomarket_staging"
+db_user = "restomarket_app"
+
+# Enable connection pooling in staging to test production config
+db_enable_pool = true
+db_pool_mode   = "transaction" # transaction, session, or statement
+db_pool_size   = 25
+
+# ============================================================================
+# REDIS CONFIGURATION (DISABLED - uncomment in variables.tf and main.tf first)
+# ============================================================================
+# redis_version        = "7"
+# redis_node_size      = "db-s-2vcpu-4gb" # $60/month
+# redis_eviction_policy = "allkeys-lru"
+# redis_maintenance_day  = "sunday"
+# redis_maintenance_hour = "02:00"
+
+# ============================================================================
+# API DROPLET CONFIGURATION (2 droplets for redundancy)
+# ============================================================================
+
+api_droplet_count = 2                  # Redundancy for staging
+api_droplet_size  = "s-2vcpu-4gb"      # $24/month per droplet
+api_droplet_image = "ubuntu-22-04-x64"
+
+# Enable backups in staging
+api_enable_backups    = true
+api_enable_monitoring = true
+api_enable_ipv6       = false
+
+# Optional: Enable block storage volumes
+api_enable_volumes = false
+api_volume_size    = 50 # GB
+
+# ============================================================================
+# LOAD BALANCER CONFIGURATION
+# ============================================================================
+
+# SSL Certificate (configure after setting up DNS)
+# Get certificate name: doctl compute certificate list
+# ssl_certificate_name = "staging-api-yourdomain-com"
+
+ssl_certificate_name   = "" # Leave empty initially, add after domain setup
+enable_https_redirect  = true
+enable_proxy_protocol  = false
+
+# ============================================================================
+# MONITORING AND ALERTING CONFIGURATION
+# ============================================================================
+
+# Disabled until Slack webhook is configured (alert_slack_webhook)
+enable_monitoring_alerts = false
+
+# Email notifications
+alert_email_recipients = [
+  # "ops@yourcompany.com",
+  # "devops@yourcompany.com",
+]
+
+# Slack notifications
+alert_slack_channel = "#alerts-staging"
+# alert_slack_webhook = "https://hooks.slack.com/services/YOUR/WEBHOOK/URL"
+
+# ============================================================================
+# OPTIONAL: CUSTOM FIREWALL RULES
+# ============================================================================
+
+# Add custom inbound rules if needed
+# custom_inbound_rules = [
+#   {
+#     protocol         = "tcp"
+#     port_range       = "8080"
+#     source_addresses = ["0.0.0.0/0"]
+#   }
+# ]
+
+# Add custom outbound rules if needed
+# custom_outbound_rules = []
+
+# ============================================================================
+# OPTIONAL: CUSTOM USER DATA
+# ============================================================================
+
+# Additional setup commands to run on droplets
+# api_custom_user_data = <<-EOT
+#   # Install additional tools
+#   apt-get install -y htop vim
+# EOT
+
+# ============================================================================
+# ESTIMATED MONTHLY COST
+# ============================================================================
+
+# API droplets: 2 × $24 = $48
+# Database: 2 × $60 = $120 (HA) - or $0 with Supabase
+# Load balancer: $12
+# Backups: ~$5-10 (20% of droplet cost)
+# -----------------------------
+# Total: ~$60-72/month without Redis (excluding bandwidth)

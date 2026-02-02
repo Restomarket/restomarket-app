@@ -21,6 +21,8 @@
     "clean": "rm -rf dist .turbo coverage",
     "db:generate": "pnpm drizzle-kit generate",
     "db:migrate": "pnpm drizzle-kit migrate",
+    "db:migrate:prod": "NODE_ENV=production drizzle-kit migrate",
+    "db:migrate:check": "drizzle-kit check",
     "db:push": "pnpm drizzle-kit push",
     "db:studio": "pnpm drizzle-kit studio"
   },

@@ -15,9 +15,15 @@ export const envSchema = z.object({
   DATABASE_CONNECT_TIMEOUT: z.string().default('10').transform(Number).pipe(z.number().positive()),
   DATABASE_SSL: z
     .string()
-    .default('false')
+    .default('true')
     .transform(val => val === 'true'),
   DATABASE_SSL_CA: z.string().optional(),
+
+  // Supabase-specific configurations
+  DATABASE_DIRECT_URL: z.string().url().optional(),
+  SUPABASE_PROJECT_REF: z.string().optional(),
+  SUPABASE_URL: z.string().url().optional(),
+  SUPABASE_ANON_KEY: z.string().optional(),
 
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
   LOG_PRETTY: z
