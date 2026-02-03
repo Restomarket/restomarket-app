@@ -1045,6 +1045,7 @@ jobs:
       - name: Determine pipeline status
         id: pipeline_status
         run: |
+          # Determine overall status
           if [ "${{ needs.code-quality.result }}" == "failure" ] || \
              [ "${{ needs.test.result }}" == "failure" ] || \
              [ "${{ needs.validate-migrations.result }}" == "failure" ] || \
@@ -1068,6 +1069,87 @@ jobs:
           else
             echo "status=success" >> $GITHUB_OUTPUT
             echo "emoji=✅" >> $GITHUB_OUTPUT
+          fi
+
+          # Determine individual job status indicators
+          # Code Quality
+          if [ "${{ needs.code-quality.result }}" == "success" ]; then
+            echo "code_quality_status=✅" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.code-quality.result }}" == "failure" ]; then
+            echo "code_quality_status=❌" >> $GITHUB_OUTPUT
+          else
+            echo "code_quality_status=⚠️" >> $GITHUB_OUTPUT
+          fi
+
+          # Tests
+          if [ "${{ needs.test.result }}" == "success" ]; then
+            echo "test_status=✅" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.test.result }}" == "failure" ]; then
+            echo "test_status=❌" >> $GITHUB_OUTPUT
+          else
+            echo "test_status=⚠️" >> $GITHUB_OUTPUT
+          fi
+
+          # Migrations Validation
+          if [ "${{ needs.validate-migrations.result }}" == "success" ]; then
+            echo "migrations_status=✅" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.validate-migrations.result }}" == "failure" ]; then
+            echo "migrations_status=❌" >> $GITHUB_OUTPUT
+          else
+            echo "migrations_status=⚠️" >> $GITHUB_OUTPUT
+          fi
+
+          # Build
+          if [ "${{ needs.build.result }}" == "success" ]; then
+            echo "build_status=✅" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.build.result }}" == "failure" ]; then
+            echo "build_status=❌" >> $GITHUB_OUTPUT
+          else
+            echo "build_status=⚠️" >> $GITHUB_OUTPUT
+          fi
+
+          # Docker Build
+          if [ "${{ needs.docker-build.result }}" == "success" ]; then
+            echo "docker_status=✅" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.docker-build.result }}" == "failure" ]; then
+            echo "docker_status=❌" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.docker-build.result }}" == "skipped" ]; then
+            echo "docker_status=⏭️" >> $GITHUB_OUTPUT
+          else
+            echo "docker_status=⚠️" >> $GITHUB_OUTPUT
+          fi
+
+          # Staging Migration
+          if [ "${{ needs.migrate-staging.result }}" == "success" ]; then
+            echo "migration_status=✅" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.migrate-staging.result }}" == "failure" ]; then
+            echo "migration_status=❌" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.migrate-staging.result }}" == "skipped" ]; then
+            echo "migration_status=⏭️" >> $GITHUB_OUTPUT
+          else
+            echo "migration_status=⚠️" >> $GITHUB_OUTPUT
+          fi
+
+          # Staging Deployment
+          if [ "${{ needs.deploy-staging.result }}" == "success" ]; then
+            echo "deploy_status=✅" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.deploy-staging.result }}" == "failure" ]; then
+            echo "deploy_status=❌" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.deploy-staging.result }}" == "skipped" ]; then
+            echo "deploy_status=⏭️" >> $GITHUB_OUTPUT
+          else
+            echo "deploy_status=⚠️" >> $GITHUB_OUTPUT
+          fi
+
+          # Load Balancer
+          if [ "${{ needs.verify-load-balancer.result }}" == "success" ]; then
+            echo "lb_status=✅" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.verify-load-balancer.result }}" == "failure" ]; then
+            echo "lb_status=❌" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.verify-load-balancer.result }}" == "skipped" ]; then
+            echo "lb_status=⏭️" >> $GITHUB_OUTPUT
+          else
+            echo "lb_status=⚠️" >> $GITHUB_OUTPUT
           fi
 
       - name: Send pipeline summary to Slack
@@ -1113,7 +1195,7 @@ jobs:
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "*Pipeline Status:*\n• Code Quality: ${{ needs.code-quality.result == 'success' && '✅' || needs.code-quality.result == 'failure' && '❌' || '⚠️' }}\n• Tests: ${{ needs.test.result == 'success' && '✅' || needs.test.result == 'failure' && '❌' || '⚠️' }}\n• Migrations Validation: ${{ needs.validate-migrations.result == 'success' && '✅' || needs.validate-migrations.result == 'failure' && '❌' || '⚠️' }}\n• Build: ${{ needs.build.result == 'success' && '✅' || needs.build.result == 'failure' && '❌' || '⚠️' }}\n• Docker Build: ${{ needs.docker-build.result == 'success' && '✅' || needs.docker-build.result == 'failure' && '❌' || needs.docker-build.result == 'skipped' && '⏭️' || '⚠️' }}\n• Staging Migration: ${{ needs.migrate-staging.result == 'success' && '✅' || needs.migrate-staging.result == 'failure' && '❌' || needs.migrate-staging.result == 'skipped' && '⏭️' || '⚠️' }}\n• Staging Deployment: ${{ needs.deploy-staging.result == 'success' && '✅' || needs.deploy-staging.result == 'failure' && '❌' || needs.deploy-staging.result == 'skipped' && '⏭️' || '⚠️' }}\n• Load Balancer: ${{ needs.verify-load-balancer.result == 'success' && '✅' || needs.verify-load-balancer.result == 'failure' && '❌' || needs.verify-load-balancer.result == 'skipped' && '⏭️' || '⚠️' }}"
+                    "text": "*Pipeline Status:*\n• Code Quality: ${{ steps.pipeline_status.outputs.code_quality_status }}\n• Tests: ${{ steps.pipeline_status.outputs.test_status }}\n• Migrations Validation: ${{ steps.pipeline_status.outputs.migrations_status }}\n• Build: ${{ steps.pipeline_status.outputs.build_status }}\n• Docker Build: ${{ steps.pipeline_status.outputs.docker_status }}\n• Staging Migration: ${{ steps.pipeline_status.outputs.migration_status }}\n• Staging Deployment: ${{ steps.pipeline_status.outputs.deploy_status }}\n• Load Balancer: ${{ steps.pipeline_status.outputs.lb_status }}"
                   }
                 },
                 {
