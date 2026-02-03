@@ -829,13 +829,6 @@ jobs:
                   ]
                 },
                 {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Message:* ${{ github.event.head_commit.message }}"
-                  }
-                },
-                {
                   "type": "actions",
                   "elements": [
                     {
@@ -850,9 +843,17 @@ jobs:
                       "type": "button",
                       "text": {
                         "type": "plain_text",
+                        "text": "View Commit"
+                      },
+                      "url": "${{ github.event.head_commit.url }}"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
                         "text": "View API"
                       },
-                      "url": "http://157.245.21.33:3002"
+                      "url": "http://157.245.21.33/v1"
                     }
                   ]
                 }
@@ -1199,13 +1200,6 @@ jobs:
                   }
                 },
                 {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Message:* ${{ github.event.head_commit.message }}"
-                  }
-                },
-                {
                   "type": "actions",
                   "elements": [
                     {
@@ -1223,6 +1217,14 @@ jobs:
                         "text": "View Commit"
                       },
                       "url": "${{ github.event.head_commit.url }}"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View API"
+                      },
+                      "url": "http://157.245.21.33/v1"
                     }
                   ]
                 }
