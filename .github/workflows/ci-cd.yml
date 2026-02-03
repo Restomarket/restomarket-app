@@ -15,6 +15,25 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# ============================================================================
+# SLACK NOTIFICATION SETUP
+# ============================================================================
+# Required GitHub Secrets (Settings → Secrets → Actions):
+#
+# SLACK_WEBHOOK - Incoming Webhook URL for your Slack channel
+#   1. Go to https://api.slack.com/apps
+#   2. Select your app (RestoMarket CI/CD - App ID: A0ACMRT033L)
+#   3. Go to "Incoming Webhooks" → Activate and create a webhook
+#   4. Copy the Webhook URL and add it as a GitHub Secret
+#   Format: https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXX
+#
+# Optional (for advanced webhook verification):
+# SLACK_SIGNING_SECRET - Used to verify webhook authenticity
+#   Value: 2374045998a8eb159a9ac834bc1deb94
+#
+# Note: Never commit actual credentials to the repository!
+# ============================================================================
+
 env:
   NODE_VERSION: '24.13.0'
   # Turborepo Remote Caching (set these in GitHub: Settings → Secrets → Actions)
@@ -321,6 +340,115 @@ jobs:
             packages/*/package.json
           retention-days: 7
           if-no-files-found: warn
+
+  # ============================================================================
+  # Notification: Build Complete
+  # ============================================================================
+  notify-build-complete:
+    name: Notify Build Complete
+    runs-on: ubuntu-latest
+    needs: build
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    timeout-minutes: 2
+
+    steps:
+      - name: Notify Slack - Build Complete
+        if: needs.build.result == 'success'
+        uses: slackapi/slack-github-action@v1.25.0
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        with:
+          payload: |
+            {
+              "text": "✅ Build Complete - Ready for Deployment",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "✅ Build Complete - Ready for Deployment"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Environment:*\nStaging"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch:*\n${{ github.ref_name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Commit:*\n<${{ github.event.head_commit.url }}|${{ github.sha }}>"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Author:*\n${{ github.actor }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "🚀 Next: Docker build and staging deployment"
+                  }
+                }
+              ]
+            }
+
+      - name: Notify Slack - Build Failed
+        if: needs.build.result == 'failure'
+        uses: slackapi/slack-github-action@v1.25.0
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        with:
+          payload: |
+            {
+              "text": "❌ Build Failed",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "❌ Build Failed"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch:*\n${{ github.ref_name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Author:*\n${{ github.actor }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Logs"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    }
+                  ]
+                }
+              ]
+            }
 
   docker-build:
     name: Build and Push Docker Images
@@ -663,6 +791,7 @@ jobs:
       - name: Notify Slack on success (${{ matrix.droplet_name }})
         if: success()
         uses: slackapi/slack-github-action@v1.25.0
+        continue-on-error: true
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
@@ -733,6 +862,7 @@ jobs:
       - name: Notify Slack on failure (${{ matrix.droplet_name }})
         if: failure()
         uses: slackapi/slack-github-action@v1.25.0
+        continue-on-error: true
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
@@ -852,6 +982,7 @@ jobs:
       - name: Notify Slack - Load Balancer Verified
         if: success()
         uses: slackapi/slack-github-action@v1.25.0
+        continue-on-error: true
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
@@ -884,6 +1015,132 @@ jobs:
                     {
                       "type": "mrkdwn",
                       "text": "*Droplets:*\n• api-1 (165.227.129.93)\n• api-2 (161.35.21.86)"
+                    }
+                  ]
+                }
+              ]
+            }
+
+  # ============================================================================
+  # Pipeline Summary Notification
+  # ============================================================================
+  pipeline-summary:
+    name: Pipeline Execution Summary
+    runs-on: ubuntu-latest
+    needs:
+      [
+        code-quality,
+        test,
+        validate-migrations,
+        build,
+        docker-build,
+        migrate-staging,
+        deploy-staging,
+        verify-load-balancer,
+      ]
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    timeout-minutes: 2
+
+    steps:
+      - name: Determine pipeline status
+        id: pipeline_status
+        run: |
+          if [ "${{ needs.code-quality.result }}" == "failure" ] || \
+             [ "${{ needs.test.result }}" == "failure" ] || \
+             [ "${{ needs.validate-migrations.result }}" == "failure" ] || \
+             [ "${{ needs.build.result }}" == "failure" ] || \
+             [ "${{ needs.docker-build.result }}" == "failure" ] || \
+             [ "${{ needs.migrate-staging.result }}" == "failure" ] || \
+             [ "${{ needs.deploy-staging.result }}" == "failure" ] || \
+             [ "${{ needs.verify-load-balancer.result }}" == "failure" ]; then
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "emoji=❌" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.code-quality.result }}" == "cancelled" ] || \
+               [ "${{ needs.test.result }}" == "cancelled" ] || \
+               [ "${{ needs.validate-migrations.result }}" == "cancelled" ] || \
+               [ "${{ needs.build.result }}" == "cancelled" ] || \
+               [ "${{ needs.docker-build.result }}" == "cancelled" ] || \
+               [ "${{ needs.migrate-staging.result }}" == "cancelled" ] || \
+               [ "${{ needs.deploy-staging.result }}" == "cancelled" ] || \
+               [ "${{ needs.verify-load-balancer.result }}" == "cancelled" ]; then
+            echo "status=cancelled" >> $GITHUB_OUTPUT
+            echo "emoji=⚠️" >> $GITHUB_OUTPUT
+          else
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "emoji=✅" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send pipeline summary to Slack
+        uses: slackapi/slack-github-action@v1.25.0
+        continue-on-error: true
+        env:
+          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
+          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
+        with:
+          payload: |
+            {
+              "text": "${{ steps.pipeline_status.outputs.emoji }} CI/CD Pipeline ${{ steps.pipeline_status.outputs.status }}",
+              "blocks": [
+                {
+                  "type": "header",
+                  "text": {
+                    "type": "plain_text",
+                    "text": "${{ steps.pipeline_status.outputs.emoji }} CI/CD Pipeline Execution Summary"
+                  }
+                },
+                {
+                  "type": "section",
+                  "fields": [
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Environment:*\nStaging"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Branch:*\n${{ github.ref_name }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Commit:*\n<${{ github.event.head_commit.url }}|${{ github.sha }}>"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Author:*\n${{ github.actor }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Pipeline Status:*\n• Code Quality: ${{ needs.code-quality.result == 'success' && '✅' || needs.code-quality.result == 'failure' && '❌' || '⚠️' }}\n• Tests: ${{ needs.test.result == 'success' && '✅' || needs.test.result == 'failure' && '❌' || '⚠️' }}\n• Migrations Validation: ${{ needs.validate-migrations.result == 'success' && '✅' || needs.validate-migrations.result == 'failure' && '❌' || '⚠️' }}\n• Build: ${{ needs.build.result == 'success' && '✅' || needs.build.result == 'failure' && '❌' || '⚠️' }}\n• Docker Build: ${{ needs.docker-build.result == 'success' && '✅' || needs.docker-build.result == 'failure' && '❌' || needs.docker-build.result == 'skipped' && '⏭️' || '⚠️' }}\n• Staging Migration: ${{ needs.migrate-staging.result == 'success' && '✅' || needs.migrate-staging.result == 'failure' && '❌' || needs.migrate-staging.result == 'skipped' && '⏭️' || '⚠️' }}\n• Staging Deployment: ${{ needs.deploy-staging.result == 'success' && '✅' || needs.deploy-staging.result == 'failure' && '❌' || needs.deploy-staging.result == 'skipped' && '⏭️' || '⚠️' }}\n• Load Balancer: ${{ needs.verify-load-balancer.result == 'success' && '✅' || needs.verify-load-balancer.result == 'failure' && '❌' || needs.verify-load-balancer.result == 'skipped' && '⏭️' || '⚠️' }}"
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Message:* ${{ github.event.head_commit.message }}"
+                  }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Pipeline"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Commit"
+                      },
+                      "url": "${{ github.event.head_commit.url }}"
                     }
                   ]
                 }
