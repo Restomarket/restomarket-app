@@ -713,6 +713,7 @@ jobs:
 
             if [ "$HTTP_CODE" = "200" ]; then
               echo "✅ Load balancer health check passed! (HTTP $HTTP_CODE)"
+              echo "Response: $BODY"
 
               # Verify it's valid JSON with 'status' field
               if echo "$BODY" | jq -e '.status' > /dev/null 2>&1; then
