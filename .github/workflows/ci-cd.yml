@@ -946,14 +946,15 @@ jobs:
 
           for i in $(seq 1 $MAX_RETRIES); do
             echo "Attempt $i/$MAX_RETRIES..."
-            
-            HTTP_CODE=$(curl -f -s -o /dev/null -w "%{http_code}" "$LOAD_BALANCER_URL" || echo "000")
-            
+
+            # Use -L to follow redirects, -f to fail on HTTP errors
+            HTTP_CODE=$(curl -L -f -s -o /dev/null -w "%{http_code}" "$LOAD_BALANCER_URL" 2>/dev/null || echo "000")
+
             if [ "$HTTP_CODE" = "200" ]; then
               echo "✅ Load balancer health check passed! (HTTP $HTTP_CODE)"
-              
+
               # Get response to verify it's working
-              RESPONSE=$(curl -s "$LOAD_BALANCER_URL")
+              RESPONSE=$(curl -L -s "$LOAD_BALANCER_URL")
               echo "Response: $RESPONSE"
               exit 0
             else
@@ -974,7 +975,8 @@ jobs:
           # Make multiple requests to see if both droplets respond
           echo "Making 10 requests to the load balancer..."
           for i in {1..10}; do
-            curl -s http://157.245.21.33/v1/health | jq -r '.uptime' || echo "Request $i failed"
+            # Follow redirects with -L
+            curl -L -s http://157.245.21.33/v1/health | jq -r '.uptime' || echo "Request $i failed"
             sleep 1
           done
 
