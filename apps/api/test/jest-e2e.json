@@ -7,7 +7,7 @@
     "^.+\\.(t|j)s$": "ts-jest"
   },
   "transformIgnorePatterns": [
-    "node_modules/(?!(better-auth|better-call|@better-fetch|@thallesp/nestjs-better-auth)/)"
+    "node_modules/(?!(.pnpm|better-auth|better-call|@better-fetch|@thallesp))"
   ],
   "moduleNameMapper": {
     "^@common/(.*)$": "<rootDir>/../src/common/$1",
