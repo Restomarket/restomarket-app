@@ -15,7 +15,6 @@ export default [
       'node_modules/**',
       'coverage/**',
       'build/**',
-      'drizzle/**',
       '**/*.d.ts',
       '.env*',
       '*.config.ts',
