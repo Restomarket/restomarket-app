@@ -497,6 +497,8 @@ jobs:
             # Application environment variables
             DATABASE_URL="${{ secrets.STAGING_DATABASE_URL }}"
             REDIS_URL="${{ secrets.STAGING_REDIS_URL }}"
+            BETTER_AUTH_SECRET="${{ secrets.STAGING_BETTER_AUTH_SECRET }}"
+            BETTER_AUTH_URL="http://157.245.21.33/v1"
             CORS_ORIGINS="http://157.245.21.33,http://165.227.129.93,http://161.35.21.86"
 
             echo "🚀 Starting blue-green deployment..."
@@ -547,6 +549,8 @@ jobs:
               -e DATABASE_URL="$DATABASE_URL" \
               -e DATABASE_SSL="true" \
               -e REDIS_URL="$REDIS_URL" \
+              -e BETTER_AUTH_SECRET="$BETTER_AUTH_SECRET" \
+              -e BETTER_AUTH_URL="$BETTER_AUTH_URL" \
               -e APP_PORT="3002" \
               -e CORS_ORIGINS="$CORS_ORIGINS" \
               -e LOG_LEVEL="info" \
