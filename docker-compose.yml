@@ -47,6 +47,9 @@ services:
       context: .
       dockerfile: apps/api/Dockerfile
       target: dependencies
+      args:
+        NODE_VERSION: 20.19.0
+        PNPM_VERSION: 9.10.0
     container_name: restomarket-api
     restart: unless-stopped
     environment:
@@ -60,12 +63,20 @@ services:
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:3000,http://localhost:3001}
       SWAGGER_ENABLED: ${SWAGGER_ENABLED:-true}
     volumes:
-      # Mount entire API directory for hot reload (except node_modules)
-      - ./apps/api:/app/apps/api
-      - ./packages:/app/packages
-      # Don't mount node_modules (use container's version)
-      - /app/node_modules
-      - /app/apps/api/node_modules
+      # Mount source code for hot reload
+      - ./apps/api/src:/app/apps/api/src
+      - ./apps/api/test:/app/apps/api/test
+      - ./apps/api/tsconfig.json:/app/apps/api/tsconfig.json
+      - ./apps/api/tsconfig.build.json:/app/apps/api/tsconfig.build.json
+      - ./apps/api/nest-cli.json:/app/apps/api/nest-cli.json
+      - ./apps/api/jest.config.mjs:/app/apps/api/jest.config.mjs
+      - ./apps/api/eslint.config.mjs:/app/apps/api/eslint.config.mjs
+      - ./packages/shared/src:/app/packages/shared/src
+      - ./packages/shared/drizzle:/app/packages/shared/drizzle
+      - ./packages/shared/drizzle.schema.ts:/app/packages/shared/drizzle.schema.ts
+      - ./packages/shared/drizzle.config.ts:/app/packages/shared/drizzle.config.ts
+      - ./tsconfig.json:/app/tsconfig.json
+      - ./turbo.json:/app/turbo.json
     ports:
       - '${API_PORT:-3000}:3000'
     depends_on:
@@ -81,7 +92,7 @@ services:
       start_period: 40s
     networks:
       - restomarket-network
-    command: pnpm --filter api dev
+    command: sh -c "cd /app && pnpm turbo build --filter=@apps/api && node apps/api/dist/main.js"
 
   # Adminer - Database Management UI
   adminer:
