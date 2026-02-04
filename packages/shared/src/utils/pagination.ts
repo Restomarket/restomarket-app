@@ -10,7 +10,7 @@ export function createPaginatedResult<T>(
   options: Pick<PaginationOptions, 'page' | 'limit'>,
 ): PaginatedResult<T> {
   const { page = 1, limit = 10 } = options;
-  const totalPages = Math.ceil(totalCount / limit);
+  const totalPages = Math.max(Math.ceil(totalCount / limit), 1);
 
   const meta: PaginationMeta = {
     limit,

@@ -327,7 +327,9 @@ export class UserRepositoryBase extends BaseRepository<typeof users> {
           .limit(limit)
           .orderBy(orderClause);
 
-        const total = results[0]?.totalCount ?? 0;
+        const totalCount = results[0]?.totalCount ?? 0;
+        // Properly coerce count to number (postgres-js returns bigint strings)
+        const total = Number(totalCount);
         // eslint-disable-next-line @typescript-eslint/no-unused-vars
         const data = results.map(({ totalCount: _, ...user }) => user as User);
 

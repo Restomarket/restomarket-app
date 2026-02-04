@@ -31,8 +31,9 @@ export class DatabaseCleaner {
   ): Promise<void> {
     const { exclude = [], cascade = true, restartIdentity = true } = options;
 
-    // Get all table names from schema
-    const tableNames = this.getTableNames().filter(name => !exclude.includes(name));
+    // Get all table names from the database (not from schema)
+    const existingTables = await this.getExistingTableNames();
+    const tableNames = existingTables.filter(name => !exclude.includes(name));
 
     if (tableNames.length === 0) {
       return;
@@ -89,6 +90,21 @@ export class DatabaseCleaner {
         await this.db.delete(table);
       }
     }
+  }
+
+  /**
+   * Get all table names from the database
+   */
+  private async getExistingTableNames(): Promise<string[]> {
+    const result: any = await this.db.execute(sql`
+      SELECT tablename 
+      FROM pg_tables 
+      WHERE schemaname = 'public'
+      ORDER BY tablename
+    `);
+
+    // drizzle returns an array directly
+    return Array.isArray(result) ? result.map((row: any) => row.tablename) : [];
   }
 
   /**
