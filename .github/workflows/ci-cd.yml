@@ -172,9 +172,7 @@ jobs:
           REDIS_PORT: 6379
 
       - name: Setup test database schema
-        run: |
-          cd apps/api
-          pnpm db:migrate
+        run: pnpm db:migrate
         env:
           NODE_ENV: test
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restomarket_test
@@ -254,23 +252,20 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run migrations
-        run: |
-          cd apps/api
-          pnpm db:migrate
+        run: pnpm db:migrate
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restomarket_migration_test
           DATABASE_DIRECT_URL: postgresql://postgres:postgres@localhost:5432/restomarket_migration_test
 
       - name: Verify schema integrity
         run: |
-          cd apps/api
           # Generate schema from current code
           pnpm db:generate
 
-          # Check if generated migrations match committed migrations
-          if [ -n "$(git status --porcelain drizzle/migrations/)" ]; then
+          # Check if generated migrations match committed migrations (in shared package)
+          if [ -n "$(git status --porcelain packages/shared/drizzle/migrations/)" ]; then
             echo "❌ Schema drift detected! Generated migrations differ from committed."
-            git diff drizzle/migrations/
+            git diff packages/shared/drizzle/migrations/
             exit 1
           fi
           echo "✅ Schema is in sync with migrations"
