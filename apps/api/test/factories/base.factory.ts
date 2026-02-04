@@ -1,6 +1,6 @@
 import { type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { type PgTableWithColumns } from 'drizzle-orm/pg-core';
-import type * as schema from '../../src/database/schema';
+import type * as schema from '@repo/shared';
 
 /**
  * Base Factory class for generating test data

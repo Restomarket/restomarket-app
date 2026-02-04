@@ -1,6 +1,6 @@
 import { pgTable, varchar, boolean, index, check } from 'drizzle-orm/pg-core';
 import { sql } from 'drizzle-orm';
-import { baseEntityFields } from './base.schema';
+import { baseEntityFields } from './base.schema.js';
 
 export const users = pgTable(
   'users',
@@ -24,9 +24,6 @@ export const users = pgTable(
     check('users_last_name_length_check', sql`length(${table.lastName}) >= 1`),
   ],
 );
-
-export type User = typeof users.$inferSelect;
-export type NewUser = typeof users.$inferInsert;
 
 /**
  * User relations for future use

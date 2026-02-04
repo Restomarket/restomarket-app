@@ -1,11 +1,11 @@
 import { Injectable } from '@nestjs/common';
 import { BusinessException, NotFoundException, ConflictException } from '@common/exceptions';
-import { UserRepository } from 'src/database/repositories/user.repository';
+import { UserRepository } from '@database/adapters';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateUserEmailDto } from './dto/update-user-email.dto';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
-import { User, users } from 'src/database/schema';
+import { type User, users } from '@repo/shared';
 import { IPaginatedResult } from '@shared/interfaces';
 import { SortOrder } from '@common/dto/sort-query.dto';
 import { and, eq, isNull, sql } from 'drizzle-orm';

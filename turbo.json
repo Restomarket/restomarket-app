@@ -69,7 +69,15 @@
     "REQUEST_TIMEOUT",
     "SUPABASE_PROJECT_REF",
     "SUPABASE_URL",
-    "SUPABASE_ANON_KEY"
+    "SUPABASE_ANON_KEY",
+    "BETTER_AUTH_URL",
+    "BETTER_AUTH_SECRET",
+    "GOOGLE_CLIENT_ID",
+    "GOOGLE_CLIENT_SECRET",
+    "GITHUB_CLIENT_ID",
+    "GITHUB_CLIENT_SECRET",
+    "NEXT_PUBLIC_APP_URL",
+    "NEXT_PUBLIC_API_URL"
   ],
   "globalDependencies": ["tsconfig.json", "eslint.config.mjs", ".prettierrc"]
 }

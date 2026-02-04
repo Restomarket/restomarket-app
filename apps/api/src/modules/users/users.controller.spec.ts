@@ -3,7 +3,7 @@ import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { type CreateUserDto } from './dto/create-user.dto';
 import { type UpdateUserDto } from './dto/update-user.dto';
-import { type User } from '../../database/schema';
+import { type User } from '@repo/shared';
 
 describe('UsersController', () => {
   let controller: UsersController;
