@@ -42,6 +42,10 @@ export const envSchema = z.object({
   SWAGGER_TITLE: z.string().default('NestJS Clean API'),
   SWAGGER_DESCRIPTION: z.string().default('Production-ready API'),
   SWAGGER_VERSION: z.string().default('1.0'),
+
+  // Auth Configuration
+  BETTER_AUTH_SECRET: z.string().optional(),
+  BETTER_AUTH_URL: z.string().url().optional(),
 });
 
 export type EnvironmentVariables = z.infer<typeof envSchema>;

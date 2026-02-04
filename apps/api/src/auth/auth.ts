@@ -3,6 +3,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { organization, bearer } from 'better-auth/plugins';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
+import { randomBytes } from 'crypto';
 import {
   authUsers,
   authSessions,
@@ -36,6 +37,16 @@ const connectionString = process.env.DATABASE_URL!;
 const client = postgres(connectionString);
 const db = drizzle(client);
 
+// Get secret from environment or generate a temporary one
+// This prevents app crash when secret is missing (e.g. in staging/CI)
+const secret = process.env.BETTER_AUTH_SECRET || randomBytes(32).toString('hex');
+
+if (!process.env.BETTER_AUTH_SECRET) {
+  console.warn(
+    '⚠️  WARNING: BETTER_AUTH_SECRET is not set. Using a temporary random secret. Sessions will be invalidated on restart.',
+  );
+}
+
 export const auth = betterAuth({
   // ============================================
   // Database Configuration (same as Next.js)
@@ -63,7 +74,7 @@ export const auth = betterAuth({
   // ============================================
   baseURL:
     process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001',
-  secret: process.env.BETTER_AUTH_SECRET!,
+  secret,
 
   // ============================================
   // Session Configuration
