@@ -56,7 +56,9 @@ export const signOut = authClient.signOut;
 // Note: The method name may vary between better-auth versions
 
 export const forgotPassword =
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (authClient as any).forgetPassword ??
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (authClient as any).forgotPassword ??
   authClient.resetPassword;
 export const resetPassword = authClient.resetPassword;

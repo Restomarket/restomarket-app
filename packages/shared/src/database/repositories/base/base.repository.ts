@@ -5,6 +5,7 @@ import { mapDatabaseError, type DatabaseError } from '../../../utils/error-handl
 import { type IRepository, type ILogger, ConsoleLogger } from './repository.interface.js';
 
 export abstract class BaseRepository<
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
   TTable extends PgTableWithColumns<any>,
 > implements IRepository {
   protected readonly tableName: string;
