@@ -6,10 +6,10 @@
   "transform": {
     "^.+\\.(t|j)s$": "ts-jest"
   },
-  "transformIgnorePatterns": [
-    "node_modules/(?!(.pnpm|better-auth|better-call|@better-fetch|@thallesp))"
-  ],
   "moduleNameMapper": {
+    "^better-auth$": "<rootDir>/__mocks__/better-auth.ts",
+    "^better-auth/adapters/drizzle$": "<rootDir>/__mocks__/better-auth.ts",
+    "^better-auth/plugins$": "<rootDir>/__mocks__/better-auth.ts",
     "^@common/(.*)$": "<rootDir>/../src/common/$1",
     "^@config/(.*)$": "<rootDir>/../src/config/$1",
     "^@database/(.*)$": "<rootDir>/../src/database/$1",
