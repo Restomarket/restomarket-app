@@ -1,12 +1,12 @@
 import { Test, type TestingModule } from '@nestjs/testing';
 import { UsersService } from './users.service';
-import { UserRepository } from '../../database/repositories/user.repository';
+import { UserRepository } from '@database/adapters';
 import { BusinessException, NotFoundException, ConflictException } from '@common/exceptions';
 import { type CreateUserDto } from './dto/create-user.dto';
 import { type UpdateUserDto } from './dto/update-user.dto';
 import { type UpdateUserEmailDto } from './dto/update-user-email.dto';
 import { type UpdateUserProfileDto } from './dto/update-user-profile.dto';
-import { type User } from '../../database/schema';
+import { type User } from '@repo/shared';
 import type { SortOrder } from '@common/dto/sort-query.dto';
 
 describe('UsersService', () => {

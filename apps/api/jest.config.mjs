@@ -12,6 +12,7 @@ const config = {
     '^@modules/(.*)$': '<rootDir>/src/modules/$1',
     '^@shared/(.*)$': '<rootDir>/src/shared/$1',
     '^@logger/(.*)$': '<rootDir>/src/logger/$1',
+    '@thallesp/nestjs-better-auth': '<rootDir>/test/mocks/better-auth.mock.ts',
   },
 };
 

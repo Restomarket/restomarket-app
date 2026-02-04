@@ -1,7 +1,7 @@
 import { Module } from '@nestjs/common';
 import { UsersService } from './users.service';
 import { UsersController } from './users.controller';
-import { UserRepository } from 'src/database/repositories/user.repository';
+import { UserRepository } from '@database/adapters';
 
 /**
  * Users module with simplified architecture

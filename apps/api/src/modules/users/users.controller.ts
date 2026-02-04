@@ -16,7 +16,7 @@ import { UsersService } from './users.service';
 import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UserResponse } from './dto/user-response.dto';
-import { User } from 'src/database/schema';
+import { type User } from '@repo/shared';
 import { ListQueryDto } from '@common/dto';
 import { ApiPaginatedResponse } from '@common/decorators';
 

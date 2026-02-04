@@ -1,50 +1,23 @@
-import { Inject, Injectable, NotFoundException } from '@nestjs/common';
 import { and, count, desc, eq, ilike, inArray, isNull, or, sql, type SQL, asc } from 'drizzle-orm';
-import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
-import { PinoLogger } from 'nestjs-pino';
-import { DATABASE_CONNECTION } from '../database.module';
-import * as schema from '../schema';
-import { NewUser, User, users } from '../schema';
-import { IPaginatedResult, IPaginationOptions } from '@shared/interfaces';
-import { createPaginatedResult } from '@common/utils';
-import { BusinessException } from '@common/exceptions';
-import { BaseRepository } from './base.repository';
-import { SortOrder } from '@common/dto/sort-query.dto';
+import { BaseRepository } from '../base/base.repository.js';
+import { users } from '../../schema/index.js';
+import type { User, NewUser } from '../../../types/database.types.js';
+import type { PaginatedResult } from '../../../types/pagination.types.js';
+import { SortOrder } from '../../../types/pagination.types.js';
+import { createPaginatedResult } from '../../../utils/pagination.js';
+import type {
+  UserQueryOptions,
+  UserFilterOptions,
+  UserStatistics,
+} from './user.repository.types.js';
 
 /**
- * Type-safe sort fields for users
- */
-type UserSortField = 'createdAt' | 'email' | 'firstName' | 'lastName';
-
-/**
- * Type-safe filter options for user queries
- * Extends Pick<User> for better type safety and maintainability
- */
-export type UserFilterOptions = Partial<Pick<User, 'id' | 'email' | 'isActive'>> & {
-  search?: string;
-  emailDomain?: string;
-  includeDeleted?: boolean;
-};
-
-/**
- * User-specific query options extending base pagination
- */
-export interface UserQueryOptions extends IPaginationOptions<UserSortField> {
-  isActive?: boolean;
-  emailDomain?: string;
-}
-
-/**
- * User Repository with Drizzle-native implementation
+ * User Repository Base with Drizzle-native implementation
  *
- * Philosophy:
- * - Repository = data access layer only
- * - Returns Drizzle-inferred types (User, NewUser)
- * - Business logic belongs in service layer
- * - Keep it simple and maintainable
+ * Framework-agnostic repository containing all business logic for user operations.
+ * No NestJS dependencies - pure database layer.
  */
-@Injectable()
-export class UserRepository extends BaseRepository<typeof users> {
+export class UserRepositoryBase extends BaseRepository<typeof users> {
   /**
    * Prepared statements for frequently executed queries
    * Improves performance by ~50% for hot paths
@@ -79,18 +52,9 @@ export class UserRepository extends BaseRepository<typeof users> {
       .prepare('find_user_by_email_with_deleted'),
   };
 
-  constructor(
-    @Inject(DATABASE_CONNECTION) db: PostgresJsDatabase<typeof schema>,
-    logger: PinoLogger,
-  ) {
-    super(db, users, logger);
-    this.logger.setContext(UserRepository.name);
-  }
-
   /**
    * Build WHERE conditions for user queries
    * Consolidates filter logic to prevent inconsistencies between count and data queries
-   * Now uses type-safe FilterOptions for better maintainability
    */
   private buildUserFilters(options: UserFilterOptions): SQL<unknown> | undefined {
     const conditions: SQL<unknown>[] = [];
@@ -145,35 +109,37 @@ export class UserRepository extends BaseRepository<typeof users> {
       const [user] = await statement.execute({ id });
       return user ?? null;
     } catch (error) {
-      return this.handleError('FIND_BY_ID', error, { id });
+      this.handleError('FIND_BY_ID', error, { id });
+      return null;
     }
   }
 
   /**
    * Create a new user
+   * Returns null on error instead of throwing
    */
-  async create(data: NewUser): Promise<User> {
+  async create(data: NewUser): Promise<User | null> {
     try {
       const [user] = await this.db.insert(users).values(data).returning();
 
       if (!user) {
-        throw new BusinessException('CREATE_FAILED', 'Failed to create user');
+        this.logger.error('Failed to create user - no row returned', { email: data.email });
+        return null;
       }
 
-      this.logger.info({ userId: user.id }, 'User created successfully');
+      this.logger.info('User created successfully', { userId: user.id });
       return user;
     } catch (error) {
-      if (error instanceof BusinessException) {
-        throw error;
-      }
-      return this.handleError('CREATE', error, { email: data.email });
+      this.handleError('CREATE', error, { email: data.email });
+      return null;
     }
   }
 
   /**
    * Update user by ID
+   * Returns null if user not found
    */
-  async update(id: string, data: Partial<NewUser>): Promise<User> {
+  async update(id: string, data: Partial<NewUser>): Promise<User | null> {
     try {
       const [user] = await this.db
         .update(users)
@@ -185,16 +151,15 @@ export class UserRepository extends BaseRepository<typeof users> {
         .returning();
 
       if (!user) {
-        throw new NotFoundException(`User with ID ${id} not found`);
+        this.logger.warn('User not found for update', { id });
+        return null;
       }
 
-      this.logger.info({ userId: id }, 'User updated successfully');
+      this.logger.info('User updated successfully', { userId: id });
       return user;
     } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      return this.handleError('UPDATE', error, { id });
+      this.handleError('UPDATE', error, { id });
+      return null;
     }
   }
 
@@ -202,21 +167,16 @@ export class UserRepository extends BaseRepository<typeof users> {
    * Update user with optimistic locking using updatedAt timestamp
    * Prevents concurrent modifications by checking if updatedAt hasn't changed
    *
-   * This is the recommended PostgreSQL approach for optimistic concurrency:
-   * - No need for version column
-   * - Uses existing updatedAt timestamp
-   * - Efficient and simple
-   *
    * @param id - User ID
    * @param data - Data to update
    * @param expectedUpdatedAt - Expected current updatedAt timestamp
-   * @throws BusinessException if updatedAt mismatch (concurrent modification detected)
+   * @returns Updated user or null if timestamp mismatch or not found
    */
   async updateWithTimestamp(
     id: string,
     data: Partial<NewUser>,
     expectedUpdatedAt: Date,
-  ): Promise<User> {
+  ): Promise<User | null> {
     try {
       const [user] = await this.db
         .update(users)
@@ -233,31 +193,27 @@ export class UserRepository extends BaseRepository<typeof users> {
         // Check if user exists
         const existingUser = await this.findById(id);
         if (!existingUser) {
-          throw new NotFoundException(`User with ID ${id} not found`);
+          this.logger.warn('User not found for optimistic update', { id });
+          return null;
         }
 
         // User exists but updatedAt mismatch - concurrent modification
-        throw new BusinessException(
-          'OPTIMISTIC_LOCK_FAILED',
-          'Record was modified by another process. Please refresh and try again.',
-          {
-            userId: id,
-            expectedUpdatedAt: expectedUpdatedAt.toISOString(),
-            actualUpdatedAt: existingUser.updatedAt.toISOString(),
-          },
-        );
+        this.logger.warn('Optimistic lock failed - concurrent modification detected', {
+          userId: id,
+          expectedUpdatedAt: expectedUpdatedAt.toISOString(),
+          actualUpdatedAt: existingUser.updatedAt.toISOString(),
+        });
+        return null;
       }
 
-      this.logger.info(
-        { userId: id, updatedAt: user.updatedAt },
-        'User updated with timestamp check',
-      );
+      this.logger.info('User updated with timestamp check', {
+        userId: id,
+        updatedAt: user.updatedAt,
+      });
       return user;
     } catch (error) {
-      if (error instanceof NotFoundException || error instanceof BusinessException) {
-        throw error;
-      }
-      return this.handleError('UPDATE_WITH_TIMESTAMP', error, { id });
+      this.handleError('UPDATE_WITH_TIMESTAMP', error, { id });
+      return null;
     }
   }
 
@@ -279,17 +235,19 @@ export class UserRepository extends BaseRepository<typeof users> {
         return false;
       }
 
-      this.logger.info({ userId: id }, 'User soft deleted successfully');
+      this.logger.info('User soft deleted successfully', { userId: id });
       return true;
     } catch (error) {
-      return this.handleError('SOFT_DELETE', error, { id });
+      this.handleError('SOFT_DELETE', error, { id });
+      return false;
     }
   }
 
   /**
    * Restore soft-deleted user
+   * Returns null if user not found or not deleted
    */
-  async restore(id: string): Promise<User> {
+  async restore(id: string): Promise<User | null> {
     try {
       const [user] = await this.db
         .update(users)
@@ -301,16 +259,15 @@ export class UserRepository extends BaseRepository<typeof users> {
         .returning();
 
       if (!user) {
-        throw new NotFoundException(`Deleted user with ID ${id} not found`);
+        this.logger.warn('Deleted user not found for restore', { id });
+        return null;
       }
 
-      this.logger.info({ userId: id }, 'User restored successfully');
+      this.logger.info('User restored successfully', { userId: id });
       return user;
     } catch (error) {
-      if (error instanceof NotFoundException) {
-        throw error;
-      }
-      return this.handleError('RESTORE', error, { id });
+      this.handleError('RESTORE', error, { id });
+      return null;
     }
   }
 
@@ -325,18 +282,8 @@ export class UserRepository extends BaseRepository<typeof users> {
   /**
    * Unified findMany method with flexible filtering and pagination
    * Uses efficient window function for count on first page
-   *
-   * @example
-   * // Find all active users with pagination
-   * await repo.findMany({ isActive: true, page: 1, limit: 20 });
-   *
-   * // Search users by name/email
-   * await repo.findMany({ search: 'john', page: 1, limit: 10 });
-   *
-   * // Filter by email domain
-   * await repo.findMany({ emailDomain: 'example.com' });
    */
-  async findMany(options: UserQueryOptions = {}): Promise<IPaginatedResult<User>> {
+  async findMany(options: UserQueryOptions = {}): Promise<PaginatedResult<User>> {
     try {
       const {
         page = 1,
@@ -380,8 +327,11 @@ export class UserRepository extends BaseRepository<typeof users> {
           .limit(limit)
           .orderBy(orderClause);
 
-        const total = results[0]?.totalCount ?? 0;
-        const data = results.map(({ totalCount: _totalCount, ...user }) => user as User);
+        const totalCount = results[0]?.totalCount ?? 0;
+        // Properly coerce count to number (postgres-js returns bigint strings)
+        const total = Number(totalCount);
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const data = results.map(({ totalCount: _, ...user }) => user as User);
 
         return createPaginatedResult(data, total, { page, limit });
       }
@@ -405,7 +355,8 @@ export class UserRepository extends BaseRepository<typeof users> {
 
       return createPaginatedResult(data, total, { page, limit });
     } catch (error) {
-      return this.handleError('FIND_MANY', error, { options });
+      this.handleError('FIND_MANY', error, { options });
+      return createPaginatedResult([], 0, { page: options.page ?? 1, limit: options.limit ?? 10 });
     }
   }
 
@@ -422,38 +373,28 @@ export class UserRepository extends BaseRepository<typeof users> {
       const [user] = await statement.execute({ email });
       return user ?? null;
     } catch (error) {
-      return this.handleError('FIND_BY_EMAIL', error, { email });
+      this.handleError('FIND_BY_EMAIL', error, { email });
+      return null;
     }
   }
 
   /**
    * Create multiple users in a single query (bulk insert)
-   *
-   * @example
-   * const users = await repo.createMany([
-   *   { email: 'user1@example.com', firstName: 'John', lastName: 'Doe' },
-   *   { email: 'user2@example.com', firstName: 'Jane', lastName: 'Smith' }
-   * ]);
    */
   async createMany(dataArray: NewUser[]): Promise<User[]> {
     try {
       const createdUsers = await this.db.insert(users).values(dataArray).returning();
 
-      this.logger.info({ count: createdUsers.length }, 'Users created in bulk');
+      this.logger.info('Users created in bulk', { count: createdUsers.length });
       return createdUsers;
     } catch (error) {
-      return this.handleError('CREATE_MANY', error, { count: dataArray.length });
+      this.handleError('CREATE_MANY', error, { count: dataArray.length });
+      return [];
     }
   }
 
   /**
    * Update multiple users in a single query (bulk update)
-   *
-   * @example
-   * const updated = await repo.updateMany(
-   *   ['user-id-1', 'user-id-2'],
-   *   { isActive: false }
-   * );
    */
   async updateMany(ids: string[], data: Partial<NewUser>): Promise<User[]> {
     try {
@@ -466,18 +407,16 @@ export class UserRepository extends BaseRepository<typeof users> {
         .where(and(inArray(users.id, ids), isNull(users.deletedAt)))
         .returning();
 
-      this.logger.info({ count: updatedUsers.length }, 'Users updated in bulk');
+      this.logger.info('Users updated in bulk', { count: updatedUsers.length });
       return updatedUsers;
     } catch (error) {
-      return this.handleError('UPDATE_MANY', error, { count: ids.length });
+      this.handleError('UPDATE_MANY', error, { count: ids.length });
+      return [];
     }
   }
 
   /**
    * Soft delete multiple users in a single query (bulk soft delete)
-   *
-   * @example
-   * const count = await repo.softDeleteMany(['user-id-1', 'user-id-2']);
    */
   async softDeleteMany(ids: string[]): Promise<number> {
     try {
@@ -490,22 +429,18 @@ export class UserRepository extends BaseRepository<typeof users> {
         .where(and(inArray(users.id, ids), isNull(users.deletedAt)))
         .returning({ id: users.id });
 
-      this.logger.info({ count: result.length }, 'Users soft deleted in bulk');
+      this.logger.info('Users soft deleted in bulk', { count: result.length });
       return result.length;
     } catch (error) {
-      return this.handleError('SOFT_DELETE_MANY', error, { count: ids.length });
+      this.handleError('SOFT_DELETE_MANY', error, { count: ids.length });
+      return 0;
     }
   }
 
   /**
    * Get user statistics
    */
-  async getStatistics(): Promise<{
-    total: number;
-    active: number;
-    inactive: number;
-    deleted: number;
-  }> {
+  async getStatistics(): Promise<UserStatistics> {
     try {
       const [result] = await this.db
         .select({
@@ -527,7 +462,8 @@ export class UserRepository extends BaseRepository<typeof users> {
         deleted: Number(result.deleted),
       };
     } catch (error) {
-      return this.handleError('GET_STATISTICS', error);
+      this.handleError('GET_STATISTICS', error);
+      return { total: 0, active: 0, inactive: 0, deleted: 0 };
     }
   }
 
@@ -542,7 +478,8 @@ export class UserRepository extends BaseRepository<typeof users> {
 
       return Number(result?.value ?? 0);
     } catch (error) {
-      return this.handleError('COUNT', error);
+      this.handleError('COUNT', error);
+      return 0;
     }
   }
 }
