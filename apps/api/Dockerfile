@@ -54,14 +54,15 @@ COPY tsconfig.json eslint.config.mjs .prettierrc ./
 
 # Copy source code for shared packages (without overwriting node_modules)
 COPY packages/shared/src ./packages/shared/src
+COPY packages/shared/drizzle.schema.ts ./packages/shared/
+COPY packages/shared/drizzle.config.ts ./packages/shared/
+COPY packages/shared/drizzle ./packages/shared/drizzle
 COPY packages/shared/tsconfig.json ./packages/shared/
 COPY packages/typescript-config/*.json ./packages/typescript-config/
 
 # Copy API source code and configuration
 COPY apps/api/src ./apps/api/src
-COPY apps/api/drizzle ./apps/api/drizzle
 COPY apps/api/tsconfig*.json apps/api/nest-cli.json apps/api/eslint.config.mjs ./apps/api/
-COPY apps/api/drizzle.config.ts ./apps/api/
 
 # Build the API using Turborepo
 RUN pnpm turbo build --filter=@apps/api
