@@ -1,7 +1,7 @@
 import { type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
-import { users, type NewUser, type User } from '../../src/database/schema';
+import { users, type NewUser, type User } from '@repo/shared';
 import { BaseFactory } from './base.factory';
-import type * as schema from '../../src/database/schema';
+import type * as schema from '@repo/shared';
 
 /**
  * User Factory for generating test users

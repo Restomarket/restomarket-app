@@ -7,7 +7,7 @@ import {
 } from '@nestjs/common';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import postgres, { type Sql } from 'postgres';
-import * as schema from '../../src/database/schema';
+import * as schema from '@repo/shared';
 import { DatabaseCleaner } from './database-cleaner';
 import { UserFactory } from '../factories';
 

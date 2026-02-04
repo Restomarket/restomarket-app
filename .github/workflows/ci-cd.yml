@@ -442,7 +442,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run database migrations
-        run: pnpm --filter api db:migrate
+        run: pnpm db:migrate
         env:
           NODE_ENV: production
           # Use direct URL for migrations (bypasses pooler; single connection from runner)
@@ -703,8 +703,11 @@ jobs:
           for i in $(seq 1 $MAX_RETRIES); do
             echo "Attempt $i/$MAX_RETRIES..."
 
-            # Follow redirects and get both HTTP code and response
-            RESPONSE=$(curl -L -s -w "\n%{http_code}" "$LOAD_BALANCER_URL" 2>&1)
+            # Follow redirects, allow insecure SSL for internal load balancer
+            # -k: allow insecure connections (self-signed certs)
+            # -L: follow redirects
+            # -s: silent mode
+            RESPONSE=$(curl -k -L -s -w "\n%{http_code}" "$LOAD_BALANCER_URL" 2>&1)
             HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
             BODY=$(echo "$RESPONSE" | sed '$d')
 
@@ -714,14 +717,19 @@ jobs:
 
               # Verify it's valid JSON with 'status' field
               if echo "$BODY" | jq -e '.status' > /dev/null 2>&1; then
-                echo "✅ Valid health response received"
+                STATUS=$(echo "$BODY" | jq -r '.status')
+                echo "✅ Health Status: $STATUS"
+                echo "Response: $BODY"
                 exit 0
               else
                 echo "⚠️  Response received but invalid format"
+                echo "Response: $BODY"
               fi
             else
               echo "⚠️  HTTP $HTTP_CODE - Retrying..."
-              echo "Response: $BODY"
+              if [ -n "$BODY" ]; then
+                echo "Response: $BODY"
+              fi
             fi
 
             if [ $i -lt $MAX_RETRIES ]; then
@@ -739,8 +747,8 @@ jobs:
           # Make multiple requests to see if both droplets respond
           echo "Making 10 requests to the load balancer..."
           for i in {1..10}; do
-            # Follow redirects with -L
-            curl -L -s http://157.245.21.33/v1/health | jq -r '.uptime' || echo "Request $i failed"
+            # Follow redirects, allow insecure SSL
+            curl -k -L -s http://157.245.21.33/v1/health | jq -r '.uptime' || echo "Request $i failed"
             sleep 1
           done
 

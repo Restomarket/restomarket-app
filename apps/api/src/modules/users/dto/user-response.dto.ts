@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { type User } from '@database/schema';
+import { type User } from '@repo/shared';
 
 /**
  * User response class for Swagger documentation
