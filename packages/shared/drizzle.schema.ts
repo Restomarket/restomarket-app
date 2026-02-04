@@ -4,3 +4,5 @@
  */
 export * from './src/database/schema/base.schema';
 export * from './src/database/schema/users.schema';
+export * from './src/database/schema/auth.schema';
+export * from './src/database/schema/organization.schema';

@@ -3,7 +3,18 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { organization, bearer } from 'better-auth/plugins';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import * as schema from '@repo/shared';
+import {
+  authUsers,
+  authSessions,
+  authAccounts,
+  authVerifications,
+  organizations,
+  members,
+  invitations,
+  teams,
+  teamMembers,
+  organizationRoles,
+} from '@repo/shared';
 
 /**
  * Better Auth Instance for NestJS API
@@ -23,7 +34,7 @@ import * as schema from '@repo/shared';
 // Create database connection
 const connectionString = process.env.DATABASE_URL!;
 const client = postgres(connectionString);
-const db = drizzle(client, { schema });
+const db = drizzle(client);
 
 export const auth = betterAuth({
   // ============================================
@@ -33,19 +44,17 @@ export const auth = betterAuth({
     provider: 'pg',
     schema: {
       // Core auth tables
-      user: schema.authUsers,
-      session: schema.authSessions,
-      account: schema.authAccounts,
-      verification: schema.authVerifications,
+      user: authUsers,
+      session: authSessions,
+      account: authAccounts,
+      verification: authVerifications,
       // Organization tables
-      organization: schema.organizations,
-      member: schema.members,
-      invitation: schema.invitations,
-      team: schema.teams,
-      teamMember: schema.teamMembers,
-      organizationRole: schema.organizationRoles,
-      // Include all schema for relations
-      ...schema,
+      organization: organizations,
+      member: members,
+      invitation: invitations,
+      team: teams,
+      teamMember: teamMembers,
+      organizationRole: organizationRoles,
     },
   }),
 
