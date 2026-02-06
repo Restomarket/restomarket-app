@@ -1,4 +1,4 @@
-CREATE TABLE "users" (
+CREATE TABLE IF NOT EXISTS "users" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL,
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL,
@@ -14,6 +14,6 @@ CREATE TABLE "users" (
 	CONSTRAINT "users_last_name_length_check" CHECK (length("users"."last_name") >= 1)
 );
 --> statement-breakpoint
-CREATE INDEX "users_active_query_idx" ON "users" USING btree ("deleted_at","is_active","created_at");--> statement-breakpoint
-CREATE INDEX "users_email_idx" ON "users" USING btree ("email");--> statement-breakpoint
-CREATE INDEX "users_name_idx" ON "users" USING btree ("first_name","last_name");
+CREATE INDEX IF NOT EXISTS "users_active_query_idx" ON "users" USING btree ("deleted_at","is_active","created_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "users_email_idx" ON "users" USING btree ("email");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "users_name_idx" ON "users" USING btree ("first_name","last_name");
