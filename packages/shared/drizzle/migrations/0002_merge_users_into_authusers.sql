@@ -18,3 +18,7 @@ ON "user" ("is_active", "deleted_at");
 COMMENT ON TABLE "user" IS 'Unified user table containing both Better Auth fields and business logic fields. Previously had separate users table that has been deprecated.';
 COMMENT ON COLUMN "user"."is_active" IS 'Business logic field: Whether the user account is active. Merged from deprecated users table.';
 COMMENT ON COLUMN "user"."deleted_at" IS 'Business logic field: Soft delete timestamp. Merged from deprecated users table.';
+
+-- Drop the deprecated users table (created in migration 0000)
+-- All functionality has been merged into the user table above
+DROP TABLE IF EXISTS "users";
