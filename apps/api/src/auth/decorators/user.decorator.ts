@@ -1,17 +1,5 @@
 import { createParamDecorator, ExecutionContext } from '@nestjs/common';
-import type { Request } from 'express';
-
-interface AuthSession {
-  user: Record<string, unknown>;
-  session: {
-    activeOrganizationId?: string | null;
-    activeTeamId?: string | null;
-  };
-}
-
-interface AuthRequest extends Request {
-  session?: AuthSession;
-}
+import type { AuthRequest } from '../guards/permissions.guard';
 
 /** Extract authenticated user from session */
 export const CurrentUser = createParamDecorator(

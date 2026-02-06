@@ -5,7 +5,7 @@
  *
  * @example Basic usage with decorators
  * ```ts
- * import { Controller, Get, Post, Body } from '@nestjs/common';
+ * import { Controller, Get } from '@nestjs/common';
  * import { Session, AllowAnonymous, type UserSession } from './auth';
  *
  * @Controller('products')
@@ -22,25 +22,6 @@
  *   }
  * }
  * ```
- *
- * @example Using AuthService for API calls
- * ```ts
- * import { Injectable } from '@nestjs/common';
- * import { AuthService } from './auth';
- * import { fromNodeHeaders } from 'better-auth/node';
- * import { auth } from './auth';
- *
- * @Injectable()
- * export class UserService {
- *   constructor(private authService: AuthService<typeof auth>) {}
- *
- *   async getUserAccounts(headers: Headers) {
- *     return this.authService.api.listUserAccounts({
- *       headers: fromNodeHeaders(headers),
- *     });
- *   }
- * }
- * ```
  */
 
 // Module
@@ -48,10 +29,13 @@ export { AuthModule } from './auth.module';
 
 // Better Auth instance
 export { auth } from './auth';
-export type { auth as Auth } from './auth';
+export type { Auth } from './auth';
 
 // Guards
 export { AuthGuard, PermissionsGuard } from './guards';
+
+// Types
+export type { AuthSession, AuthRequest } from './guards/permissions.guard';
 
 // All decorators (library + custom)
 export {

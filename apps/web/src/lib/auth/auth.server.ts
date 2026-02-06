@@ -2,7 +2,7 @@ import { headers } from 'next/headers';
 import { redirect } from 'next/navigation';
 import { cache } from 'react';
 import { auth } from './auth.config';
-import type { AuthContext, AuthSessionData } from '@repo/shared';
+import type { AuthContext, AuthSessionData } from '@repo/shared/auth';
 
 /**
  * Server-side Authentication Utilities

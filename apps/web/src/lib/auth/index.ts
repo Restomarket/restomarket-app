@@ -27,8 +27,8 @@ export {
   generateBearerToken,
 } from './auth.server';
 
-// Re-export shared types (only types that exist in @repo/shared)
-export type { AuthContext, AuthSessionData } from '@repo/shared';
+// Re-export shared types (from auth sub-package)
+export type { AuthContext, AuthSessionData } from '@repo/shared/auth';
 
 // Re-export Drizzle schema types
 export type { AuthUser, AuthSession, Organization, Member, Team } from '@repo/shared';

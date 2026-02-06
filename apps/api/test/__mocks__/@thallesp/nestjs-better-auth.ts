@@ -59,10 +59,12 @@ export class AuthGuard implements CanActivate {
 // Mock AuthModule
 @Module({})
 export class AuthModule {
-  static forRoot(options?: any) {
+  static forRoot(_options?: any) {
     return {
       module: AuthModule,
       global: true,
+      providers: [AuthService],
+      exports: [AuthService],
     };
   }
 }

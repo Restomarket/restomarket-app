@@ -205,7 +205,7 @@ export class UsersService {
         .update(users)
         .set({
           email: dto.email,
-          updatedAt: sql`now()`,
+          updatedAt: new Date(),
         })
         .where(and(eq(users.id, id), isNull(users.deletedAt)))
         .returning();
