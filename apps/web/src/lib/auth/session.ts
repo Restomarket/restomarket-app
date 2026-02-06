@@ -97,7 +97,9 @@ export async function hasRole(role: string, organizationId?: string) {
   }
 
   // Get active organization from session or use provided ID
-  const orgId = organizationId || session.session.activeOrganizationId;
+  const orgId =
+    organizationId ||
+    ((session.session as Record<string, unknown>).activeOrganizationId as string | undefined);
 
   if (!orgId) {
     return false;
