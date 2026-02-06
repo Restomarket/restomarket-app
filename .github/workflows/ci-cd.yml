@@ -257,6 +257,9 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restomarket_migration_test
           DATABASE_DIRECT_URL: postgresql://postgres:postgres@localhost:5432/restomarket_migration_test
 
+      - name: Build shared package
+        run: pnpm --filter @repo/shared build
+
       - name: Verify schema integrity
         run: |
           # Generate schema from current code

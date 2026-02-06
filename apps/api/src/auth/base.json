@@ -1,10 +1,13 @@
 {
   "$schema": "https://json.schemastore.org/tsconfig",
   "compilerOptions": {
+    /* Type Safety */
     "strict": true,
     "noUncheckedIndexedAccess": true,
     "noFallthroughCasesInSwitch": true,
     "forceConsistentCasingInFileNames": true,
+
+    /* Module System */
     "module": "NodeNext",
     "moduleResolution": "NodeNext",
     "moduleDetection": "force",
@@ -12,12 +15,16 @@
     "verbatimModuleSyntax": true,
     "resolveJsonModule": true,
     "esModuleInterop": true,
+
+    /* Emit */
     "target": "ES2022",
     "lib": ["ES2022"],
     "declaration": true,
     "declarationMap": true,
     "sourceMap": true,
     "incremental": false,
+
+    /* Performance */
     "skipLibCheck": true
   }
 }
