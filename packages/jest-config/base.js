@@ -21,6 +21,8 @@ const config = {
   },
   moduleNameMapper: {
     '^@/(.*)$': ['<rootDir>/src/$1', '<rootDir>/app/$1'],
+    '^@repo/shared$': '<rootDir>/../../packages/shared/src/index.ts',
+    '^@repo/shared/(.*)$': '<rootDir>/../../packages/shared/src/$1',
   },
   passWithNoTests: true,
   resetMocks: true,
