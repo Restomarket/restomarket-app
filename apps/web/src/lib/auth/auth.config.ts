@@ -1,27 +1,28 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { organization, bearer } from 'better-auth/plugins';
 import { nextCookies } from 'better-auth/next-js';
-import { createAccessControl } from 'better-auth/plugins/access';
 import { getDatabase } from '../database/connection';
 import * as schema from '@repo/shared';
-import { statements, rolePermissions } from '@repo/shared';
+import { createBetterAuthBaseConfig } from '@repo/shared';
+import { sendVerificationEmail, sendPasswordResetEmail } from '../email/index';
 
 /**
- * Create Access Control with our custom statements
+ * Next.js Better Auth Configuration
+ *
+ * Uses shared configuration from @repo/shared with Next.js-specific features:
+ * - Email/password + OAuth (Google, GitHub)
+ * - Email verification with Resend
+ * - Organization lifecycle hooks
+ * - Next.js cookie helpers
+ *
+ * Core configuration is shared with NestJS to ensure consistency.
+ *
+ * @see https://www.better-auth.com/docs
  */
-const ac = createAccessControl(statements);
 
-/**
- * Define roles using Better Auth's access control system
- */
-const roles = {
-  owner: ac.newRole(rolePermissions.owner),
-  admin: ac.newRole(rolePermissions.admin),
-  manager: ac.newRole(rolePermissions.manager),
-  member: ac.newRole(rolePermissions.member),
-  viewer: ac.newRole(rolePermissions.viewer),
-};
+// ============================================
+// Database Connection Helper
+// ============================================
 
 /**
  * Get database connection with fallback for build time
@@ -30,106 +31,102 @@ const roles = {
  */
 function getDatabaseSafe() {
   try {
-    // During build time, DATABASE_URL may not be available
     if (!process.env.DATABASE_URL) {
       console.warn('[Auth] DATABASE_URL not set, using placeholder for build');
-      // Return undefined - Better Auth will handle this gracefully during build
-      return undefined;
+      // Return a placeholder - Better Auth will handle the missing connection at runtime
+      return null as unknown as ReturnType<typeof getDatabase>;
     }
     return getDatabase();
   } catch (error) {
     console.warn('[Auth] Failed to connect to database, using placeholder');
     console.error(error);
-    return undefined;
+    return null as unknown as ReturnType<typeof getDatabase>;
   }
 }
 
-/**
- * Better Auth Configuration
- *
- * This is the main authentication configuration for the application.
- * It handles:
- * - Email/password authentication
- * - Social OAuth providers
- * - Session management
- * - Organization management (multi-tenancy)
- * - Team management
- * - Role-based access control
- * - Token generation for API access
- *
- * @see https://www.better-auth.com/docs/installation
- */
+// ============================================
+// Better Auth Configuration
+// ============================================
+
+// Get shared base configuration
+const baseConfig = createBetterAuthBaseConfig();
+
 export const auth = betterAuth({
+  // Spread shared configuration
+  ...baseConfig,
+
   // ============================================
   // Database Configuration (Drizzle + Supabase)
   // ============================================
-  database: getDatabaseSafe()
-    ? drizzleAdapter(getDatabaseSafe()!, {
-        provider: 'pg',
-        schema: {
-          // Core auth tables
-          user: schema.authUsers,
-          session: schema.authSessions,
-          account: schema.authAccounts,
-          verification: schema.authVerifications,
-          // Organization tables
-          organization: schema.organizations,
-          member: schema.members,
-          invitation: schema.invitations,
-          team: schema.teams,
-          teamMember: schema.teamMembers,
-          organizationRole: schema.organizationRoles,
-          // Include all schema for relations
-          ...schema,
-        },
-      })
-    : undefined,
+  database: drizzleAdapter(getDatabaseSafe()!, {
+    provider: 'pg',
+    schema: {
+      // Core auth tables
+      user: schema.authUsers,
+      session: schema.authSessions,
+      account: schema.authAccounts,
+      verification: schema.authVerifications,
+      // Organization tables
+      organization: schema.organizations,
+      member: schema.members,
+      invitation: schema.invitations,
+      team: schema.teams,
+      teamMember: schema.teamMembers,
+      organizationRole: schema.organizationRoles,
+      // Include all schema for relations
+      ...schema,
+    },
+  }),
 
   // ============================================
-  // Base URL Configuration
+  // Base URL & Secret
   // ============================================
   baseURL:
     process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
   secret: process.env.BETTER_AUTH_SECRET!,
 
   // ============================================
-  // Session Configuration
+  // Next.js-Specific User Settings
   // ============================================
-  session: {
-    expiresIn: 60 * 60 * 24 * 7, // 7 days
-    updateAge: 60 * 60 * 24, // Update session every 24 hours
-    cookieCache: {
+  user: {
+    ...baseConfig.user,
+    // Email change settings (Next.js only)
+    changeEmail: {
       enabled: true,
-      maxAge: 5 * 60, // Cache for 5 minutes
+      sendChangeEmailVerification: async ({ user, newEmail, url }) => {
+        // Send email change verification to the new email address
+        await sendVerificationEmail({
+          user: { email: newEmail, name: user.name },
+          url,
+        });
+      },
     },
   },
 
   // ============================================
-  // Email & Password Authentication
+  // Next.js-Specific: Email & Password Authentication
   // ============================================
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: process.env.NODE_ENV === 'production',
-    sendResetPassword: async ({ user, url }) => {
-      // TODO: Implement with your email provider (Resend, SendGrid, etc.)
-      console.log(`[Auth] Password reset email for ${user.email}: ${url}`);
-    },
+    sendResetPassword: sendPasswordResetEmail,
+    // Password requirements
+    minPasswordLength: 8,
+    maxPasswordLength: 128,
   },
 
   // ============================================
-  // Email Verification
+  // Next.js-Specific: Email Verification
   // ============================================
   emailVerification: {
     sendOnSignUp: true,
     autoSignInAfterVerification: true,
-    sendVerificationEmail: async ({ user, url }) => {
-      // TODO: Implement with your email provider
-      console.log(`[Auth] Verification email for ${user.email}: ${url}`);
-    },
+    sendVerificationEmail: sendVerificationEmail,
+    expiresIn: 60 * 60 * 24, // 24 hours
   },
 
   // ============================================
-  // Social OAuth Providers
+  // Next.js-Specific: Social OAuth Providers
   // ============================================
   socialProviders: {
     // Google OAuth
@@ -145,6 +142,7 @@ export const auth = betterAuth({
           },
         }
       : {}),
+
     // GitHub OAuth
     ...(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
       ? {
@@ -161,149 +159,16 @@ export const auth = betterAuth({
   },
 
   // ============================================
-  // User Schema Extension
-  // ============================================
-  user: {
-    additionalFields: {
-      firstName: {
-        type: 'string',
-        required: false,
-      },
-      lastName: {
-        type: 'string',
-        required: false,
-      },
-    },
-  },
-
-  // ============================================
-  // Plugins
+  // Plugins (extend base config with Next.js-specific)
   // ============================================
   plugins: [
-    // Bearer token for API authentication (NestJS)
-    bearer(),
-
-    // Organization management (multi-tenancy)
-    organization({
-      // Access Control with custom roles
-      ac,
-      roles,
-
-      // Organization settings
-      allowUserToCreateOrganization: true,
-      creatorRole: 'owner',
-      membershipLimit: 100,
-      invitationExpiresIn: 60 * 60 * 48, // 48 hours
-
-      // Enable teams within organizations
-      teams: {
-        enabled: true,
-        maximumTeams: 20,
-      },
-
-      // Dynamic access control (create roles at runtime)
-      dynamicAccessControl: {
-        enabled: true,
-        maximumRolesPerOrganization: 50,
-      },
-
-      // Email verification for invitations
-      requireEmailVerificationOnInvitation: process.env.NODE_ENV === 'production',
-
-      // Invitation email handler
-      async sendInvitationEmail(data) {
-        const inviteLink = `${process.env.NEXT_PUBLIC_APP_URL}/invite/${data.id}`;
-        // TODO: Send with your email provider
-        console.log(`[Auth] Invitation email to ${data.email}: ${inviteLink}`);
-      },
-
-      // Organization lifecycle hooks
-      organizationHooks: {
-        afterCreateOrganization: async ({ organization, user }) => {
-          console.log(`[Auth] Organization created: ${organization.name} by ${user.email}`);
-          // TODO: Setup default resources, Stripe customer, etc.
-        },
-        afterAddMember: async ({ user, organization }) => {
-          console.log(`[Auth] ${user.email} joined ${organization.name}`);
-          // TODO: Send welcome email, setup default permissions, etc.
-        },
-        afterRemoveMember: async ({ user, organization }) => {
-          console.log(`[Auth] ${user.email} left ${organization.name}`);
-          // TODO: Cleanup resources, revoke access, etc.
-        },
-      },
-    }),
+    // Include all base plugins
+    ...(baseConfig.plugins || []),
 
     // Next.js Cookie Helper - MUST be last plugin
     // Automatically sets cookies in server actions
     nextCookies(),
   ],
-
-  // ============================================
-  // Advanced Configuration
-  // ============================================
-  advanced: {
-    database: {
-      // Use crypto.randomUUID() for ID generation
-      generateId: () => crypto.randomUUID(),
-    },
-  },
-
-  // ============================================
-  // Rate Limiting
-  // ============================================
-  rateLimit: {
-    enabled: true,
-    window: 60, // 1 minute
-    max: 100, // 100 requests per minute
-  },
-
-  // ============================================
-  // Experimental Features
-  // ============================================
-  experimental: {
-    joins: true, // Enable Drizzle joins for better performance
-  },
-
-  // ============================================
-  // Database Hooks
-  // ============================================
-  databaseHooks: {
-    user: {
-      create: {
-        after: async user => {
-          console.log(`[Auth] New user created: ${user.email}`);
-          // TODO: Send welcome email, create default org, etc.
-        },
-      },
-    },
-    session: {
-      create: {
-        before: async session => {
-          // Optionally set default active organization on login
-          return {
-            data: {
-              ...session,
-              // activeOrganizationId can be set here if needed
-            },
-          };
-        },
-      },
-    },
-  },
-
-  // ============================================
-  // Hooks (required for @thallesp/nestjs-better-auth)
-  // ============================================
-  hooks: {},
-
-  // ============================================
-  // Trusted Origins (CORS)
-  // ============================================
-  trustedOrigins: [
-    process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-    process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001',
-  ].filter(Boolean) as string[],
 });
 
 // Export type for client inference

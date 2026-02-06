@@ -37,7 +37,11 @@ export class UsersService {
       });
     }
 
-    return await this.userRepository.create(createUserDto);
+    return await this.userRepository.create({
+      id: crypto.randomUUID(),
+      name: `${createUserDto.firstName} ${createUserDto.lastName}`.trim() || createUserDto.email,
+      ...createUserDto,
+    });
   }
 
   async findAllPaginated(

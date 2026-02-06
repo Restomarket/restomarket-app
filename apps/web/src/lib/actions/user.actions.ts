@@ -189,10 +189,14 @@ export async function createUser(
     }
 
     const repo = getUserRepository();
+    const trimmedFirstName = data.firstName.trim();
+    const trimmedLastName = data.lastName.trim();
     const user = await repo.create({
+      id: crypto.randomUUID(),
+      name: `${trimmedFirstName} ${trimmedLastName}`.trim() || data.email,
       email: data.email.toLowerCase().trim(),
-      firstName: data.firstName.trim(),
-      lastName: data.lastName.trim(),
+      firstName: trimmedFirstName,
+      lastName: trimmedLastName,
     });
 
     if (!user) {

@@ -11,11 +11,12 @@ import { relations } from 'drizzle-orm';
  */
 
 // ============================================
-// User Table (Better Auth Core)
+// User Table (Better Auth Core + Business Logic)
 // ============================================
 export const authUsers = pgTable(
   'user',
   {
+    // Better Auth required fields
     id: text('id').primaryKey(),
     name: text('name').notNull(),
     email: text('email').notNull().unique(),
@@ -23,13 +24,20 @@ export const authUsers = pgTable(
     image: text('image'),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
-    // Additional custom fields for your app
+
+    // Custom fields for your application
     firstName: varchar('first_name', { length: 100 }),
     lastName: varchar('last_name', { length: 100 }),
+
+    // Business logic fields (merged from users table)
+    isActive: boolean('is_active').notNull().default(true),
+    deletedAt: timestamp('deleted_at', { withTimezone: true, mode: 'date' }),
   },
   table => [
     index('auth_users_email_idx').on(table.email),
     index('auth_users_created_at_idx').on(table.createdAt),
+    // Index for active users query (soft delete + active status)
+    index('auth_users_active_idx').on(table.isActive, table.deletedAt),
   ],
 );
 
@@ -47,9 +55,14 @@ export const authSessions = pgTable(
     expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
     ipAddress: text('ip_address'),
     userAgent: text('user_agent'),
+
     // Organization plugin fields
+    // Note: These do NOT have FK constraints intentionally - Better Auth manages them
+    // This prevents cascade deletion issues when orgs/teams are deleted
+    // Better Auth will set these to null when the referenced entity is removed
     activeOrganizationId: text('active_organization_id'),
     activeTeamId: text('active_team_id'),
+
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   },

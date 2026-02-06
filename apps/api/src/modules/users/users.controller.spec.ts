@@ -11,7 +11,10 @@ describe('UsersController', () => {
 
   const mockUser: User = {
     id: '123e4567-e89b-12d3-a456-426614174000',
+    name: 'John Doe',
     email: 'test@example.com',
+    emailVerified: false,
+    image: null,
     firstName: 'John',
     lastName: 'Doe',
     isActive: true,

@@ -15,6 +15,20 @@
       "when": 1770204572183,
       "tag": "0001_mixed_dormammu",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1770384946125,
+      "tag": "0002_merge_users_into_authusers",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1770389142000,
+      "tag": "0003_add_missing_updated_at_columns",
+      "breakpoints": true
     }
   ]
 }

@@ -1,29 +1,27 @@
 import { createAuthClient } from 'better-auth/react';
-import { organizationClient, inferAdditionalFields } from 'better-auth/client/plugins';
+import { organizationClient, inferAdditionalFields, adminClient } from 'better-auth/client/plugins';
+import { useState, useEffect } from 'react';
 import type { auth } from './auth.config';
 
 /**
  * Better Auth Client
  *
- * This client provides React hooks and methods for authentication
- * on the client-side. Use this for:
- * - Login/logout
+ * Production-ready auth client with React hooks for:
+ * - Email/password & OAuth authentication
  * - Session management
- * - Organization switching
- * - Team management
+ * - Organization & team management
+ * - Admin user management
+ * - Permission checks
  *
  * @example
  * ```tsx
- * import { authClient } from '@/lib/auth/auth.client';
+ * import { authClient, useSession } from '@/lib/auth/auth.client';
  *
  * // In a component
- * const { data: session } = authClient.useSession();
+ * const { data: session } = useSession();
  *
  * // Sign in
  * await authClient.signIn.email({ email, password });
- *
- * // Sign out
- * await authClient.signOut();
  * ```
  */
 export const authClient = createAuthClient({
@@ -31,6 +29,10 @@ export const authClient = createAuthClient({
   plugins: [
     // Infer additional fields from server auth config
     inferAdditionalFields<typeof auth>(),
+
+    // Admin plugin client
+    adminClient(),
+
     // Organization plugin for client
     organizationClient({
       teams: {
@@ -53,8 +55,6 @@ export const signUp = authClient.signUp;
 export const signOut = authClient.signOut;
 
 // Password reset
-// Note: The method name may vary between better-auth versions
-
 export const forgotPassword =
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   (authClient as any).forgetPassword ??
@@ -69,6 +69,9 @@ export const verifyEmail = authClient.verifyEmail;
 
 // Organization methods
 export const { organization } = authClient;
+
+// Admin methods (for admin users only)
+export const admin = authClient.admin;
 
 // ============================================
 // Type Exports
@@ -103,6 +106,7 @@ export function useOrganization() {
 
 /**
  * Hook to get current user's role in active organization
+ * Implements hierarchical role checks where higher roles include lower role permissions
  */
 export function useRole() {
   const { data: session, isPending, error } = useSession();
@@ -116,15 +120,38 @@ export function useRole() {
   // Cast to string to avoid TypeScript narrowing issues with role comparisons
   const role = member?.role as string | undefined;
 
+  // Define role hierarchy (higher number = more permissions)
+  const roleHierarchy: Record<string, number> = {
+    owner: 5,
+    admin: 4,
+    manager: 3,
+    member: 2,
+    viewer: 1,
+  };
+
+  const currentLevel = role ? roleHierarchy[role] || 0 : 0;
+
   return {
     role,
     isPending,
     error,
-    isOwner: role === 'owner',
-    isAdmin: role === 'admin' || role === 'owner',
-    isManager: role === 'manager' || role === 'admin' || role === 'owner',
-    isMember: role === 'member',
-    isViewer: role === 'viewer',
+    // Hierarchical checks (includes higher roles)
+    isOwner: currentLevel >= 5,
+    isAdmin: currentLevel >= 4,
+    isManager: currentLevel >= 3,
+    isMember: currentLevel >= 2,
+    isViewer: currentLevel >= 1,
+    // Exact role checks (if needed)
+    isExactlyOwner: role === 'owner',
+    isExactlyAdmin: role === 'admin',
+    isExactlyManager: role === 'manager',
+    isExactlyMember: role === 'member',
+    isExactlyViewer: role === 'viewer',
+    // Helper function
+    hasMinimumRole: (minRole: string) => {
+      const minLevel = roleHierarchy[minRole] || 0;
+      return currentLevel >= minLevel;
+    },
   };
 }
 
@@ -152,35 +179,60 @@ export function useTeam() {
 }
 
 /**
- * Hook to check permissions
+ * Hook to check permissions with client-side caching
+ * Cache is automatically cleared when organization changes
  *
  * @example
  * ```tsx
- * const { hasPermission } = usePermissions();
+ * const { hasPermission, clearCache } = usePermissions();
  *
- * if (hasPermission('product:create')) {
+ * if (await hasPermission('product:create')) {
  *   // Show create button
  * }
+ *
+ * // Manually clear cache if needed
+ * clearCache();
  * ```
  */
 export function usePermissions() {
   const { data: session, isPending, error } = useSession();
+  const [cache, setCache] = useState<Record<string, boolean>>({});
 
-  const hasPermission = async (permission: string) => {
+  // Clear cache when organization changes
+  useEffect(() => {
+    setCache({});
+  }, [session?.session?.activeOrganizationId]);
+
+  const hasPermission = async (permission: string): Promise<boolean> => {
     if (!session?.session?.activeOrganizationId) return false;
+
+    // Check cache first
+    if (cache[permission] !== undefined) {
+      return cache[permission];
+    }
 
     try {
       const result = await organization.hasPermission({
         permission: permission as never, // Cast due to strict typing
       });
-      return result.data?.success ?? false;
+      const allowed = result.data?.success ?? false;
+
+      // Cache the result
+      setCache(prev => ({ ...prev, [permission]: allowed }));
+
+      return allowed;
     } catch {
       return false;
     }
   };
 
+  const clearCache = () => {
+    setCache({});
+  };
+
   return {
     hasPermission,
+    clearCache,
     isPending,
     error,
   };
@@ -217,5 +269,41 @@ export function useMembers() {
     removeMember: organization.removeMember,
     // Get active member (current user)
     getActiveMember: organization.getActiveMember,
+  };
+}
+
+/**
+ * Hook for admin user management
+ * Only available to users with admin role
+ *
+ * @example
+ * ```tsx
+ * const { listUsers, setRole, impersonate } = useAdmin();
+ *
+ * // List all users
+ * const users = await listUsers();
+ *
+ * // Set user role
+ * await setRole({ userId: '123', role: 'admin' });
+ *
+ * // Impersonate user (for debugging)
+ * await impersonate({ userId: '123' });
+ * ```
+ */
+export function useAdmin() {
+  return {
+    // List all users
+    listUsers: admin.listUsers,
+    // Create user as admin
+    createUser: admin.createUser,
+    // Set user role
+    setRole: admin.setRole,
+    // Ban/unban user
+    banUser: admin.banUser,
+    unbanUser: admin.unbanUser,
+    // Impersonate user (for support/debugging)
+    impersonateUser: admin.impersonateUser,
+    // Stop impersonation
+    stopImpersonating: admin.stopImpersonating,
   };
 }
