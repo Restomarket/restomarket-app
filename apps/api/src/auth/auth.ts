@@ -1,6 +1,5 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
-import { organization, bearer } from 'better-auth/plugins';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { randomBytes } from 'crypto';
@@ -15,43 +14,109 @@ import {
   teams,
   teamMembers,
   organizationRoles,
+  createBetterAuthBaseConfig,
 } from '@repo/shared';
 
 /**
- * Better Auth Instance for NestJS API
+ * NestJS Better Auth Instance
  *
- * This is a separate Better Auth instance that runs on the NestJS backend.
- * It shares the same database and schema as the Next.js frontend auth instance.
- *
- * The NestJS instance is primarily used for:
+ * Uses shared configuration from @repo/shared to ensure consistency with Next.js.
+ * This instance is used for:
  * - Validating session tokens from the frontend
  * - Checking permissions for protected routes
- * - Handling API-specific authentication flows
+ * - Bearer token validation for API clients
  *
- * Note: The primary auth server runs on Next.js. This instance connects
- * to the same database for session validation.
+ * Configuration is automatically synchronized with Next.js via the shared config.
+ *
+ * @see https://www.better-auth.com/docs
  */
 
-// Create database connection
-const connectionString = process.env.DATABASE_URL!;
-const client = postgres(connectionString);
-const db = drizzle(client);
+// ============================================
+// Database Connection (Singleton Pattern)
+// ============================================
 
-// Get secret from environment or generate a temporary one
-// This prevents app crash when secret is missing (e.g. in staging/CI)
-const secret = process.env.BETTER_AUTH_SECRET || randomBytes(32).toString('hex');
+let dbInstance: ReturnType<typeof drizzle> | null = null;
+let clientInstance: ReturnType<typeof postgres> | null = null;
 
-if (!process.env.BETTER_AUTH_SECRET) {
-  console.warn(
-    '⚠️  WARNING: BETTER_AUTH_SECRET is not set. Using a temporary random secret. Sessions will be invalidated on restart.',
-  );
+/**
+ * Get or create database connection using singleton pattern
+ * This prevents connection exhaustion in production
+ */
+function getDatabase() {
+  if (!dbInstance) {
+    const connectionString = process.env.DATABASE_URL!;
+
+    // Create postgres client with optimized settings
+    clientInstance = postgres(connectionString, {
+      max: process.env.DATABASE_POOL_MAX ? parseInt(process.env.DATABASE_POOL_MAX) : 10,
+      idle_timeout: parseInt(process.env.DATABASE_IDLE_TIMEOUT || '20'),
+      connect_timeout: parseInt(process.env.DATABASE_CONNECT_TIMEOUT || '10'),
+      prepare: false, // Required for Supabase/Neon pooler
+      onnotice: process.env.NODE_ENV === 'development' ? console.warn : undefined,
+    });
+
+    dbInstance = drizzle(clientInstance);
+
+    // Cleanup on process exit (for Docker/Kubernetes compatibility)
+    if (process.env.NODE_ENV !== 'test') {
+      const cleanup = async () => {
+        await clientInstance?.end({ timeout: 5 });
+        process.exit(0);
+      };
+
+      process.on('SIGTERM', cleanup);
+      process.on('SIGINT', cleanup);
+    }
+  }
+
+  return dbInstance;
 }
 
+// ============================================
+// Secret Configuration
+// ============================================
+
+// Get secret from environment or fail hard in production
+const getSecret = (): string => {
+  if (process.env.BETTER_AUTH_SECRET) {
+    return process.env.BETTER_AUTH_SECRET;
+  }
+
+  // Hard error in production - sessions MUST be consistent across restarts
+  if (process.env.NODE_ENV === 'production') {
+    throw new Error(
+      'BETTER_AUTH_SECRET is required in production. Generate one with: openssl rand -base64 32',
+    );
+  }
+
+  // Development/staging: warn but allow temporary secret
+  const tempSecret = randomBytes(32).toString('hex');
+  console.warn('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  console.warn('⚠️  WARNING: BETTER_AUTH_SECRET is not set!');
+  console.warn('⚠️  Using temporary random secret.');
+  console.warn('⚠️  Sessions will be invalidated on restart.');
+  console.warn('⚠️  Generate a secret: openssl rand -base64 32');
+  console.warn('━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━');
+  return tempSecret;
+};
+
+const secret = getSecret();
+
+// ============================================
+// Better Auth Configuration
+// ============================================
+
+// Get shared base configuration
+const baseConfig = createBetterAuthBaseConfig();
+
 export const auth = betterAuth({
+  // Spread shared configuration
+  ...baseConfig,
+
   // ============================================
   // Database Configuration (same as Next.js)
   // ============================================
-  database: drizzleAdapter(db, {
+  database: drizzleAdapter(getDatabase(), {
     provider: 'pg',
     schema: {
       // Core auth tables
@@ -70,54 +135,12 @@ export const auth = betterAuth({
   }),
 
   // ============================================
-  // Base URL Configuration
+  // Base URL & Secret Configuration
   // ============================================
   baseURL:
-    process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3001',
+    process.env.BETTER_AUTH_URL || process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
   secret,
-
-  // ============================================
-  // Session Configuration
-  // ============================================
-  session: {
-    expiresIn: 60 * 60 * 24 * 7, // 7 days
-    updateAge: 60 * 60 * 24, // Update session every 24 hours
-    cookieCache: {
-      enabled: true,
-      maxAge: 5 * 60, // Cache for 5 minutes
-    },
-  },
-
-  // ============================================
-  // Plugins (must match Next.js configuration)
-  // ============================================
-  plugins: [
-    // Bearer token for API authentication
-    bearer(),
-
-    // Organization management (multi-tenancy)
-    organization({
-      // Enable teams within organizations
-      teams: {
-        enabled: true,
-        maximumTeams: 20,
-      },
-    }),
-  ],
-
-  // ============================================
-  // Hooks (required for @thallesp/nestjs-better-auth)
-  // ============================================
-  hooks: {},
-
-  // ============================================
-  // Trusted Origins (CORS)
-  // ============================================
-  trustedOrigins: [
-    process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000',
-    process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001',
-  ].filter(Boolean) as string[],
-});
+}) as ReturnType<typeof betterAuth>;
 
 // Export type for client inference
 export type Auth = typeof auth;

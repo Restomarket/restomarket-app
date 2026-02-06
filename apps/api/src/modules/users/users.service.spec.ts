@@ -15,7 +15,10 @@ describe('UsersService', () => {
 
   const mockUser: User = {
     id: '123e4567-e89b-12d3-a456-426614174000',
+    name: 'John Doe',
     email: 'test@example.com',
+    emailVerified: false,
+    image: null,
     firstName: 'John',
     lastName: 'Doe',
     isActive: true,
@@ -69,7 +72,15 @@ describe('UsersService', () => {
       const result = await service.create(createUserDto);
 
       expect(repository.findByEmail).toHaveBeenCalledWith(createUserDto.email);
-      expect(repository.create).toHaveBeenCalledWith(createUserDto);
+      expect(repository.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          email: createUserDto.email,
+          firstName: createUserDto.firstName,
+          lastName: createUserDto.lastName,
+          id: expect.any(String),
+          name: 'Jane Smith',
+        }),
+      );
       expect(result).toEqual(mockUser);
     });
 

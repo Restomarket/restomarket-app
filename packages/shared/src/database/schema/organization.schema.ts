@@ -23,6 +23,7 @@ export const organizations = pgTable(
     logo: text('logo'),
     metadata: text('metadata'), // JSON string for additional data
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   },
   table => [
     uniqueIndex('organization_slug_idx').on(table.slug),
@@ -45,6 +46,7 @@ export const members = pgTable(
       .references(() => organizations.id, { onDelete: 'cascade' }),
     role: text('role').notNull().default('member'),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
+    updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
   },
   table => [
     index('member_user_id_idx').on(table.userId),

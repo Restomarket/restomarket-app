@@ -126,7 +126,9 @@ export async function hasPermission(permission: string): Promise<boolean> {
   const headersList = await headers();
 
   try {
-    const result = await auth.api.hasPermission({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const api = auth.api as any;
+    const result = await api.hasPermission({
       headers: headersList,
       body: {
         permission: permission as never, // Cast for strict typing
@@ -195,7 +197,9 @@ export async function getActiveOrganization() {
   const headersList = await headers();
 
   try {
-    const result = await auth.api.getFullOrganization({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const api = auth.api as any;
+    const result = await api.getFullOrganization({
       headers: headersList,
     });
 
@@ -212,7 +216,9 @@ export async function getUserOrganizations() {
   const headersList = await headers();
 
   try {
-    const result = await auth.api.listOrganizations({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const api = auth.api as any;
+    const result = await api.listOrganizations({
       headers: headersList,
     });
 
@@ -229,7 +235,9 @@ export async function getUserRole(): Promise<string | null> {
   const headersList = await headers();
 
   try {
-    const member = await auth.api.getActiveMember({
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const api = auth.api as any;
+    const member = await api.getActiveMember({
       headers: headersList,
     });
 
