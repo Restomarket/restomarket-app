@@ -1,4 +1,11 @@
-import { Injectable, CanActivate, ExecutionContext, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  CanActivate,
+  ExecutionContext,
+  ForbiddenException,
+  Logger,
+  UnauthorizedException,
+} from '@nestjs/common';
 import { Reflector } from '@nestjs/core';
 import type { Request } from 'express';
 import { auth } from '../auth';
@@ -7,12 +14,17 @@ import { PERMISSIONS_KEY } from '../decorators/permissions.decorator';
 const ALLOW_ANONYMOUS_KEY = 'allowAnonymous';
 const OPTIONAL_AUTH_KEY = 'optionalAuth';
 
-interface AuthSession {
-  user: { id: string };
-  session: { token: string };
+/** Session shape attached to request by upstream auth middleware */
+export interface AuthSession {
+  user: { id: string; [key: string]: unknown };
+  session: {
+    token: string;
+    activeOrganizationId?: string | null;
+    activeTeamId?: string | null;
+  };
 }
 
-interface AuthRequest extends Request {
+export interface AuthRequest extends Request {
   session?: AuthSession;
 }
 
@@ -22,15 +34,13 @@ interface AuthRequest extends Request {
  * Validates that authenticated users have required permissions
  * for protected routes using the @RequirePermissions() decorator.
  *
- * IMPORTANT: This uses the local Better Auth instance instead of
- * making HTTP calls to Next.js, which:
- * - Eliminates network latency
- * - Removes dependency on Next.js availability
- * - Prevents single point of failure
- * - Uses the same database for consistency
+ * Uses the local Better Auth instance directly (no HTTP calls),
+ * which eliminates network latency and removes cross-service dependencies.
  */
 @Injectable()
 export class PermissionsGuard implements CanActivate {
+  private readonly logger = new Logger(PermissionsGuard.name);
+
   constructor(private readonly reflector: Reflector) {}
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
@@ -38,17 +48,19 @@ export class PermissionsGuard implements CanActivate {
       context.getHandler(),
       context.getClass(),
     ]);
-    const optionalAuth = this.reflector.getAllAndOverride<boolean>(OPTIONAL_AUTH_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
+
     const requiredPermissions = this.reflector.getAllAndOverride<string[]>(PERMISSIONS_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
 
-    // Allow anonymous access if specified
+    // No permissions required or anonymous access allowed
     if (allowAnonymous || !requiredPermissions?.length) return true;
+
+    const optionalAuth = this.reflector.getAllAndOverride<boolean>(OPTIONAL_AUTH_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
 
     const request = context.switchToHttp().getRequest<AuthRequest>();
     const session = request.session;
@@ -56,12 +68,12 @@ export class PermissionsGuard implements CanActivate {
     // Allow unauthenticated if optional auth
     if (optionalAuth && !session) return true;
 
-    // Require authentication
+    // 401: Authentication required
     if (!session?.user) {
-      throw new ForbiddenException('Authentication required');
+      throw new UnauthorizedException('Authentication required');
     }
 
-    // Check permissions using local Better Auth instance
+    // 403: Check permissions
     const hasPermissions = await this.checkPermissions(request, requiredPermissions);
     if (!hasPermissions) {
       throw new ForbiddenException(`Missing permissions: ${requiredPermissions.join(', ')}`);
@@ -71,33 +83,36 @@ export class PermissionsGuard implements CanActivate {
   }
 
   /**
-   * Check permissions using local Better Auth instance
-   *
-   * This calls auth.api.hasPermission() directly instead of making
-   * HTTP requests to Next.js, which is much faster and more reliable.
+   * Check permissions using local Better Auth instance.
+   * Calls auth.api.hasPermission() directly — no HTTP round-trip.
    */
   private async checkPermissions(request: Request, permissions: string[]): Promise<boolean> {
     const token = this.extractToken(request);
     if (!token) return false;
 
-    // Convert Express request headers to Headers object
     const headers = this.convertHeaders(request);
 
     for (const permission of permissions) {
       try {
-        // Use local Better Auth instance directly (no HTTP call!)
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const api = auth.api as any;
-        const result = await api.hasPermission({
-          headers,
-          body: { permission },
-        });
+        const api = auth.api as Record<
+          string,
+          ((...args: unknown[]) => Promise<unknown>) | undefined
+        >;
+        const hasPermission = api.hasPermission;
 
-        if (!result?.success) {
+        if (!hasPermission) {
+          this.logger.warn('hasPermission API not available on auth instance');
           return false;
         }
+
+        const result = (await hasPermission({
+          headers,
+          body: { permission },
+        })) as { success?: boolean } | null;
+
+        if (!result?.success) return false;
       } catch (error) {
-        console.error(`[PermissionsGuard] Permission check failed for ${permission}:`, error);
+        this.logger.error(`Permission check failed for "${permission}"`, error);
         return false;
       }
     }
@@ -105,10 +120,7 @@ export class PermissionsGuard implements CanActivate {
     return true;
   }
 
-  /**
-   * Extract authentication token from request
-   * Supports both Bearer token and session token
-   */
+  /** Extract auth token from Bearer header or session */
   private extractToken(request: Request): string | undefined {
     const authHeader = request.headers.authorization;
     if (authHeader?.startsWith('Bearer ')) {
@@ -117,28 +129,19 @@ export class PermissionsGuard implements CanActivate {
     return (request as AuthRequest).session?.session?.token;
   }
 
-  /**
-   * Convert Express headers to Web Headers object
-   * Better Auth expects Web API Headers
-   */
+  /** Convert Express headers to Web API Headers (Better Auth requirement) */
   private convertHeaders(request: Request): Headers {
     const headers = new Headers();
 
-    // Add authorization header if present
     if (request.headers.authorization) {
       headers.set('Authorization', request.headers.authorization);
     }
-
-    // Add session cookie if present
     if (request.headers.cookie) {
       headers.set('Cookie', request.headers.cookie);
     }
-
-    // Add other common headers
     if (request.headers['user-agent']) {
       headers.set('User-Agent', request.headers['user-agent']);
     }
-
     if (request.headers['x-forwarded-for']) {
       headers.set('X-Forwarded-For', request.headers['x-forwarded-for'] as string);
     }

@@ -3,7 +3,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { nextCookies } from 'better-auth/next-js';
 import { getDatabase } from '../database/connection';
 import * as schema from '@repo/shared';
-import { createBetterAuthBaseConfig } from '@repo/shared';
+import { createBetterAuthBaseConfig } from '@repo/shared/auth';
 import { sendVerificationEmail, sendPasswordResetEmail } from '../email/index';
 
 /**
@@ -93,7 +93,15 @@ export const auth = betterAuth({
     // Email change settings (Next.js only)
     changeEmail: {
       enabled: true,
-      sendChangeEmailVerification: async ({ user, newEmail, url }) => {
+      sendChangeEmailVerification: async ({
+        user,
+        newEmail,
+        url,
+      }: {
+        user: { name: string };
+        newEmail: string;
+        url: string;
+      }) => {
         // Send email change verification to the new email address
         await sendVerificationEmail({
           user: { email: newEmail, name: user.name },

@@ -8,5 +8,6 @@ import { PermissionsGuard } from './guards/permissions.guard';
 @Module({
   imports: [BetterAuthModule.forRoot({ auth })],
   providers: [{ provide: APP_GUARD, useClass: PermissionsGuard }],
+  exports: [BetterAuthModule],
 })
 export class AuthModule {}

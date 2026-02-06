@@ -2,6 +2,7 @@ import { type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { users, type NewUser, type User } from '@repo/shared';
 import { BaseFactory } from './base.factory';
 import type * as schema from '@repo/shared';
+import { randomUUID } from 'crypto';
 
 /**
  * User Factory for generating test users
@@ -35,11 +36,16 @@ export class UserFactory extends BaseFactory<typeof users, NewUser, User> {
    */
   protected getDefaults(): Partial<NewUser> {
     const sequence = ++UserFactory.sequenceCounter;
+    const firstName = `FirstName${sequence}`;
+    const lastName = `LastName${sequence}`;
 
     return {
+      id: randomUUID(),
+      name: `${firstName} ${lastName}`,
       email: `user${sequence}@example.com`,
-      firstName: `FirstName${sequence}`,
-      lastName: `LastName${sequence}`,
+      emailVerified: false,
+      firstName,
+      lastName,
       isActive: true,
     };
   }
