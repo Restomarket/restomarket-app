@@ -3,7 +3,7 @@
 # Uses turbo prune for minimal image size
 
 # Build arguments
-ARG NODE_VERSION=20.19.0
+ARG NODE_VERSION=24.13.0
 ARG PNPM_VERSION=9.10.0
 
 # ============================================
