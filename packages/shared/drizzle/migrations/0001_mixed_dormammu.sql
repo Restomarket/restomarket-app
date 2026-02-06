@@ -1,4 +1,4 @@
-CREATE TABLE "account" (
+CREATE TABLE IF NOT EXISTS "account" (
 	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
 	"account_id" text NOT NULL,
@@ -14,7 +14,7 @@ CREATE TABLE "account" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "session" (
+CREATE TABLE IF NOT EXISTS "session" (
 	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
 	"token" text NOT NULL,
@@ -28,7 +28,7 @@ CREATE TABLE "session" (
 	CONSTRAINT "session_token_unique" UNIQUE("token")
 );
 --> statement-breakpoint
-CREATE TABLE "user" (
+CREATE TABLE IF NOT EXISTS "user" (
 	"id" text PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"email" text NOT NULL,
@@ -41,7 +41,7 @@ CREATE TABLE "user" (
 	CONSTRAINT "user_email_unique" UNIQUE("email")
 );
 --> statement-breakpoint
-CREATE TABLE "verification" (
+CREATE TABLE IF NOT EXISTS "verification" (
 	"id" text PRIMARY KEY NOT NULL,
 	"identifier" text NOT NULL,
 	"value" text NOT NULL,
@@ -50,7 +50,7 @@ CREATE TABLE "verification" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "invitation" (
+CREATE TABLE IF NOT EXISTS "invitation" (
 	"id" text PRIMARY KEY NOT NULL,
 	"email" text NOT NULL,
 	"organization_id" text NOT NULL,
@@ -62,7 +62,7 @@ CREATE TABLE "invitation" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "member" (
+CREATE TABLE IF NOT EXISTS "member" (
 	"id" text PRIMARY KEY NOT NULL,
 	"user_id" text NOT NULL,
 	"organization_id" text NOT NULL,
@@ -70,7 +70,7 @@ CREATE TABLE "member" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "organization_role" (
+CREATE TABLE IF NOT EXISTS "organization_role" (
 	"id" text PRIMARY KEY NOT NULL,
 	"organization_id" text NOT NULL,
 	"role" text NOT NULL,
@@ -79,7 +79,7 @@ CREATE TABLE "organization_role" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "organization" (
+CREATE TABLE IF NOT EXISTS "organization" (
 	"id" text PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"slug" text NOT NULL,
@@ -89,14 +89,14 @@ CREATE TABLE "organization" (
 	CONSTRAINT "organization_slug_unique" UNIQUE("slug")
 );
 --> statement-breakpoint
-CREATE TABLE "team_member" (
+CREATE TABLE IF NOT EXISTS "team_member" (
 	"id" text PRIMARY KEY NOT NULL,
 	"team_id" text NOT NULL,
 	"user_id" text NOT NULL,
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "team" (
+CREATE TABLE IF NOT EXISTS "team" (
 	"id" text PRIMARY KEY NOT NULL,
 	"name" text NOT NULL,
 	"organization_id" text NOT NULL,
@@ -115,26 +115,26 @@ ALTER TABLE "organization_role" ADD CONSTRAINT "organization_role_organization_i
 ALTER TABLE "team_member" ADD CONSTRAINT "team_member_team_id_team_id_fk" FOREIGN KEY ("team_id") REFERENCES "public"."team"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "team_member" ADD CONSTRAINT "team_member_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "team" ADD CONSTRAINT "team_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "auth_accounts_user_id_idx" ON "account" USING btree ("user_id");--> statement-breakpoint
-CREATE INDEX "auth_accounts_provider_idx" ON "account" USING btree ("provider_id","account_id");--> statement-breakpoint
-CREATE INDEX "auth_sessions_user_id_idx" ON "session" USING btree ("user_id");--> statement-breakpoint
-CREATE INDEX "auth_sessions_token_idx" ON "session" USING btree ("token");--> statement-breakpoint
-CREATE INDEX "auth_sessions_expires_at_idx" ON "session" USING btree ("expires_at");--> statement-breakpoint
-CREATE INDEX "auth_users_email_idx" ON "user" USING btree ("email");--> statement-breakpoint
-CREATE INDEX "auth_users_created_at_idx" ON "user" USING btree ("created_at");--> statement-breakpoint
-CREATE INDEX "auth_verifications_identifier_idx" ON "verification" USING btree ("identifier");--> statement-breakpoint
-CREATE INDEX "invitation_email_idx" ON "invitation" USING btree ("email");--> statement-breakpoint
-CREATE INDEX "invitation_organization_id_idx" ON "invitation" USING btree ("organization_id");--> statement-breakpoint
-CREATE INDEX "invitation_status_idx" ON "invitation" USING btree ("status");--> statement-breakpoint
-CREATE INDEX "member_user_id_idx" ON "member" USING btree ("user_id");--> statement-breakpoint
-CREATE INDEX "member_organization_id_idx" ON "member" USING btree ("organization_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "member_user_org_unique_idx" ON "member" USING btree ("user_id","organization_id");--> statement-breakpoint
-CREATE INDEX "organization_role_org_id_idx" ON "organization_role" USING btree ("organization_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "organization_role_unique_idx" ON "organization_role" USING btree ("organization_id","role");--> statement-breakpoint
-CREATE UNIQUE INDEX "organization_slug_idx" ON "organization" USING btree ("slug");--> statement-breakpoint
-CREATE INDEX "organization_created_at_idx" ON "organization" USING btree ("created_at");--> statement-breakpoint
-CREATE INDEX "team_member_team_id_idx" ON "team_member" USING btree ("team_id");--> statement-breakpoint
-CREATE INDEX "team_member_user_id_idx" ON "team_member" USING btree ("user_id");--> statement-breakpoint
-CREATE UNIQUE INDEX "team_member_unique_idx" ON "team_member" USING btree ("team_id","user_id");--> statement-breakpoint
-CREATE INDEX "team_organization_id_idx" ON "team" USING btree ("organization_id");--> statement-breakpoint
-CREATE INDEX "team_name_idx" ON "team" USING btree ("name");
+CREATE INDEX IF NOT EXISTS "auth_accounts_user_id_idx" ON "account" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "auth_accounts_provider_idx" ON "account" USING btree ("provider_id","account_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "auth_sessions_user_id_idx" ON "session" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "auth_sessions_token_idx" ON "session" USING btree ("token");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "auth_sessions_expires_at_idx" ON "session" USING btree ("expires_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "auth_users_email_idx" ON "user" USING btree ("email");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "auth_users_created_at_idx" ON "user" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "auth_verifications_identifier_idx" ON "verification" USING btree ("identifier");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "invitation_email_idx" ON "invitation" USING btree ("email");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "invitation_organization_id_idx" ON "invitation" USING btree ("organization_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "invitation_status_idx" ON "invitation" USING btree ("status");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "member_user_id_idx" ON "member" USING btree ("user_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "member_organization_id_idx" ON "member" USING btree ("organization_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "member_user_org_unique_idx" ON "member" USING btree ("user_id","organization_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "organization_role_org_id_idx" ON "organization_role" USING btree ("organization_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "organization_role_unique_idx" ON "organization_role" USING btree ("organization_id","role");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "organization_slug_idx" ON "organization" USING btree ("slug");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "organization_created_at_idx" ON "organization" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "team_member_team_id_idx" ON "team_member" USING btree ("team_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "team_member_user_id_idx" ON "team_member" USING btree ("user_id");--> statement-breakpoint
+CREATE UNIQUE INDEX IF NOT EXISTS "team_member_unique_idx" ON "team_member" USING btree ("team_id","user_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "team_organization_id_idx" ON "team" USING btree ("organization_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "team_name_idx" ON "team" USING btree ("name");
