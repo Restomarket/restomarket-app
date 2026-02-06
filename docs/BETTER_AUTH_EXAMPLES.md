@@ -55,6 +55,7 @@ export default async function DashboardPage() {
 const session = await requireAuth();
 
 return (
+
 <div>
 <h1>Dashboard</h1>
 <p>Welcome, {session.user.name}!</p>
@@ -131,6 +132,7 @@ Sign In
 }
 
 return (
+
 <div className="user-menu">
 <img src={session.user.image} alt={session.user.name} />
 <span>{session.user.name}</span>
@@ -190,6 +192,7 @@ setError('');
 }
 
 return (
+
 <form onSubmit={handleSubmit} className="space-y-4">
 {error && (
 <div className="bg-red-50 text-red-600 p-3 rounded">
@@ -327,6 +330,7 @@ redirect(`/organizations/${params.id}`); // No permission
 
 // ✅ User is authenticated AND authorized
 return (
+
 <div>
 <h1>Organization Settings</h1>
 {/_ Settings form _/}
@@ -358,6 +362,7 @@ redirect('/dashboard');
 
 // If not authenticated, show landing page
 return (
+
 <div>
 <h1>Welcome to Our App</h1>
 <a href="/login">Sign In</a>
@@ -405,6 +410,7 @@ with: { organization: true },
 ]);
 
 return (
+
 <div>
 <h1>Dashboard Overview</h1>
 {/_ Render data _/}
@@ -461,6 +467,7 @@ name: formData.get('name') as string,
 }
 
 return (
+
 <form action={handleSignUp}>
 {error && <div className="error">{error}</div>}
 {/_ Form fields _/}
