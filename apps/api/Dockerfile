@@ -63,7 +63,7 @@ FROM dependencies AS builder
 
 # Copy workspace configuration and global config files
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml turbo.json ./
-COPY tsconfig.json eslint.config.mjs .prettierrc ./
+COPY tsconfig.json eslint.config.mjs ./
 
 # Copy source code for shared packages (without overwriting node_modules)
 COPY packages/shared/src ./packages/shared/src
