@@ -149,5 +149,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 # Use dumb-init to handle signals properly
 ENTRYPOINT ["dumb-init", "--"]
 
-# Start the application (NestJS outputs to dist/)
-CMD ["node", "dist/main.js"]
+# Start the application
+# Path: /app/dist/apps/api/src/main.js (NestJS monorepo build structure)
+CMD ["node", "dist/apps/api/src/main.js"]
