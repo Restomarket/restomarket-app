@@ -779,9 +779,11 @@ jobs:
     steps:
       - name: Extract commit title
         id: commit_info
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
         run: |
           # Get the first line of commit message (title) and sanitize it
-          COMMIT_TITLE=$(echo '${{ github.event.head_commit.message }}' | head -n1 | cut -c1-100)
+          COMMIT_TITLE=$(echo "$COMMIT_MSG" | head -n1 | cut -c1-100)
           # Remove quotes and special chars that could break JSON
           COMMIT_TITLE=$(echo "$COMMIT_TITLE" | tr -d '"' | tr -d "'" | tr -d '`')
           echo "title=$COMMIT_TITLE" >> $GITHUB_OUTPUT
