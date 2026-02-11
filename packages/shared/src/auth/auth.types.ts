@@ -26,7 +26,7 @@ export interface AuthContext {
     role?: string | null;
     banned?: boolean | null;
     banReason?: string | null;
-    banExpires?: number | null;
+    banExpires?: Date | null;
     firstName?: string | null;
     lastName?: string | null;
     isActive?: boolean;

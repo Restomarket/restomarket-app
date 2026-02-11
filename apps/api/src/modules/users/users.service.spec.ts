@@ -315,7 +315,7 @@ describe('UsersService', () => {
       mockUserRepository.transaction.mockImplementation(async callback => {
         return callback({
           query: {
-            users: {
+            authUsers: {
               findFirst: jest.fn().mockResolvedValueOnce(mockUser).mockResolvedValueOnce(null),
             },
           },
@@ -342,7 +342,7 @@ describe('UsersService', () => {
       mockUserRepository.transaction.mockImplementation(async callback => {
         return callback({
           query: {
-            users: {
+            authUsers: {
               findFirst: jest.fn().mockResolvedValue(mockUser),
             },
           },

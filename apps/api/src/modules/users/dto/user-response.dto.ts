@@ -105,7 +105,7 @@ export class UserResponse implements User {
     example: null,
     required: false,
     nullable: true,
-    description: 'Ban expiration (Unix timestamp in seconds)',
+    description: 'Ban expiration date',
   })
-  banExpires!: number | null;
+  banExpires!: Date | null;
 }

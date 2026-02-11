@@ -1,0 +1,2 @@
+ALTER TABLE "user" ALTER COLUMN "ban_expires" SET DATA TYPE timestamp with time zone USING CASE WHEN ban_expires IS NOT NULL THEN to_timestamp(ban_expires) ELSE NULL END;--> statement-breakpoint
+ALTER TABLE "session" ADD COLUMN "impersonated_by" text;

@@ -2,7 +2,7 @@ import { Injectable, Inject, NotFoundException } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
 import {
   UserRepositoryBase,
-  users,
+  authUsers,
   type User,
   type NewUser,
   type DatabaseConnection,
@@ -27,7 +27,7 @@ export class UserRepository extends UserRepositoryBase {
       debug: (msg, ctx) => pinoLogger.debug(ctx ?? {}, msg),
     };
 
-    super(db, users, logger);
+    super(db, authUsers, logger);
     pinoLogger.setContext(UserRepository.name);
   }
 

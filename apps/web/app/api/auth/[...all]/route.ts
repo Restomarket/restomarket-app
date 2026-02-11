@@ -10,7 +10,7 @@ import { NextResponse } from 'next/server';
  * - POST /api/auth/sign-up/email
  * - POST /api/auth/sign-out
  * - GET /api/auth/session
- * - POST /api/auth/forget-password
+ * - POST /api/auth/request-password-reset
  * - POST /api/auth/reset-password
  * - GET /api/auth/callback/google (OAuth callback)
  * - POST /api/auth/organization/* (Organization endpoints)

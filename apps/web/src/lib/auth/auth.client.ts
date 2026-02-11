@@ -1,5 +1,10 @@
 import { createAuthClient } from 'better-auth/react';
-import { organizationClient, inferAdditionalFields, adminClient } from 'better-auth/client/plugins';
+import {
+  organizationClient,
+  inferAdditionalFields,
+  adminClient,
+  emailOTPClient,
+} from 'better-auth/client/plugins';
 import { useState, useEffect } from 'react';
 import type { auth } from './auth.config';
 
@@ -39,6 +44,9 @@ export const authClient = createAuthClient({
         enabled: true,
       },
     }),
+
+    // Email OTP client
+    emailOTPClient(),
   ],
 });
 
@@ -54,18 +62,16 @@ export const signIn = authClient.signIn;
 export const signUp = authClient.signUp;
 export const signOut = authClient.signOut;
 
-// Password reset
-export const forgotPassword =
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (authClient as any).forgetPassword ??
-  // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  (authClient as any).forgotPassword ??
-  authClient.resetPassword;
+// Password reset (renamed from forgetPassword in Better Auth 1.4)
+export const forgotPassword = authClient.requestPasswordReset;
 export const resetPassword = authClient.resetPassword;
 
 // Email verification
 export const sendVerificationEmail = authClient.sendVerificationEmail;
 export const verifyEmail = authClient.verifyEmail;
+
+// Email OTP methods
+export const emailOtp = authClient.emailOtp;
 
 // Organization methods
 export const { organization } = authClient;

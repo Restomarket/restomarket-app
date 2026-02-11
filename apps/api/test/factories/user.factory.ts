@@ -1,5 +1,5 @@
 import { type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
-import { users, type NewUser, type User } from '@repo/shared';
+import { authUsers as users, type NewUser, type User } from '@repo/shared';
 import { BaseFactory } from './base.factory';
 import type * as schema from '@repo/shared';
 import { randomUUID } from 'crypto';

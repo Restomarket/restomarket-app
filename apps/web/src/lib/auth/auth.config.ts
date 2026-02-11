@@ -1,10 +1,11 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { nextCookies } from 'better-auth/next-js';
+import { emailOTP } from 'better-auth/plugins/email-otp';
 import { getDatabase } from '../database/connection';
 import * as schema from '@repo/shared';
 import { createBetterAuthBaseConfig } from '@repo/shared/auth';
-import { sendVerificationEmail, sendPasswordResetEmail } from '../email/index';
+import { sendVerificationEmail, sendPasswordResetEmail, sendVerificationOTP } from '../email/index';
 
 /**
  * Next.js Better Auth Configuration
@@ -101,8 +102,8 @@ export const auth = betterAuth({
         newEmail: string;
         url: string;
       }) => {
-        // Send email change verification to the new email address
-        await sendVerificationEmail({
+        // Fire-and-forget to prevent timing attacks (Better Auth best practice)
+        void sendVerificationEmail({
           user: { email: newEmail, name: user.name },
           url,
         });
@@ -116,7 +117,10 @@ export const auth = betterAuth({
   emailAndPassword: {
     enabled: true,
     requireEmailVerification: process.env.NODE_ENV === 'production',
-    sendResetPassword: sendPasswordResetEmail,
+    // Fire-and-forget to prevent timing attacks (Better Auth best practice)
+    sendResetPassword: async data => {
+      void sendPasswordResetEmail(data);
+    },
     // Password requirements
     minPasswordLength: 8,
     maxPasswordLength: 128,
@@ -128,7 +132,10 @@ export const auth = betterAuth({
   emailVerification: {
     sendOnSignUp: true,
     autoSignInAfterVerification: true,
-    sendVerificationEmail: sendVerificationEmail,
+    // Fire-and-forget to prevent timing attacks (Better Auth best practice)
+    sendVerificationEmail: async data => {
+      void sendVerificationEmail(data);
+    },
     expiresIn: 60 * 60 * 24, // 24 hours
   },
 
@@ -157,6 +164,16 @@ export const auth = betterAuth({
   plugins: [
     // Include all base plugins
     ...(baseConfig.plugins || []),
+
+    // Email OTP for sign-in, email verification, and password reset via OTP
+    emailOTP({
+      // Fire-and-forget to prevent timing attacks (Better Auth best practice)
+      async sendVerificationOTP(data) {
+        void sendVerificationOTP(data);
+      },
+      otpLength: 6,
+      expiresIn: 300, // 5 minutes
+    }),
 
     // Next.js Cookie Helper - MUST be last plugin
     // Automatically sets cookies in server actions

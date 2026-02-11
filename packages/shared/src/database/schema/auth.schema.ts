@@ -40,7 +40,7 @@ export const authUsers = pgTable(
     // Admin plugin fields (ban management)
     banned: boolean('banned').default(false),
     banReason: text('ban_reason'),
-    banExpires: integer('ban_expires'),
+    banExpires: timestamp('ban_expires', { withTimezone: true, mode: 'date' }),
 
     // Custom fields for your application
     firstName: varchar('first_name', { length: 100 }),
@@ -73,6 +73,9 @@ export const authSessions = pgTable(
     expiresAt: timestamp('expires_at', { withTimezone: true, mode: 'date' }).notNull(),
     ipAddress: text('ip_address'),
     userAgent: text('user_agent'),
+
+    // Admin plugin field (user impersonation)
+    impersonatedBy: text('impersonated_by'),
 
     // Organization plugin fields
     // Note: These do NOT have FK constraints intentionally - Better Auth manages them
@@ -161,10 +164,8 @@ export const authRateLimits = pgTable(
 // ============================================
 // Relations (Required for Drizzle Joins - Better Auth 1.4+)
 // ============================================
-export const authUsersRelations = relations(authUsers, ({ many }) => ({
-  sessions: many(authSessions),
-  accounts: many(authAccounts),
-}));
+// Note: authUsersRelations is defined in auth-relations.ts to avoid circular imports
+// (it needs to reference org tables like members, invitations, teamMembers)
 
 export const authSessionsRelations = relations(authSessions, ({ one }) => ({
   user: one(authUsers, {

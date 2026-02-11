@@ -1,6 +1,6 @@
 import { and, count, desc, eq, ilike, inArray, isNull, or, sql, type SQL, asc } from 'drizzle-orm';
 import { BaseRepository } from '../base/base.repository.js';
-import { users } from '../../schema/index.js';
+import { authUsers as users } from '../../schema/index.js';
 import type { User, NewUser } from '../../../types/database.types.js';
 import type { PaginatedResult } from '../../../types/pagination.types.js';
 import { SortOrder } from '../../../types/pagination.types.js';
