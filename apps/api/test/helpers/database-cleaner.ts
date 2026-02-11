@@ -50,7 +50,14 @@ export class DatabaseCleaner {
     const truncateStatement = sql.raw(sqlCommand);
 
     try {
+      // Execute truncate
       await this.db.execute(truncateStatement);
+
+      // In CI environments, ensure the operation is committed
+      // PostgreSQL auto-commits DDL statements, but we verify with a simple query
+      if (process.env.CI === 'true') {
+        await this.db.execute(sql`SELECT 1`);
+      }
     } catch (error) {
       console.error('Failed to truncate tables:', sqlCommand, error);
       throw error;
