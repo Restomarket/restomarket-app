@@ -16,7 +16,7 @@ export class DatabaseCleaner {
 
   /**
    * Clean all tables in the database
-   * Uses TRUNCATE for better performance (faster than DELETE)
+   * Uses TRUNCATE for better performance
    *
    * @param options.exclude - Table names to exclude from cleanup
    * @param options.cascade - Whether to cascade truncate to dependent tables
@@ -50,14 +50,7 @@ export class DatabaseCleaner {
     const truncateStatement = sql.raw(sqlCommand);
 
     try {
-      // Execute truncate
       await this.db.execute(truncateStatement);
-
-      // In CI environments, ensure the operation is committed
-      // PostgreSQL auto-commits DDL statements, but we verify with a simple query
-      if (process.env.CI === 'true') {
-        await this.db.execute(sql`SELECT 1`);
-      }
     } catch (error) {
       console.error('Failed to truncate tables:', sqlCommand, error);
       throw error;

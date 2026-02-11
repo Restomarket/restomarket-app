@@ -45,7 +45,9 @@ export class E2ETestSetup {
   private moduleMetadata: ModuleMetadata = {};
   private app?: INestApplication;
   private connection?: Sql;
+  private cleanupConnection?: Sql; // Separate connection for cleanup
   private db?: PostgresJsDatabase<typeof schema>;
+  private cleanupDb?: PostgresJsDatabase<typeof schema>;
   private cleaner?: DatabaseCleaner;
   private factories = new Map<string, any>();
   private providerOverrides: { token: any; value: any }[] = [];
@@ -246,8 +248,8 @@ export class E2ETestSetup {
       }
 
       // Verify cleanup worked by checking table counts
-      if (process.env.CI === 'true' && this.db) {
-        const result = await this.db.execute(sql`SELECT COUNT(*) as count FROM "user"`);
+      if (process.env.CI === 'true' && this.cleanupDb) {
+        const result = await this.cleanupDb.execute(sql`SELECT COUNT(*) as count FROM "user"`);
         const count = (result as any)[0]?.count;
         if (count && parseInt(count) > 0) {
           console.warn(`WARNING: Cleanup verification failed - found ${count} users after cleanup`);
@@ -275,6 +277,14 @@ export class E2ETestSetup {
     }
 
     try {
+      if (this.cleanupConnection) {
+        await this.cleanupConnection.end({ timeout: 5 });
+      }
+    } catch (error) {
+      console.error('Failed to close cleanup connection:', error);
+    }
+
+    try {
       if (this.connection) {
         await this.connection.end({ timeout: 5 });
       }
@@ -293,6 +303,7 @@ export class E2ETestSetup {
       throw new Error('DATABASE_URL is not defined in test environment');
     }
 
+    // Main connection for app and factories
     this.connection = postgres(databaseUrl, {
       max: 10,
       idle_timeout: 20,
@@ -302,8 +313,18 @@ export class E2ETestSetup {
       prepare: false,
     });
 
+    // Dedicated connection for cleanup (max 1 connection, no pooling)
+    // This ensures TRUNCATE can get exclusive locks without interference
+    this.cleanupConnection = postgres(databaseUrl, {
+      max: 1,
+      idle_timeout: 2,
+      connect_timeout: 10,
+      prepare: false,
+    });
+
     this.db = drizzle(this.connection, { schema });
-    this.cleaner = new DatabaseCleaner(this.db);
+    this.cleanupDb = drizzle(this.cleanupConnection, { schema });
+    this.cleaner = new DatabaseCleaner(this.cleanupDb);
   }
 
   /**
