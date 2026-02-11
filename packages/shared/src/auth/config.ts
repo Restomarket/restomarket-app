@@ -176,9 +176,10 @@ export function createBetterAuthBaseConfig(): Partial<BetterAuthOptions> {
     // ============================================
     // Experimental Features
     // ============================================
-    experimental: {
-      joins: true, // Enable Drizzle joins for better performance
-    },
+    // Note: experimental.joins is intentionally disabled.
+    // It requires each table to appear exactly once in the Drizzle schema,
+    // which conflicts with alias exports needed for backward compatibility.
+    // Standard queries perform well for auth operations.
 
     // ============================================
     // Database Hooks (data consistency)
