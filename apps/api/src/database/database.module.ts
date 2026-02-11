@@ -2,7 +2,7 @@ import { Global, Inject, Module, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres, { type Sql } from 'postgres';
-import * as schema from '@repo/shared';
+import * as schema from '@repo/shared/database/schema';
 import type { DatabaseConnection as SharedDatabaseConnection } from '@repo/shared';
 
 export const DATABASE_CONNECTION = 'DATABASE_CONNECTION';

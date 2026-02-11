@@ -3,7 +3,7 @@ import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { nextCookies } from 'better-auth/next-js';
 import { emailOTP } from 'better-auth/plugins/email-otp';
 import { getDatabase } from '../database/connection';
-import * as schema from '@repo/shared';
+import * as schema from '@repo/shared/database/schema';
 import { createBetterAuthBaseConfig } from '@repo/shared/auth';
 import { sendVerificationEmail, sendPasswordResetEmail, sendVerificationOTP } from '../email/index';
 

@@ -1,6 +1,6 @@
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
-import * as schema from '@repo/shared';
+import * as schema from '@repo/shared/database/schema';
 import type { DatabaseConnection } from '@repo/shared';
 
 declare global {

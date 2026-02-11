@@ -4,7 +4,7 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { randomBytes } from 'crypto';
 import { Logger } from '@nestjs/common';
-import * as schema from '@repo/shared';
+import * as schema from '@repo/shared/database/schema';
 import { createBetterAuthBaseConfig } from '@repo/shared/auth';
 
 /**

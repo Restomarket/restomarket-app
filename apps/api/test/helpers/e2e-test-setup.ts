@@ -8,7 +8,7 @@ import {
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { sql } from 'drizzle-orm';
 import postgres, { type Sql } from 'postgres';
-import * as schema from '@repo/shared';
+import * as schema from '@repo/shared/database/schema';
 import { DatabaseCleaner } from './database-cleaner';
 import { UserFactory } from '../factories';
 import { DATABASE_CONNECTION, POSTGRES_CLIENT } from '../../src/database/database.module';
