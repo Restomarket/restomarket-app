@@ -4,19 +4,7 @@ import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres from 'postgres';
 import { randomBytes } from 'crypto';
 import { Logger } from '@nestjs/common';
-import {
-  authUsers,
-  authSessions,
-  authAccounts,
-  authVerifications,
-  authRateLimits,
-  organizations,
-  members,
-  invitations,
-  teams,
-  teamMembers,
-  organizationRoles,
-} from '@repo/shared';
+import * as schema from '@repo/shared';
 import { createBetterAuthBaseConfig } from '@repo/shared/auth';
 
 /**
@@ -62,7 +50,7 @@ function getDatabase(): ReturnType<typeof drizzle> {
     onnotice: process.env.NODE_ENV === 'development' ? msg => logger.warn(msg) : undefined,
   });
 
-  dbInstance = drizzle(clientInstance);
+  dbInstance = drizzle(clientInstance, { schema });
 
   // Graceful shutdown for Docker/Kubernetes
   if (process.env.NODE_ENV !== 'test') {
@@ -112,17 +100,9 @@ export const auth = betterAuth({
   database: drizzleAdapter(getDatabase(), {
     provider: 'pg',
     schema: {
-      user: authUsers,
-      session: authSessions,
-      account: authAccounts,
-      verification: authVerifications,
-      rateLimit: authRateLimits,
-      organization: organizations,
-      member: members,
-      invitation: invitations,
-      team: teams,
-      teamMember: teamMembers,
-      organizationRole: organizationRoles,
+      // Spread full schema - includes Better Auth model name aliases
+      // (user, session, account, verification, rateLimit) plus all relations
+      ...schema,
     },
   }),
 

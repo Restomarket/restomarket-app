@@ -26,6 +26,9 @@ describe('UsersService', () => {
     createdAt: new Date('2024-01-01'),
     updatedAt: new Date('2024-01-01'),
     deletedAt: null,
+    banned: false,
+    banReason: null,
+    banExpires: null,
   };
 
   const mockUserRepository = {

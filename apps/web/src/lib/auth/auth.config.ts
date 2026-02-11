@@ -61,20 +61,8 @@ export const auth = betterAuth({
   database: drizzleAdapter(getDatabaseSafe()!, {
     provider: 'pg',
     schema: {
-      // Core auth tables
-      user: schema.authUsers,
-      session: schema.authSessions,
-      account: schema.authAccounts,
-      verification: schema.authVerifications,
-      rateLimit: schema.authRateLimits,
-      // Organization tables
-      organization: schema.organizations,
-      member: schema.members,
-      invitation: schema.invitations,
-      team: schema.teams,
-      teamMember: schema.teamMembers,
-      organizationRole: schema.organizationRoles,
-      // Include all schema for relations
+      // Spread full schema - includes Better Auth model name aliases
+      // (user, session, account, verification, rateLimit) plus all relations
       ...schema,
     },
   }),

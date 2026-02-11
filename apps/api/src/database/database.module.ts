@@ -2,30 +2,7 @@ import { Global, Inject, Module, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres, { type Sql } from 'postgres';
-import {
-  users,
-  authUsers,
-  authSessions,
-  authAccounts,
-  authVerifications,
-  authRateLimits,
-  authUsersRelations,
-  authSessionsRelations,
-  authAccountsRelations,
-  authRateLimitsRelations,
-  organizations,
-  members,
-  invitations,
-  teams,
-  teamMembers,
-  organizationRoles,
-  organizationsRelations,
-  membersRelations,
-  invitationsRelations,
-  teamsRelations,
-  teamMembersRelations,
-  organizationRolesRelations,
-} from '@repo/shared';
+import * as schema from '@repo/shared';
 import type { DatabaseConnection as SharedDatabaseConnection } from '@repo/shared';
 
 export const DATABASE_CONNECTION = 'DATABASE_CONNECTION';
@@ -65,30 +42,7 @@ export type DatabaseConnection = SharedDatabaseConnection;
       provide: DATABASE_CONNECTION,
       useFactory: (client: Sql): DatabaseConnection => {
         return drizzle(client, {
-          schema: {
-            users,
-            authUsers,
-            authSessions,
-            authAccounts,
-            authVerifications,
-            authRateLimits,
-            authUsersRelations,
-            authSessionsRelations,
-            authAccountsRelations,
-            authRateLimitsRelations,
-            organizations,
-            members,
-            invitations,
-            teams,
-            teamMembers,
-            organizationRoles,
-            organizationsRelations,
-            membersRelations,
-            invitationsRelations,
-            teamsRelations,
-            teamMembersRelations,
-            organizationRolesRelations,
-          },
+          schema,
         });
       },
       inject: [POSTGRES_CLIENT],

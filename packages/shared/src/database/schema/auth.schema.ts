@@ -37,6 +37,11 @@ export const authUsers = pgTable(
     // Role field (required for admin plugin and organization access control)
     role: text('role').default('member'),
 
+    // Admin plugin fields (ban management)
+    banned: boolean('banned').default(false),
+    banReason: text('ban_reason'),
+    banExpires: integer('ban_expires'),
+
     // Custom fields for your application
     firstName: varchar('first_name', { length: 100 }),
     lastName: varchar('last_name', { length: 100 }),
@@ -174,6 +179,8 @@ export const authAccountsRelations = relations(authAccounts, ({ one }) => ({
     references: [authUsers.id],
   }),
 }));
+
+export const authVerificationsRelations = relations(authVerifications, () => ({}));
 
 export const authRateLimitsRelations = relations(authRateLimits, () => ({}));
 

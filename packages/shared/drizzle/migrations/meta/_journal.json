@@ -43,6 +43,13 @@
       "when": 1770835072412,
       "tag": "0005_even_the_spike",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1770838022880,
+      "tag": "0006_sweet_luckman",
+      "breakpoints": true
     }
   ]
 }
