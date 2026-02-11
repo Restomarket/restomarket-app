@@ -157,6 +157,9 @@ jobs:
           DATABASE_DIRECT_URL: postgresql://postgres:postgres@localhost:5432/restomarket_test
           DATABASE_SSL: false
 
+      - name: Build shared package
+        run: pnpm --filter @repo/shared build
+
       # Remote caching handles build artifacts automatically
       - name: Run unit tests
         run: pnpm turbo test --filter=...[origin/${{ github.base_ref || 'main' }}]
