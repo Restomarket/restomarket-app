@@ -1,27 +1,18 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { getSessionCookie } from 'better-auth/cookies';
+import { auth } from '@/lib/auth/auth.config';
 
 /**
  * Authentication Proxy (Next.js 16+)
  *
  * This proxy protects routes and handles authentication redirects.
  *
- * ⚠️ SECURITY WARNING:
- * This proxy only checks for the existence of a session cookie - it does NOT validate it.
- * Anyone can manually create a cookie to bypass this check.
- * You MUST always validate the session on your server for any protected actions or pages.
+ * Uses Better Auth's getSession() for proper session validation.
  *
  * Route Protection Strategy:
  * - Public routes: Accessible without authentication
  * - Protected routes: Require authentication (redirect to /login)
  * - Auth routes: Redirect to /dashboard if already authenticated
- *
- * Cookie Configuration:
- * - Using default Better Auth cookie name: 'better-auth.session_token'
- * - Using default cookie prefix: 'better-auth'
- * - If you customize these in auth.config.ts, update getSessionCookie() accordingly:
- *   getSessionCookie(request, { cookieName: 'custom_name', cookiePrefix: 'custom_prefix' })
  *
  * @see https://www.better-auth.com/docs/integrations/next
  * @see https://nextjs.org/docs/app/api-reference/file-conventions/proxy
@@ -96,9 +87,11 @@ export async function proxy(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Get session cookie using Better Auth helper
-  const sessionCookie = getSessionCookie(request);
-  const isAuthenticated = !!sessionCookie;
+  // Validate session using Better Auth
+  const session = await auth.api.getSession({
+    headers: request.headers,
+  });
+  const isAuthenticated = !!session?.user;
 
   // ============================================
   // Public Routes - Always Allow
@@ -122,10 +115,6 @@ export async function proxy(request: NextRequest) {
       loginUrl.searchParams.set('callbackUrl', pathname);
       return NextResponse.redirect(loginUrl);
     }
-
-    // ⚠️ NOTE: This proxy only checks for cookie existence.
-    // For critical operations, always validate the session server-side
-    // in your page/route using auth.api.getSession()
 
     return NextResponse.next();
   }

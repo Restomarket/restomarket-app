@@ -12,7 +12,6 @@ import { auth } from '@/lib/auth/auth.config';
  * - POST /api/auth/forget-password
  * - POST /api/auth/reset-password
  * - GET /api/auth/callback/google (OAuth callback)
- * - GET /api/auth/callback/github (OAuth callback)
  * - POST /api/auth/organization/* (Organization endpoints)
  * - And more...
  *

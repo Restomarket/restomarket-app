@@ -10,7 +10,7 @@ import { sendVerificationEmail, sendPasswordResetEmail } from '../email/index';
  * Next.js Better Auth Configuration
  *
  * Uses shared configuration from @repo/shared with Next.js-specific features:
- * - Email/password + OAuth (Google, GitHub)
+ * - Email/password + OAuth (Google)
  * - Email verification with Resend
  * - Organization lifecycle hooks
  * - Next.js cookie helpers
@@ -137,7 +137,7 @@ export const auth = betterAuth({
   // Next.js-Specific: Social OAuth Providers
   // ============================================
   socialProviders: {
-    // Google OAuth
+    // Google OAuth - conditionally enabled based on env vars
     ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
       ? {
           google: {
@@ -146,20 +146,6 @@ export const auth = betterAuth({
             mapProfileToUser: profile => ({
               firstName: profile.given_name,
               lastName: profile.family_name,
-            }),
-          },
-        }
-      : {}),
-
-    // GitHub OAuth
-    ...(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
-      ? {
-          github: {
-            clientId: process.env.GITHUB_CLIENT_ID,
-            clientSecret: process.env.GITHUB_CLIENT_SECRET,
-            mapProfileToUser: profile => ({
-              firstName: profile.name?.split(' ')[0] || '',
-              lastName: profile.name?.split(' ').slice(1).join(' ') || '',
             }),
           },
         }
