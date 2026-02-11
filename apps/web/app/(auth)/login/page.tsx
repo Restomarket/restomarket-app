@@ -168,12 +168,20 @@ function LoginForm() {
         </form>
       </Form>
 
-      <p className="text-center text-sm text-muted-foreground">
-        Don&apos;t have an account?{' '}
-        <Link href="/register" className="font-medium underline hover:text-foreground">
-          Sign up
-        </Link>
-      </p>
+      <div className="space-y-2 text-center text-sm text-muted-foreground">
+        <p>
+          <Link href="/otp-login" className="font-medium underline hover:text-foreground">
+            Sign in with OTP
+          </Link>{' '}
+          instead
+        </p>
+        <p>
+          Don&apos;t have an account?{' '}
+          <Link href="/register" className="font-medium underline hover:text-foreground">
+            Sign up
+          </Link>
+        </p>
+      </div>
     </div>
   );
 }

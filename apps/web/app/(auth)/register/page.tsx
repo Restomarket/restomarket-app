@@ -105,7 +105,15 @@ function RegisterForm() {
 
         <div className="flex flex-col gap-2">
           <Button onClick={() => router.push('/login')}>Continue to sign in</Button>
-          <Button variant="outline" onClick={() => setShowSuccess(false)}>
+          <Button
+            variant="outline"
+            onClick={() =>
+              router.push(`/verify-otp?email=${encodeURIComponent(form.getValues('email'))}`)
+            }
+          >
+            Verify with OTP code
+          </Button>
+          <Button variant="ghost" onClick={() => setShowSuccess(false)}>
             Back to registration
           </Button>
         </div>

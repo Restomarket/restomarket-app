@@ -143,12 +143,20 @@ export default function ForgotPasswordPage() {
         </form>
       </Form>
 
-      <Link href="/login" className="block">
-        <Button variant="ghost" className="w-full">
-          <ArrowLeft className="mr-2 size-4" />
-          Back to sign in
-        </Button>
-      </Link>
+      <div className="space-y-2">
+        <Link href="/reset-password-otp" className="block">
+          <Button variant="outline" className="w-full">
+            Reset with OTP code instead
+          </Button>
+        </Link>
+
+        <Link href="/login" className="block">
+          <Button variant="ghost" className="w-full">
+            <ArrowLeft className="mr-2 size-4" />
+            Back to sign in
+          </Button>
+        </Link>
+      </div>
     </div>
   );
 }

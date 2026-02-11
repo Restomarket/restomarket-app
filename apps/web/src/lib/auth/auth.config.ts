@@ -116,7 +116,7 @@ export const auth = betterAuth({
   // ============================================
   emailAndPassword: {
     enabled: true,
-    requireEmailVerification: process.env.NODE_ENV === 'production',
+    requireEmailVerification: false, // Temporarily disabled until Resend is configured
     // Fire-and-forget to prevent timing attacks (Better Auth best practice)
     sendResetPassword: async data => {
       void sendPasswordResetEmail(data);
