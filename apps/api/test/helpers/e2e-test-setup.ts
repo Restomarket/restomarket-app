@@ -122,6 +122,26 @@ export class E2ETestSetup {
     // Create test module
     const moduleBuilder = await this.createTestModule();
 
+    // CRITICAL: Override database providers to use test connection
+    // This ensures the app and tests share the same database connection
+    // Create a proxy for the connection that prevents the DatabaseModule from closing it
+    const connectionProxy = new Proxy(this.connection!, {
+      get: (target, prop) => {
+        // Prevent DatabaseModule.onModuleDestroy from closing our test connection
+        if (prop === 'end') {
+          return async () => {
+            // No-op - we'll close it ourselves in teardown()
+          };
+        }
+        return target[prop as keyof typeof target];
+      },
+    });
+
+    const { DATABASE_CONNECTION, POSTGRES_CLIENT } =
+      await import('../../src/database/database.module');
+    moduleBuilder.overrideProvider(POSTGRES_CLIENT).useValue(connectionProxy);
+    moduleBuilder.overrideProvider(DATABASE_CONNECTION).useValue(this.db);
+
     // Apply provider overrides
     for (const override of this.providerOverrides) {
       moduleBuilder.overrideProvider(override.token).useValue(override.value);
@@ -217,11 +237,20 @@ export class E2ETestSetup {
    * Call this in afterAll
    */
   async teardown(): Promise<void> {
-    if (this.app) {
-      await this.app.close();
+    try {
+      if (this.app) {
+        await this.app.close();
+      }
+    } catch (error) {
+      console.error('Failed to close app:', error);
     }
-    if (this.connection) {
-      await this.connection.end();
+
+    try {
+      if (this.connection) {
+        await this.connection.end({ timeout: 5 });
+      }
+    } catch (error) {
+      console.error('Failed to close database connection:', error);
     }
   }
 
@@ -239,6 +268,9 @@ export class E2ETestSetup {
       max: 10,
       idle_timeout: 20,
       connect_timeout: 10,
+      // Match production config - disable prepared statements
+      // This ensures compatibility with pooled connections and test environments
+      prepare: false,
     });
 
     this.db = drizzle(this.connection, { schema });

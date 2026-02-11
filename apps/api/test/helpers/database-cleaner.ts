@@ -39,12 +39,13 @@ export class DatabaseCleaner {
       return;
     }
 
-    // Build TRUNCATE statement - order matters: CASCADE must come last
-    const restartClause = restartIdentity ? 'RESTART IDENTITY' : '';
-    const cascadeClause = cascade ? 'CASCADE' : '';
+    // Build TRUNCATE statement with proper spacing
+    const clauses = [restartIdentity && 'RESTART IDENTITY', cascade && 'CASCADE']
+      .filter(Boolean)
+      .join(' ');
 
     const sqlCommand =
-      `TRUNCATE TABLE ${tableNames.map(t => `"${t}"`).join(', ')} ${restartClause} ${cascadeClause}`.trim();
+      `TRUNCATE TABLE ${tableNames.map(t => `"${t}"`).join(', ')} ${clauses}`.trim();
 
     const truncateStatement = sql.raw(sqlCommand);
 
@@ -105,42 +106,6 @@ export class DatabaseCleaner {
 
     // drizzle returns an array directly
     return Array.isArray(result) ? result.map((row: any) => row.tablename) : [];
-  }
-
-  /**
-   * Get all table names from the schema
-   */
-  private getTableNames(): string[] {
-    const tables: string[] = [];
-
-    for (const [key, value] of Object.entries(schema)) {
-      // Check if it's a Drizzle table
-      if (value && typeof value === 'object') {
-        // Try multiple ways to get the table name
-        const tableName =
-          (value as any)[Symbol.for('drizzle:Name')] ??
-          (value as any)._?.name ??
-          (value as any)[Symbol.for('drizzle:PgInlineForeignKeys')] ??
-          key;
-
-        // Drizzle tables have specific properties
-        if (
-          tableName &&
-          typeof tableName === 'string' &&
-          ((value as any)[Symbol.for('drizzle:Columns')] ||
-            (value as any)[Symbol.for('drizzle:Table')])
-        ) {
-          tables.push(tableName);
-        }
-      }
-    }
-
-    // Fallback to hardcoded table names if auto-detection fails
-    if (tables.length === 0) {
-      tables.push('users');
-    }
-
-    return tables;
   }
 
   /**
