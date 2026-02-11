@@ -175,6 +175,8 @@ export const authAccountsRelations = relations(authAccounts, ({ one }) => ({
   }),
 }));
 
+export const authRateLimitsRelations = relations(authRateLimits, () => ({}));
+
 // ============================================
 // Type Exports
 // ============================================
