@@ -7,5 +7,4 @@ export type NewUser = typeof authUsers.$inferInsert;
 export type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import type * as schema from '../database/schema/index.js';
 import type { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
-// Exclude baseEntityFields from schema type as it's not a table/relation
-export type DatabaseConnection = PostgresJsDatabase<Omit<typeof schema, 'baseEntityFields'>>;
+export type DatabaseConnection = PostgresJsDatabase<typeof schema>;
