@@ -59,6 +59,7 @@ export default async function DashboardPage() {
               {user.image && (
                 <div>
                   <p className="text-sm font-medium">Profile Image</p>
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
                   <img
                     src={user.image}
                     alt={user.name || 'Profile'}
