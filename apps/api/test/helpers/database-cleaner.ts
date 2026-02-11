@@ -1,6 +1,6 @@
 import { type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { sql } from 'drizzle-orm';
-import * as schema from '@repo/shared';
+import * as schema from '@repo/shared/database/schema';
 
 /**
  * Database Cleaner - Handles cleanup of test database tables

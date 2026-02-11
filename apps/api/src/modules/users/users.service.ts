@@ -5,10 +5,10 @@ import { CreateUserDto } from './dto/create-user.dto';
 import { UpdateUserDto } from './dto/update-user.dto';
 import { UpdateUserEmailDto } from './dto/update-user-email.dto';
 import { UpdateUserProfileDto } from './dto/update-user-profile.dto';
-import { type User, users } from '@repo/shared';
+import { type User, authUsers as users } from '@repo/shared';
 import { IPaginatedResult } from '@shared/interfaces';
 import { SortOrder } from '@common/dto/sort-query.dto';
-import { and, eq, isNull, sql } from 'drizzle-orm';
+import { and, eq, isNull } from 'drizzle-orm';
 
 /**
  * Users service with simplified architecture
@@ -173,7 +173,7 @@ export class UsersService {
   async updateUserEmail(id: string, dto: UpdateUserEmailDto): Promise<User> {
     return await this.userRepository.transaction(async tx => {
       // Check if user exists
-      const user = await tx.query.users.findFirst({
+      const user = await tx.query.authUsers.findFirst({
         where: (users, { eq, and, isNull }) => and(eq(users.id, id), isNull(users.deletedAt)),
       });
 
@@ -189,7 +189,7 @@ export class UsersService {
       }
 
       // Check if email is already taken (within transaction)
-      const existingUser = await tx.query.users.findFirst({
+      const existingUser = await tx.query.authUsers.findFirst({
         where: (users, { eq, and, isNull }) =>
           and(eq(users.email, dto.email), isNull(users.deletedAt)),
       });

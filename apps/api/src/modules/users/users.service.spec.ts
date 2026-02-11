@@ -19,12 +19,16 @@ describe('UsersService', () => {
     email: 'test@example.com',
     emailVerified: false,
     image: null,
+    role: 'member',
     firstName: 'John',
     lastName: 'Doe',
     isActive: true,
     createdAt: new Date('2024-01-01'),
     updatedAt: new Date('2024-01-01'),
     deletedAt: null,
+    banned: false,
+    banReason: null,
+    banExpires: null,
   };
 
   const mockUserRepository = {
@@ -311,7 +315,7 @@ describe('UsersService', () => {
       mockUserRepository.transaction.mockImplementation(async callback => {
         return callback({
           query: {
-            users: {
+            authUsers: {
               findFirst: jest.fn().mockResolvedValueOnce(mockUser).mockResolvedValueOnce(null),
             },
           },
@@ -338,7 +342,7 @@ describe('UsersService', () => {
       mockUserRepository.transaction.mockImplementation(async callback => {
         return callback({
           query: {
-            users: {
+            authUsers: {
               findFirst: jest.fn().mockResolvedValue(mockUser),
             },
           },

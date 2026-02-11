@@ -15,12 +15,16 @@ describe('UsersController', () => {
     email: 'test@example.com',
     emailVerified: false,
     image: null,
+    role: 'member',
     firstName: 'John',
     lastName: 'Doe',
     isActive: true,
     createdAt: new Date('2024-01-01'),
     updatedAt: new Date('2024-01-01'),
     deletedAt: null,
+    banned: false,
+    banReason: null,
+    banExpires: null,
   };
 
   const mockUsersService = {

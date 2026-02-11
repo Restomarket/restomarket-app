@@ -1,4 +1,4 @@
-import { UserRepositoryBase, users } from '@repo/shared';
+import { UserRepositoryBase, authUsers } from '@repo/shared';
 import { getDatabase } from '../connection';
 
 /**
@@ -7,5 +7,5 @@ import { getDatabase } from '../connection';
  */
 export function getUserRepository(): UserRepositoryBase {
   const db = getDatabase();
-  return new UserRepositoryBase(db, users);
+  return new UserRepositoryBase(db, authUsers);
 }

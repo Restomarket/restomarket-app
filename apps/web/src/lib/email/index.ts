@@ -8,5 +8,6 @@
 export {
   sendVerificationEmail,
   sendPasswordResetEmail,
+  sendVerificationOTP,
   sendInvitationEmail,
 } from './resend-provider';

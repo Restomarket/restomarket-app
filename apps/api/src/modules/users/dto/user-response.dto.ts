@@ -42,6 +42,15 @@ export class UserResponse implements User {
   })
   image!: string | null;
 
+  @ApiProperty({
+    example: 'member',
+    required: false,
+    nullable: true,
+    description: 'User role (member, admin, owner, manager, viewer)',
+    default: 'member',
+  })
+  role!: string | null;
+
   @ApiProperty({ example: 'John', description: 'User first name' })
   firstName!: string;
 
@@ -74,4 +83,29 @@ export class UserResponse implements User {
     description: 'Soft delete timestamp (null if not deleted)',
   })
   deletedAt!: Date | null;
+
+  @ApiProperty({
+    example: false,
+    required: false,
+    nullable: true,
+    description: 'Whether the user is banned',
+    default: false,
+  })
+  banned!: boolean | null;
+
+  @ApiProperty({
+    example: null,
+    required: false,
+    nullable: true,
+    description: 'Reason for banning the user',
+  })
+  banReason!: string | null;
+
+  @ApiProperty({
+    example: null,
+    required: false,
+    nullable: true,
+    description: 'Ban expiration date',
+  })
+  banExpires!: Date | null;
 }

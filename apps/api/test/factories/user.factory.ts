@@ -1,7 +1,7 @@
 import { type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
-import { users, type NewUser, type User } from '@repo/shared';
+import { authUsers as users, type NewUser, type User } from '@repo/shared';
 import { BaseFactory } from './base.factory';
-import type * as schema from '@repo/shared';
+import type * as schema from '@repo/shared/database/schema';
 import { randomUUID } from 'crypto';
 
 /**
@@ -44,6 +44,7 @@ export class UserFactory extends BaseFactory<typeof users, NewUser, User> {
       name: `${firstName} ${lastName}`,
       email: `user${sequence}@example.com`,
       emailVerified: false,
+      role: 'member',
       firstName,
       lastName,
       isActive: true,

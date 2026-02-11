@@ -9,13 +9,52 @@ import {
   authSessions,
   authAccounts,
   authVerifications,
+  authRateLimits,
+  authUsersRelations,
+  authSessionsRelations,
+  authAccountsRelations,
+  authVerificationsRelations,
+  authRateLimitsRelations,
   organizations,
   members,
   invitations,
   teams,
   teamMembers,
   organizationRoles,
-} from '@repo/shared';
+  organizationsRelations,
+  membersRelations,
+  invitationsRelations,
+  teamsRelations,
+  teamMembersRelations,
+  organizationRolesRelations,
+} from '@repo/shared/database/schema';
+
+// Explicit schema object avoids CJS/ESM interop issues where `import *` adds
+// a `default` key with null prototype that crashes drizzle's extractTablesRelationalConfig
+const schema = {
+  authUsers,
+  authSessions,
+  authAccounts,
+  authVerifications,
+  authRateLimits,
+  authUsersRelations,
+  authSessionsRelations,
+  authAccountsRelations,
+  authVerificationsRelations,
+  authRateLimitsRelations,
+  organizations,
+  members,
+  invitations,
+  teams,
+  teamMembers,
+  organizationRoles,
+  organizationsRelations,
+  membersRelations,
+  invitationsRelations,
+  teamsRelations,
+  teamMembersRelations,
+  organizationRolesRelations,
+};
 import { createBetterAuthBaseConfig } from '@repo/shared/auth';
 
 /**
@@ -61,7 +100,7 @@ function getDatabase(): ReturnType<typeof drizzle> {
     onnotice: process.env.NODE_ENV === 'development' ? msg => logger.warn(msg) : undefined,
   });
 
-  dbInstance = drizzle(clientInstance);
+  dbInstance = drizzle(clientInstance, { schema });
 
   // Graceful shutdown for Docker/Kubernetes
   if (process.env.NODE_ENV !== 'test') {
@@ -111,16 +150,19 @@ export const auth = betterAuth({
   database: drizzleAdapter(getDatabase(), {
     provider: 'pg',
     schema: {
-      user: authUsers,
-      session: authSessions,
-      account: authAccounts,
-      verification: authVerifications,
-      organization: organizations,
-      member: members,
-      invitation: invitations,
-      team: teams,
-      teamMember: teamMembers,
-      organizationRole: organizationRoles,
+      // Map Better Auth model names to Drizzle table objects
+      // (only tables - relations are handled by the Drizzle client instance)
+      user: schema.authUsers,
+      session: schema.authSessions,
+      account: schema.authAccounts,
+      verification: schema.authVerifications,
+      rateLimit: schema.authRateLimits,
+      organization: schema.organizations,
+      member: schema.members,
+      invitation: schema.invitations,
+      team: schema.teams,
+      teamMember: schema.teamMembers,
+      organizationRole: schema.organizationRoles,
     },
   }),
 

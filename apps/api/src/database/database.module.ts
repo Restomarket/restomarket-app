@@ -3,14 +3,16 @@ import { ConfigService } from '@nestjs/config';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres, { type Sql } from 'postgres';
 import {
-  users,
   authUsers,
   authSessions,
   authAccounts,
   authVerifications,
+  authRateLimits,
   authUsersRelations,
   authSessionsRelations,
   authAccountsRelations,
+  authVerificationsRelations,
+  authRateLimitsRelations,
   organizations,
   members,
   invitations,
@@ -23,7 +25,34 @@ import {
   teamsRelations,
   teamMembersRelations,
   organizationRolesRelations,
-} from '@repo/shared';
+} from '@repo/shared/database/schema';
+
+// Explicit schema object avoids CJS/ESM interop issues where `import *` adds
+// a `default` key with null prototype that crashes drizzle's extractTablesRelationalConfig
+const schema = {
+  authUsers,
+  authSessions,
+  authAccounts,
+  authVerifications,
+  authRateLimits,
+  authUsersRelations,
+  authSessionsRelations,
+  authAccountsRelations,
+  authVerificationsRelations,
+  authRateLimitsRelations,
+  organizations,
+  members,
+  invitations,
+  teams,
+  teamMembers,
+  organizationRoles,
+  organizationsRelations,
+  membersRelations,
+  invitationsRelations,
+  teamsRelations,
+  teamMembersRelations,
+  organizationRolesRelations,
+};
 import type { DatabaseConnection as SharedDatabaseConnection } from '@repo/shared';
 
 export const DATABASE_CONNECTION = 'DATABASE_CONNECTION';
@@ -63,28 +92,7 @@ export type DatabaseConnection = SharedDatabaseConnection;
       provide: DATABASE_CONNECTION,
       useFactory: (client: Sql): DatabaseConnection => {
         return drizzle(client, {
-          schema: {
-            users,
-            authUsers,
-            authSessions,
-            authAccounts,
-            authVerifications,
-            authUsersRelations,
-            authSessionsRelations,
-            authAccountsRelations,
-            organizations,
-            members,
-            invitations,
-            teams,
-            teamMembers,
-            organizationRoles,
-            organizationsRelations,
-            membersRelations,
-            invitationsRelations,
-            teamsRelations,
-            teamMembersRelations,
-            organizationRolesRelations,
-          },
+          schema,
         });
       },
       inject: [POSTGRES_CLIENT],

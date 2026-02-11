@@ -29,6 +29,34 @@
       "when": 1770389142000,
       "tag": "0003_add_missing_updated_at_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1770832005892,
+      "tag": "0004_free_sumo",
+      "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "7",
+      "when": 1770835072412,
+      "tag": "0005_even_the_spike",
+      "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1770838022880,
+      "tag": "0006_sweet_luckman",
+      "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1770843033139,
+      "tag": "0007_right_gateway",
+      "breakpoints": true
     }
   ]
 }

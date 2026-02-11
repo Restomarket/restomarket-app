@@ -272,6 +272,83 @@ function getInvitationTemplate(
   return { html, text };
 }
 
+/**
+ * Generate OTP verification email template
+ */
+function getOtpEmailTemplate(
+  otp: string,
+  type: 'sign-in' | 'email-verification' | 'forget-password',
+): { html: string; text: string } {
+  const typeLabels = {
+    'sign-in': {
+      title: 'Sign in to your account',
+      description: 'Use this code to sign in to your account:',
+    },
+    'email-verification': {
+      title: 'Verify your email',
+      description: 'Use this code to verify your email address:',
+    },
+    'forget-password': {
+      title: 'Reset your password',
+      description: 'Use this code to reset your password:',
+    },
+  } as const;
+
+  const { title, description } = typeLabels[type];
+
+  const html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>${title}</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f5f5f5;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f5f5f5; padding: 40px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05);">
+          <tr>
+            <td style="padding: 40px 40px 20px; text-align: center;">
+              <h1 style="margin: 0; color: #1a1a1a; font-size: 24px; font-weight: 600;">${APP_NAME}</h1>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 20px 40px 40px;">
+              <p style="margin: 0 0 20px; color: #4a5568; font-size: 16px; line-height: 24px;">${description}</p>
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 30px 0;">
+                <tr>
+                  <td align="center">
+                    <div style="display: inline-block; padding: 16px 40px; background-color: #f7fafc; border: 2px solid #e2e8f0; border-radius: 8px; font-size: 32px; font-weight: 700; letter-spacing: 8px; color: #1a1a1a;">${otp}</div>
+                  </td>
+                </tr>
+              </table>
+              <p style="margin: 30px 0 0; color: #a0aec0; font-size: 14px; line-height: 20px;">
+                This code will expire in 5 minutes. If you didn't request this code, you can safely ignore this email.
+              </p>
+            </td>
+          </tr>
+          <tr>
+            <td style="padding: 20px 40px; background-color: #f7fafc; border-radius: 0 0 8px 8px; border-top: 1px solid #e2e8f0;">
+              <p style="margin: 0; color: #a0aec0; font-size: 12px; text-align: center;">
+                &copy; ${new Date().getFullYear()} ${APP_NAME}. All rights reserved.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+  `.trim();
+
+  const text = `Your ${APP_NAME} verification code is: ${otp}\n\n${description}\n\nThis code will expire in 5 minutes.\n\nIf you didn't request this code, you can safely ignore this email.\n\n© ${new Date().getFullYear()} ${APP_NAME}`;
+
+  return { html, text };
+}
+
 // ============================================
 // Export Email Handlers for Better Auth
 // ============================================
@@ -313,6 +390,35 @@ export async function sendPasswordResetEmail({
   await sendEmail({
     to: user.email,
     subject: `Reset your ${APP_NAME} password`,
+    html,
+    text,
+  });
+}
+
+/**
+ * Send OTP verification email
+ * Used by Better Auth emailOTP plugin
+ */
+export async function sendVerificationOTP({
+  email,
+  otp,
+  type,
+}: {
+  email: string;
+  otp: string;
+  type: 'sign-in' | 'email-verification' | 'forget-password';
+}): Promise<void> {
+  const subjectMap: Record<string, string> = {
+    'sign-in': `Your ${APP_NAME} sign-in code`,
+    'email-verification': `Verify your ${APP_NAME} email`,
+    'forget-password': `Reset your ${APP_NAME} password`,
+  };
+
+  const { html, text } = getOtpEmailTemplate(otp, type);
+
+  await sendEmail({
+    to: email,
+    subject: subjectMap[type] || `Your ${APP_NAME} verification code`,
     html,
     text,
   });

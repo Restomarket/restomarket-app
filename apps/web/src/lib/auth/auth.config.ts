@@ -1,16 +1,17 @@
 import { betterAuth } from 'better-auth';
 import { drizzleAdapter } from 'better-auth/adapters/drizzle';
 import { nextCookies } from 'better-auth/next-js';
+import { emailOTP } from 'better-auth/plugins/email-otp';
 import { getDatabase } from '../database/connection';
-import * as schema from '@repo/shared';
+import * as schema from '@repo/shared/database/schema';
 import { createBetterAuthBaseConfig } from '@repo/shared/auth';
-import { sendVerificationEmail, sendPasswordResetEmail } from '../email/index';
+import { sendVerificationEmail, sendPasswordResetEmail, sendVerificationOTP } from '../email/index';
 
 /**
  * Next.js Better Auth Configuration
  *
  * Uses shared configuration from @repo/shared with Next.js-specific features:
- * - Email/password + OAuth (Google, GitHub)
+ * - Email/password + OAuth (Google)
  * - Email verification with Resend
  * - Organization lifecycle hooks
  * - Next.js cookie helpers
@@ -61,20 +62,19 @@ export const auth = betterAuth({
   database: drizzleAdapter(getDatabaseSafe()!, {
     provider: 'pg',
     schema: {
-      // Core auth tables
+      // Map Better Auth model names to Drizzle table objects
+      // (only tables - relations are handled by the Drizzle client instance)
       user: schema.authUsers,
       session: schema.authSessions,
       account: schema.authAccounts,
       verification: schema.authVerifications,
-      // Organization tables
+      rateLimit: schema.authRateLimits,
       organization: schema.organizations,
       member: schema.members,
       invitation: schema.invitations,
       team: schema.teams,
       teamMember: schema.teamMembers,
       organizationRole: schema.organizationRoles,
-      // Include all schema for relations
-      ...schema,
     },
   }),
 
@@ -102,8 +102,8 @@ export const auth = betterAuth({
         newEmail: string;
         url: string;
       }) => {
-        // Send email change verification to the new email address
-        await sendVerificationEmail({
+        // Fire-and-forget to prevent timing attacks (Better Auth best practice)
+        void sendVerificationEmail({
           user: { email: newEmail, name: user.name },
           url,
         });
@@ -116,8 +116,11 @@ export const auth = betterAuth({
   // ============================================
   emailAndPassword: {
     enabled: true,
-    requireEmailVerification: process.env.NODE_ENV === 'production',
-    sendResetPassword: sendPasswordResetEmail,
+    requireEmailVerification: false, // Temporarily disabled until Resend is configured
+    // Fire-and-forget to prevent timing attacks (Better Auth best practice)
+    sendResetPassword: async data => {
+      void sendPasswordResetEmail(data);
+    },
     // Password requirements
     minPasswordLength: 8,
     maxPasswordLength: 128,
@@ -129,7 +132,10 @@ export const auth = betterAuth({
   emailVerification: {
     sendOnSignUp: true,
     autoSignInAfterVerification: true,
-    sendVerificationEmail: sendVerificationEmail,
+    // Fire-and-forget to prevent timing attacks (Better Auth best practice)
+    sendVerificationEmail: async data => {
+      void sendVerificationEmail(data);
+    },
     expiresIn: 60 * 60 * 24, // 24 hours
   },
 
@@ -137,7 +143,7 @@ export const auth = betterAuth({
   // Next.js-Specific: Social OAuth Providers
   // ============================================
   socialProviders: {
-    // Google OAuth
+    // Google OAuth - conditionally enabled based on env vars
     ...(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET
       ? {
           google: {
@@ -150,20 +156,6 @@ export const auth = betterAuth({
           },
         }
       : {}),
-
-    // GitHub OAuth
-    ...(process.env.GITHUB_CLIENT_ID && process.env.GITHUB_CLIENT_SECRET
-      ? {
-          github: {
-            clientId: process.env.GITHUB_CLIENT_ID,
-            clientSecret: process.env.GITHUB_CLIENT_SECRET,
-            mapProfileToUser: profile => ({
-              firstName: profile.name?.split(' ')[0] || '',
-              lastName: profile.name?.split(' ').slice(1).join(' ') || '',
-            }),
-          },
-        }
-      : {}),
   },
 
   // ============================================
@@ -172,6 +164,16 @@ export const auth = betterAuth({
   plugins: [
     // Include all base plugins
     ...(baseConfig.plugins || []),
+
+    // Email OTP for sign-in, email verification, and password reset via OTP
+    emailOTP({
+      // Fire-and-forget to prevent timing attacks (Better Auth best practice)
+      async sendVerificationOTP(data) {
+        void sendVerificationOTP(data);
+      },
+      otpLength: 6,
+      expiresIn: 300, // 5 minutes
+    }),
 
     // Next.js Cookie Helper - MUST be last plugin
     // Automatically sets cookies in server actions

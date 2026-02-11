@@ -1,6 +1,7 @@
 import type { BetterAuthOptions } from 'better-auth';
-import { bearer, admin } from 'better-auth/plugins';
-import { organization as organizationPlugin } from 'better-auth/plugins';
+import { bearer } from 'better-auth/plugins/bearer';
+import { admin } from 'better-auth/plugins/admin';
+import { organization as organizationPlugin } from 'better-auth/plugins/organization';
 import { createAccessControl } from 'better-auth/plugins/access';
 import { statements, rolePermissions } from './permissions.js';
 
@@ -60,12 +61,12 @@ export function createBetterAuthBaseConfig(): Partial<BetterAuthOptions> {
         firstName: {
           type: 'string',
           required: false,
-          input: false, // Don't require in signup form
+          input: true,
         },
         lastName: {
           type: 'string',
           required: false,
-          input: false,
+          input: true,
         },
         // Business logic fields (merged from old users table)
         isActive: {
@@ -96,7 +97,7 @@ export function createBetterAuthBaseConfig(): Partial<BetterAuthOptions> {
     account: {
       accountLinking: {
         enabled: true,
-        trustedProviders: ['google', 'github'],
+        trustedProviders: ['google'],
       },
     },
 
@@ -109,7 +110,7 @@ export function createBetterAuthBaseConfig(): Partial<BetterAuthOptions> {
 
       // Admin plugin for user management
       admin({
-        defaultRole: 'admin',
+        defaultRole: 'member',
       }),
 
       // Organization management (multi-tenancy)
@@ -175,9 +176,10 @@ export function createBetterAuthBaseConfig(): Partial<BetterAuthOptions> {
     // ============================================
     // Experimental Features
     // ============================================
-    experimental: {
-      joins: true, // Enable Drizzle joins for better performance
-    },
+    // Note: experimental.joins is intentionally disabled.
+    // It requires each table to appear exactly once in the Drizzle schema,
+    // which conflicts with alias exports needed for backward compatibility.
+    // Standard queries perform well for auth operations.
 
     // ============================================
     // Database Hooks (data consistency)
