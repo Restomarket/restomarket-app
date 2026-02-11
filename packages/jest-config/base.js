@@ -2,14 +2,10 @@
 
 const config = {
   roots: ['<rootDir>'],
-  collectCoverageFrom: [
-    'src/**/*.{ts,tsx}',
-    'app/**/*.{ts,tsx}',
-    '!**/*.d.ts',
-    '!**/node_modules/**',
-    '!**/vendor/**',
-  ],
-  coverageDirectory: 'coverage',
+
+  // ============================================
+  // File Extensions & Transforms
+  // ============================================
   moduleFileExtensions: ['ts', 'tsx', 'js', 'jsx', 'json', 'node'],
   transform: {
     '^.+\\.tsx?$': [
@@ -19,21 +15,41 @@ const config = {
       },
     ],
   },
+
+  // ============================================
+  // Test Discovery
+  // ============================================
+  testPathIgnorePatterns: ['<rootDir>/node_modules/', '<rootDir>/dist/'],
+
+  // ============================================
+  // Coverage
+  // ============================================
+  collectCoverageFrom: [
+    'src/**/*.{ts,tsx}',
+    'app/**/*.{ts,tsx}',
+    '!**/*.d.ts',
+    '!**/node_modules/**',
+    '!**/dist/**',
+    '!**/index.ts',
+    '!**/__mocks__/**',
+  ],
+  coverageDirectory: 'coverage',
+  coverageReporters: ['text-summary', 'lcov', 'clover'],
+
+  // ============================================
+  // Module Resolution (Monorepo)
+  // ============================================
   moduleNameMapper: {
     '^@/(.*)$': ['<rootDir>/src/$1', '<rootDir>/app/$1'],
+    '^@repo/shared$': '<rootDir>/../../packages/shared/dist/index.js',
+    '^@repo/shared/(.*)$': '<rootDir>/../../packages/shared/dist/$1',
   },
+
+  // ============================================
+  // Behavior
+  // ============================================
   passWithNoTests: true,
   resetMocks: true,
-  // Coverage thresholds disabled by default - enable per package as needed
-  // coverageThreshold: {
-  //   global: {
-  //     branches: 80,
-  //     functions: 80,
-  //     lines: 80,
-  //     statements: 80,
-  //   },
-  // },
-  watchPlugins: ['jest-watch-typeahead/filename', 'jest-watch-typeahead/testname'],
 };
 
 export default config;

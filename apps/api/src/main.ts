@@ -14,9 +14,11 @@ import { ValidationException } from './common/exceptions';
 async function bootstrap(): Promise<void> {
   try {
     // Create NestJS application
+    // Note: bodyParser disabled for Better Auth to handle raw request body
     const app = await NestFactory.create(AppModule, {
       bufferLogs: true,
       cors: false, // Configure CORS manually below
+      bodyParser: false, // Required for Better Auth
     });
 
     // Get services

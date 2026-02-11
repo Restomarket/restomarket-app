@@ -1,7 +1,7 @@
 import { ApiProperty } from '@nestjs/swagger';
 import { Transform } from 'class-transformer';
 import { IsEmail, IsNotEmpty, IsString, MinLength, MaxLength } from 'class-validator';
-import { type NewUser } from '@database/schema';
+import { type NewUser } from '@repo/shared';
 
 /**
  * DTO for creating a new user

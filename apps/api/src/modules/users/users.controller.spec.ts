@@ -3,7 +3,7 @@ import { UsersController } from './users.controller';
 import { UsersService } from './users.service';
 import { type CreateUserDto } from './dto/create-user.dto';
 import { type UpdateUserDto } from './dto/update-user.dto';
-import { type User } from '../../database/schema';
+import { type User } from '@repo/shared';
 
 describe('UsersController', () => {
   let controller: UsersController;
@@ -11,7 +11,10 @@ describe('UsersController', () => {
 
   const mockUser: User = {
     id: '123e4567-e89b-12d3-a456-426614174000',
+    name: 'John Doe',
     email: 'test@example.com',
+    emailVerified: false,
+    image: null,
     firstName: 'John',
     lastName: 'Doe',
     isActive: true,

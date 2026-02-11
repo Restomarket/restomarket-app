@@ -6,10 +6,12 @@ import {
   type ModuleMetadata,
 } from '@nestjs/common';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import { sql } from 'drizzle-orm';
 import postgres, { type Sql } from 'postgres';
-import * as schema from '../../src/database/schema';
+import * as schema from '@repo/shared';
 import { DatabaseCleaner } from './database-cleaner';
 import { UserFactory } from '../factories';
+import { DATABASE_CONNECTION, POSTGRES_CLIENT } from '../../src/database/database.module';
 
 /**
  * E2E Test Setup Builder - Provides a fluent API for configuring E2E tests
@@ -43,7 +45,9 @@ export class E2ETestSetup {
   private moduleMetadata: ModuleMetadata = {};
   private app?: INestApplication;
   private connection?: Sql;
+  private cleanupConnection?: Sql; // Separate connection for cleanup
   private db?: PostgresJsDatabase<typeof schema>;
+  private cleanupDb?: PostgresJsDatabase<typeof schema>;
   private cleaner?: DatabaseCleaner;
   private factories = new Map<string, any>();
   private providerOverrides: { token: any; value: any }[] = [];
@@ -121,6 +125,24 @@ export class E2ETestSetup {
 
     // Create test module
     const moduleBuilder = await this.createTestModule();
+
+    // CRITICAL: Override database providers to use test connection
+    // This ensures the app and tests share the same database connection
+    // Create a proxy for the connection that prevents the DatabaseModule from closing it
+    const connectionProxy = new Proxy(this.connection!, {
+      get: (target, prop) => {
+        // Prevent DatabaseModule.onModuleDestroy from closing our test connection
+        if (prop === 'end') {
+          return async () => {
+            // No-op - we'll close it ourselves in teardown()
+          };
+        }
+        return target[prop as keyof typeof target];
+      },
+    });
+
+    moduleBuilder.overrideProvider(POSTGRES_CLIENT).useValue(connectionProxy);
+    moduleBuilder.overrideProvider(DATABASE_CONNECTION).useValue(this.db);
 
     // Apply provider overrides
     for (const override of this.providerOverrides) {
@@ -203,9 +225,38 @@ export class E2ETestSetup {
     }
 
     try {
-      await this.cleaner.cleanAll();
-      // Reset factory sequences for predictable test data
+      // Reset factory sequences BEFORE cleanup to ensure fresh start
       UserFactory.resetSequence();
+
+      // Perform cleanup with retry logic for CI environments
+      let attempts = 0;
+      const maxAttempts = 3;
+
+      while (attempts < maxAttempts) {
+        try {
+          await this.cleaner.cleanAll();
+          break;
+        } catch (error) {
+          attempts++;
+          if (attempts >= maxAttempts) {
+            console.error('Failed to cleanup database after', maxAttempts, 'attempts:', error);
+            throw error;
+          }
+          // Wait a bit before retrying (50ms)
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+      }
+
+      // Verify cleanup worked by checking table counts
+      if (process.env.CI === 'true' && this.cleanupDb) {
+        const result = await this.cleanupDb.execute(sql`SELECT COUNT(*) as count FROM "user"`);
+        const count = (result as any)[0]?.count;
+        if (count && parseInt(count) > 0) {
+          console.warn(`WARNING: Cleanup verification failed - found ${count} users after cleanup`);
+          // Force cleanup again
+          await this.cleaner.cleanAll();
+        }
+      }
     } catch (error) {
       console.error('Failed to cleanup database:', error);
       throw error;
@@ -217,11 +268,28 @@ export class E2ETestSetup {
    * Call this in afterAll
    */
   async teardown(): Promise<void> {
-    if (this.app) {
-      await this.app.close();
+    try {
+      if (this.app) {
+        await this.app.close();
+      }
+    } catch (error) {
+      console.error('Failed to close app:', error);
     }
-    if (this.connection) {
-      await this.connection.end();
+
+    try {
+      if (this.cleanupConnection) {
+        await this.cleanupConnection.end({ timeout: 5 });
+      }
+    } catch (error) {
+      console.error('Failed to close cleanup connection:', error);
+    }
+
+    try {
+      if (this.connection) {
+        await this.connection.end({ timeout: 5 });
+      }
+    } catch (error) {
+      console.error('Failed to close database connection:', error);
     }
   }
 
@@ -235,14 +303,28 @@ export class E2ETestSetup {
       throw new Error('DATABASE_URL is not defined in test environment');
     }
 
+    // Main connection for app and factories
     this.connection = postgres(databaseUrl, {
       max: 10,
       idle_timeout: 20,
       connect_timeout: 10,
+      // Match production config - disable prepared statements
+      // This ensures compatibility with pooled connections and test environments
+      prepare: false,
+    });
+
+    // Dedicated connection for cleanup (max 1 connection, no pooling)
+    // This ensures TRUNCATE can get exclusive locks without interference
+    this.cleanupConnection = postgres(databaseUrl, {
+      max: 1,
+      idle_timeout: 2,
+      connect_timeout: 10,
+      prepare: false,
     });
 
     this.db = drizzle(this.connection, { schema });
-    this.cleaner = new DatabaseCleaner(this.db);
+    this.cleanupDb = drizzle(this.cleanupConnection, { schema });
+    this.cleaner = new DatabaseCleaner(this.cleanupDb);
   }
 
   /**

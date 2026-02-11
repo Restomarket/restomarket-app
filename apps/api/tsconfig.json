@@ -10,7 +10,9 @@
       "@database/*": ["src/database/*"],
       "@modules/*": ["src/modules/*"],
       "@shared/*": ["src/shared/*"],
-      "@logger/*": ["src/logger/*"]
+      "@logger/*": ["src/logger/*"],
+      "@repo/shared/auth": ["../../packages/shared/src/auth/index.ts"],
+      "@repo/shared/*": ["../../packages/shared/src/*"]
     }
   },
   "include": ["src/**/*", "test/**/*", "*.config.ts", "*.config.mjs"],

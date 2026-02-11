@@ -1,13 +1,35 @@
 import { Global, Inject, Module, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { drizzle, PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres, { type Sql } from 'postgres';
-import * as schema from './schema';
+import {
+  users,
+  authUsers,
+  authSessions,
+  authAccounts,
+  authVerifications,
+  authUsersRelations,
+  authSessionsRelations,
+  authAccountsRelations,
+  organizations,
+  members,
+  invitations,
+  teams,
+  teamMembers,
+  organizationRoles,
+  organizationsRelations,
+  membersRelations,
+  invitationsRelations,
+  teamsRelations,
+  teamMembersRelations,
+  organizationRolesRelations,
+} from '@repo/shared';
+import type { DatabaseConnection as SharedDatabaseConnection } from '@repo/shared';
 
 export const DATABASE_CONNECTION = 'DATABASE_CONNECTION';
 export const POSTGRES_CLIENT = 'POSTGRES_CLIENT';
 
-export type DatabaseConnection = PostgresJsDatabase<typeof schema>;
+export type DatabaseConnection = SharedDatabaseConnection;
 
 @Global()
 @Module({
@@ -40,7 +62,30 @@ export type DatabaseConnection = PostgresJsDatabase<typeof schema>;
     {
       provide: DATABASE_CONNECTION,
       useFactory: (client: Sql): DatabaseConnection => {
-        return drizzle(client, { schema });
+        return drizzle(client, {
+          schema: {
+            users,
+            authUsers,
+            authSessions,
+            authAccounts,
+            authVerifications,
+            authUsersRelations,
+            authSessionsRelations,
+            authAccountsRelations,
+            organizations,
+            members,
+            invitations,
+            teams,
+            teamMembers,
+            organizationRoles,
+            organizationsRelations,
+            membersRelations,
+            invitationsRelations,
+            teamsRelations,
+            teamMembersRelations,
+            organizationRolesRelations,
+          },
+        });
       },
       inject: [POSTGRES_CLIENT],
     },

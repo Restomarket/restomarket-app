@@ -1,0 +1,34 @@
+{
+  "version": "7",
+  "dialect": "postgresql",
+  "entries": [
+    {
+      "idx": 0,
+      "version": "7",
+      "when": 1762294735939,
+      "tag": "0000_colossal_squirrel_girl",
+      "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "7",
+      "when": 1770204572183,
+      "tag": "0001_mixed_dormammu",
+      "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1770384946125,
+      "tag": "0002_merge_users_into_authusers",
+      "breakpoints": true
+    },
+    {
+      "idx": 3,
+      "version": "7",
+      "when": 1770389142000,
+      "tag": "0003_add_missing_updated_at_columns",
+      "breakpoints": true
+    }
+  ]
+}
