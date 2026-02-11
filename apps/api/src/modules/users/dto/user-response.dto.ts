@@ -42,6 +42,15 @@ export class UserResponse implements User {
   })
   image!: string | null;
 
+  @ApiProperty({
+    example: 'member',
+    required: false,
+    nullable: true,
+    description: 'User role (member, admin, owner, manager, viewer)',
+    default: 'member',
+  })
+  role!: string | null;
+
   @ApiProperty({ example: 'John', description: 'User first name' })
   firstName!: string;
 
