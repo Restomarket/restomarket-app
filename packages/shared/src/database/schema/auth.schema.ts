@@ -34,6 +34,9 @@ export const authUsers = pgTable(
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
     updatedAt: timestamp('updated_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
 
+    // Role field (required for admin plugin and organization access control)
+    role: text('role').default('member'),
+
     // Custom fields for your application
     firstName: varchar('first_name', { length: 100 }),
     lastName: varchar('last_name', { length: 100 }),
@@ -47,6 +50,7 @@ export const authUsers = pgTable(
     index('auth_users_created_at_idx').on(table.createdAt),
     // Index for active users query (soft delete + active status)
     index('auth_users_active_idx').on(table.isActive, table.deletedAt),
+    index('auth_users_role_idx').on(table.role),
   ],
 );
 
@@ -138,7 +142,8 @@ export const authVerifications = pgTable(
 export const authRateLimits = pgTable(
   'rate_limit',
   {
-    key: text('key').primaryKey(),
+    id: text('id').primaryKey(),
+    key: text('key').notNull().unique(),
     count: integer('count').notNull().default(0),
     lastRequest: bigint('last_request', { mode: 'number' }).notNull(),
   },
