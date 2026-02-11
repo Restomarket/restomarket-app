@@ -6,10 +6,12 @@ import {
   type ModuleMetadata,
 } from '@nestjs/common';
 import { drizzle, type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
+import { sql } from 'drizzle-orm';
 import postgres, { type Sql } from 'postgres';
 import * as schema from '@repo/shared';
 import { DatabaseCleaner } from './database-cleaner';
 import { UserFactory } from '../factories';
+import { DATABASE_CONNECTION, POSTGRES_CLIENT } from '../../src/database/database.module';
 
 /**
  * E2E Test Setup Builder - Provides a fluent API for configuring E2E tests
@@ -137,8 +139,6 @@ export class E2ETestSetup {
       },
     });
 
-    const { DATABASE_CONNECTION, POSTGRES_CLIENT } =
-      await import('../../src/database/database.module');
     moduleBuilder.overrideProvider(POSTGRES_CLIENT).useValue(connectionProxy);
     moduleBuilder.overrideProvider(DATABASE_CONNECTION).useValue(this.db);
 
@@ -223,9 +223,38 @@ export class E2ETestSetup {
     }
 
     try {
-      await this.cleaner.cleanAll();
-      // Reset factory sequences for predictable test data
+      // Reset factory sequences BEFORE cleanup to ensure fresh start
       UserFactory.resetSequence();
+
+      // Perform cleanup with retry logic for CI environments
+      let attempts = 0;
+      const maxAttempts = 3;
+
+      while (attempts < maxAttempts) {
+        try {
+          await this.cleaner.cleanAll();
+          break;
+        } catch (error) {
+          attempts++;
+          if (attempts >= maxAttempts) {
+            console.error('Failed to cleanup database after', maxAttempts, 'attempts:', error);
+            throw error;
+          }
+          // Wait a bit before retrying (50ms)
+          await new Promise(resolve => setTimeout(resolve, 50));
+        }
+      }
+
+      // Verify cleanup worked by checking table counts
+      if (process.env.CI === 'true' && this.db) {
+        const result = await this.db.execute(sql`SELECT COUNT(*) as count FROM "user"`);
+        const count = (result as any)[0]?.count;
+        if (count && parseInt(count) > 0) {
+          console.warn(`WARNING: Cleanup verification failed - found ${count} users after cleanup`);
+          // Force cleanup again
+          await this.cleaner.cleanAll();
+        }
+      }
     } catch (error) {
       console.error('Failed to cleanup database:', error);
       throw error;
