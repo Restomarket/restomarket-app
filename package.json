@@ -8,6 +8,11 @@
     "node": ">=20.19.0",
     "pnpm": ">=9.10.0"
   },
+  "pnpm": {
+    "overrides": {
+      "@isaacs/brace-expansion": ">=5.0.1"
+    }
+  },
   "scripts": {
     "dev": "turbo run dev",
     "build": "turbo run build",
@@ -25,6 +30,13 @@
     "docker:dev": "docker compose up",
     "docker:dev:build": "docker compose up --build",
     "docker:dev:detach": "docker compose up -d",
+    "db:generate": "pnpm --filter @repo/shared db:generate",
+    "db:migrate": "pnpm --filter @repo/shared db:migrate",
+    "db:push": "pnpm --filter @repo/shared db:push",
+    "db:studio": "pnpm --filter @repo/shared db:studio",
+    "auth:migrate": "pnpm --filter web auth:migrate",
+    "auth:generate": "pnpm --filter web auth:generate",
+    "auth:mcp": "pnpm --filter web auth:mcp",
     "prepare": "husky",
     "preinstall": "npx only-allow pnpm"
   },

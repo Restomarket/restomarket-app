@@ -1,5 +1,5 @@
 import { ApiProperty } from '@nestjs/swagger';
-import { type User } from '@database/schema';
+import { type User } from '@repo/shared';
 
 /**
  * User response class for Swagger documentation
@@ -17,10 +17,30 @@ export class UserResponse implements User {
   id!: string;
 
   @ApiProperty({
+    example: 'John Doe',
+    description: 'User display name',
+  })
+  name!: string;
+
+  @ApiProperty({
     example: 'john.doe@example.com',
     description: 'User email address (normalized to lowercase)',
   })
   email!: string;
+
+  @ApiProperty({
+    example: true,
+    description: 'Whether the email has been verified',
+  })
+  emailVerified!: boolean;
+
+  @ApiProperty({
+    example: null,
+    required: false,
+    nullable: true,
+    description: 'User avatar/profile image URL',
+  })
+  image!: string | null;
 
   @ApiProperty({ example: 'John', description: 'User first name' })
   firstName!: string;

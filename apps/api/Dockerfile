@@ -3,7 +3,7 @@
 # Uses turbo prune for minimal image size
 
 # Build arguments
-ARG NODE_VERSION=20.18.1
+ARG NODE_VERSION=24.13.0
 ARG PNPM_VERSION=9.10.0
 
 # ============================================
@@ -43,6 +43,19 @@ COPY apps/api/package.json ./apps/api/
 # Install all dependencies (including dev dependencies for build)
 RUN pnpm install --frozen-lockfile --prefer-offline
 
+# Copy source code and config files for development
+COPY tsconfig.json ./
+COPY turbo.json ./
+COPY packages/typescript-config/*.json ./packages/typescript-config/
+COPY packages/shared/src ./packages/shared/src
+COPY packages/shared/drizzle.schema.ts ./packages/shared/
+COPY packages/shared/drizzle.config.ts ./packages/shared/
+COPY packages/shared/drizzle ./packages/shared/drizzle
+COPY packages/shared/tsconfig.json ./packages/shared/
+COPY apps/api/src ./apps/api/src
+COPY apps/api/test ./apps/api/test
+COPY apps/api/tsconfig*.json apps/api/nest-cli.json apps/api/eslint.config.mjs ./apps/api/
+
 # ============================================
 # Stage 3: Builder - Compile TypeScript
 # ============================================
@@ -50,24 +63,25 @@ FROM dependencies AS builder
 
 # Copy workspace configuration and global config files
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml turbo.json ./
-COPY tsconfig.json eslint.config.mjs .prettierrc ./
+COPY tsconfig.json eslint.config.mjs ./
 
 # Copy source code for shared packages (without overwriting node_modules)
 COPY packages/shared/src ./packages/shared/src
+COPY packages/shared/drizzle.schema.ts ./packages/shared/
+COPY packages/shared/drizzle.config.ts ./packages/shared/
+COPY packages/shared/drizzle ./packages/shared/drizzle
 COPY packages/shared/tsconfig.json ./packages/shared/
 COPY packages/typescript-config/*.json ./packages/typescript-config/
 
 # Copy API source code and configuration
 COPY apps/api/src ./apps/api/src
-COPY apps/api/drizzle ./apps/api/drizzle
 COPY apps/api/tsconfig*.json apps/api/nest-cli.json apps/api/eslint.config.mjs ./apps/api/
-COPY apps/api/drizzle.config.ts ./apps/api/
 
 # Build the API using Turborepo
 RUN pnpm turbo build --filter=@apps/api
 
 # Verify build outputs exist
-RUN ls -la /app/apps/api/dist/src/ || (echo "ERROR: Build failed - no output" && exit 1)
+RUN ls -la /app/apps/api/dist/ || (echo "ERROR: Build failed - no output" && exit 1)
 
 # ============================================
 # Stage 4: Production Deploy - Use pnpm deploy for minimal production image
@@ -135,5 +149,6 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
 # Use dumb-init to handle signals properly
 ENTRYPOINT ["dumb-init", "--"]
 
-# Start the application (NestJS outputs to dist/src/)
-CMD ["node", "dist/src/main.js"]
+# Start the application
+# Path: /app/dist/apps/api/src/main.js (NestJS monorepo build structure)
+CMD ["node", "dist/apps/api/src/main.js"]

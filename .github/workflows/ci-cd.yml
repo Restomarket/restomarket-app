@@ -15,8 +15,30 @@ concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
 
+# ============================================================================
+# SLACK NOTIFICATION SETUP
+# ============================================================================
+# Required GitHub Secrets (Settings → Secrets → Actions):
+#
+# SLACK_WEBHOOK - Incoming Webhook URL for your Slack channel
+#   1. Go to https://api.slack.com/apps
+#   2. Select your app (RestoMarket CI/CD - App ID: A0ACMRT033L)
+#   3. Go to "Incoming Webhooks" → Activate and create a webhook
+#   4. Copy the Webhook URL and add it as a GitHub Secret
+#   Format: https://hooks.slack.com/services/T00000000/B00000000/XXXXXXXXXXXXXXXXXXXX
+#
+# Optional (for advanced webhook verification):
+# SLACK_SIGNING_SECRET - Used to verify webhook authenticity
+#   Value: 2374045998a8eb159a9ac834bc1deb94
+#
+# Note: Never commit actual credentials to the repository!
+# ============================================================================
+
 env:
   NODE_VERSION: '24.13.0'
+  # Turborepo Remote Caching (set these in GitHub: Settings → Secrets → Actions)
+  TURBO_TOKEN: ${{ secrets.TURBO_TOKEN }}
+  TURBO_TEAM: ${{ vars.TURBO_TEAM }}
 
 jobs:
   code-quality:
@@ -48,34 +70,25 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Cache Turbo build outputs
-        uses: actions/cache@v4
-        with:
-          path: |
-            .turbo
-            node_modules/.cache/turbo
-          key: ${{ runner.os }}-turbo-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-turbo-
-
-      - name: Run linter
-        run: pnpm turbo lint --filter=...[origin/${{ github.base_ref || 'main' }}]
+      # Run lint and type-check in parallel using Turborepo
+      # Remote caching will skip already-built packages
+      - name: Run linter and type check
+        run: pnpm turbo lint type-check --filter=...[origin/${{ github.base_ref || 'main' }}]
 
       - name: Check formatting
         run: pnpm format:check
-
-      - name: Run type check
-        run: pnpm turbo type-check
 
       - name: Dependency audit
         run: pnpm audit --audit-level=high
         continue-on-error: true # Don't fail on audit, but report
 
-      - name: Run gitleaks secret scan
-        uses: gitleaks/gitleaks-action@v2
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          GITLEAKS_LICENSE: ${{ secrets.GITLEAKS_LICENSE }} # Optional for premium features
+      - name: TruffleHog Secret Scan
+        uses: trufflesecurity/trufflehog@v3.88.7
+        with:
+          path: ./
+          base: ${{ github.event.repository.default_branch }}
+          head: HEAD
+          extra_args: --only-verified
 
       - name: Security scan with Trivy
         uses: aquasecurity/trivy-action@master
@@ -136,17 +149,15 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Cache Turbo build outputs
-        uses: actions/cache@v4
-        with:
-          path: |
-            .turbo
-            node_modules/.cache/turbo
-          key: ${{ runner.os }}-turbo-test-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-turbo-test-
-            ${{ runner.os }}-turbo-
+      - name: Setup test database schema
+        run: pnpm db:migrate
+        env:
+          NODE_ENV: test
+          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restomarket_test
+          DATABASE_DIRECT_URL: postgresql://postgres:postgres@localhost:5432/restomarket_test
+          DATABASE_SSL: false
 
+      # Remote caching handles build artifacts automatically
       - name: Run unit tests
         run: pnpm turbo test --filter=...[origin/${{ github.base_ref || 'main' }}]
         env:
@@ -167,16 +178,6 @@ jobs:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restomarket_test
           REDIS_HOST: localhost
           REDIS_PORT: 6379
-
-      - name: Setup test database schema
-        run: |
-          cd apps/api
-          pnpm db:migrate
-        env:
-          NODE_ENV: test
-          DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restomarket_test
-          DATABASE_DIRECT_URL: postgresql://postgres:postgres@localhost:5432/restomarket_test
-          DATABASE_SSL: false
 
       - name: Run E2E tests
         run: pnpm --filter api test:e2e
@@ -251,23 +252,23 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run migrations
-        run: |
-          cd apps/api
-          pnpm db:migrate
+        run: pnpm db:migrate
         env:
           DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restomarket_migration_test
           DATABASE_DIRECT_URL: postgresql://postgres:postgres@localhost:5432/restomarket_migration_test
 
+      - name: Build shared package
+        run: pnpm --filter @repo/shared build
+
       - name: Verify schema integrity
         run: |
-          cd apps/api
           # Generate schema from current code
           pnpm db:generate
 
-          # Check if generated migrations match committed migrations
-          if [ -n "$(git status --porcelain drizzle/migrations/)" ]; then
+          # Check if generated migrations match committed migrations (in shared package)
+          if [ -n "$(git status --porcelain packages/shared/drizzle/migrations/)" ]; then
             echo "❌ Schema drift detected! Generated migrations differ from committed."
-            git diff drizzle/migrations/
+            git diff packages/shared/drizzle/migrations/
             exit 1
           fi
           echo "✅ Schema is in sync with migrations"
@@ -296,19 +297,18 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Cache Turbo build outputs
-        uses: actions/cache@v4
-        with:
-          path: |
-            .turbo
-            node_modules/.cache/turbo
-          key: ${{ runner.os }}-turbo-build-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-turbo-build-
-            ${{ runner.os }}-turbo-
-
+      # Build with Turborepo remote caching
       - name: Build all packages
-        run: pnpm turbo build
+        run: pnpm turbo build --summarize
+
+      - name: Upload Turbo summary
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: turbo-summary-build
+          path: .turbo/runs/*.json
+          retention-days: 7
+          if-no-files-found: ignore
 
       - name: Upload build artifacts (API)
         uses: actions/upload-artifact@v4
@@ -440,7 +440,7 @@ jobs:
         run: pnpm install --frozen-lockfile
 
       - name: Run database migrations
-        run: pnpm --filter api db:migrate
+        run: pnpm db:migrate
         env:
           NODE_ENV: production
           # Use direct URL for migrations (bypasses pooler; single connection from runner)
@@ -500,6 +500,8 @@ jobs:
             # Application environment variables
             DATABASE_URL="${{ secrets.STAGING_DATABASE_URL }}"
             REDIS_URL="${{ secrets.STAGING_REDIS_URL }}"
+            BETTER_AUTH_SECRET="${{ secrets.STAGING_BETTER_AUTH_SECRET }}"
+            BETTER_AUTH_URL="http://157.245.21.33/v1"
             CORS_ORIGINS="http://157.245.21.33,http://165.227.129.93,http://161.35.21.86"
 
             echo "🚀 Starting blue-green deployment..."
@@ -550,6 +552,8 @@ jobs:
               -e DATABASE_URL="$DATABASE_URL" \
               -e DATABASE_SSL="true" \
               -e REDIS_URL="$REDIS_URL" \
+              -e BETTER_AUTH_SECRET="$BETTER_AUTH_SECRET" \
+              -e BETTER_AUTH_URL="$BETTER_AUTH_URL" \
               -e APP_PORT="3002" \
               -e CORS_ORIGINS="$CORS_ORIGINS" \
               -e LOG_LEVEL="info" \
@@ -677,138 +681,6 @@ jobs:
             echo "Current container status:"
             docker ps --filter "name=restomarket-api" --format "table {{.Names}}\t{{.Image}}\t{{.Status}}\t{{.Ports}}" || echo "No containers running"
 
-      - name: Notify Slack on success (${{ matrix.droplet_name }})
-        if: success()
-        uses: slackapi/slack-github-action@v1.25.0
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
-        with:
-          payload: |
-            {
-              "text": "✅ Staging Deployment Successful (${{ matrix.droplet_name }})",
-              "blocks": [
-                {
-                  "type": "header",
-                  "text": {
-                    "type": "plain_text",
-                    "text": "✅ Staging Deployment Successful (${{ matrix.droplet_name }})"
-                  }
-                },
-                {
-                  "type": "section",
-                  "fields": [
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Environment:*\nStaging"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Branch:*\n${{ github.ref_name }}"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Commit:*\n<${{ github.event.head_commit.url }}|${{ github.sha }}>"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Author:*\n${{ github.actor }}"
-                    }
-                  ]
-                },
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "*Message:* ${{ github.event.head_commit.message }}"
-                  }
-                },
-                {
-                  "type": "actions",
-                  "elements": [
-                    {
-                      "type": "button",
-                      "text": {
-                        "type": "plain_text",
-                        "text": "View Deployment"
-                      },
-                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                    },
-                    {
-                      "type": "button",
-                      "text": {
-                        "type": "plain_text",
-                        "text": "View API"
-                      },
-                      "url": "http://157.245.21.33:3002"
-                    }
-                  ]
-                }
-              ]
-            }
-
-      - name: Notify Slack on failure (${{ matrix.droplet_name }})
-        if: failure()
-        uses: slackapi/slack-github-action@v1.25.0
-        env:
-          SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
-          SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
-        with:
-          payload: |
-            {
-              "text": "❌ Staging Deployment Failed (${{ matrix.droplet_name }})",
-              "blocks": [
-                {
-                  "type": "header",
-                  "text": {
-                    "type": "plain_text",
-                    "text": "❌ Staging Deployment Failed (${{ matrix.droplet_name }})"
-                  }
-                },
-                {
-                  "type": "section",
-                  "fields": [
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Environment:*\nStaging (${{ matrix.droplet_name }})"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Branch:*\n${{ github.ref_name }}"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Commit:*\n<${{ github.event.head_commit.url }}|${{ github.sha }}>"
-                    },
-                    {
-                      "type": "mrkdwn",
-                      "text": "*Author:*\n${{ github.actor }}"
-                    }
-                  ]
-                },
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": "⚠️ *Rollback initiated* - Previous version restored"
-                  }
-                },
-                {
-                  "type": "actions",
-                  "elements": [
-                    {
-                      "type": "button",
-                      "text": {
-                        "type": "plain_text",
-                        "text": "View Logs"
-                      },
-                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
-                    }
-                  ]
-                }
-              ]
-            }
-
   # ============================================================================
   # Verify Load Balancer
   # ============================================================================
@@ -832,21 +704,38 @@ jobs:
 
           for i in $(seq 1 $MAX_RETRIES); do
             echo "Attempt $i/$MAX_RETRIES..."
-            
-            HTTP_CODE=$(curl -f -s -o /dev/null -w "%{http_code}" "$LOAD_BALANCER_URL" || echo "000")
-            
+
+            # Follow redirects, allow insecure SSL for internal load balancer
+            # -k: allow insecure connections (self-signed certs)
+            # -L: follow redirects
+            # -s: silent mode
+            RESPONSE=$(curl -k -L -s -w "\n%{http_code}" "$LOAD_BALANCER_URL" 2>&1)
+            HTTP_CODE=$(echo "$RESPONSE" | tail -n1)
+            BODY=$(echo "$RESPONSE" | sed '$d')
+
             if [ "$HTTP_CODE" = "200" ]; then
               echo "✅ Load balancer health check passed! (HTTP $HTTP_CODE)"
-              
-              # Get response to verify it's working
-              RESPONSE=$(curl -s "$LOAD_BALANCER_URL")
-              echo "Response: $RESPONSE"
-              exit 0
+              echo "Response: $BODY"
+
+              # Verify it's valid JSON with 'status' field
+              if echo "$BODY" | jq -e '.status' > /dev/null 2>&1; then
+                STATUS=$(echo "$BODY" | jq -r '.status')
+                echo "✅ Health Status: $STATUS"
+                echo "Response: $BODY"
+                exit 0
+              else
+                echo "⚠️  Response received but invalid format"
+                echo "Response: $BODY"
+              fi
             else
               echo "⚠️  HTTP $HTTP_CODE - Retrying..."
-              if [ $i -lt $MAX_RETRIES ]; then
-                sleep $RETRY_DELAY
+              if [ -n "$BODY" ]; then
+                echo "Response: $BODY"
               fi
+            fi
+
+            if [ $i -lt $MAX_RETRIES ]; then
+              sleep $RETRY_DELAY
             fi
           done
 
@@ -860,35 +749,178 @@ jobs:
           # Make multiple requests to see if both droplets respond
           echo "Making 10 requests to the load balancer..."
           for i in {1..10}; do
-            curl -s http://157.245.21.33/v1/health | jq -r '.uptime' || echo "Request $i failed"
+            # Follow redirects, allow insecure SSL
+            curl -k -L -s http://157.245.21.33/v1/health | jq -r '.uptime' || echo "Request $i failed"
             sleep 1
           done
 
           echo "✅ Load balancer is distributing traffic"
 
-      - name: Notify Slack - Load Balancer Verified
-        if: success()
+  # ============================================================================
+  # Pipeline Summary Notification
+  # ============================================================================
+  pipeline-summary:
+    name: Pipeline Execution Summary
+    runs-on: ubuntu-latest
+    needs:
+      [
+        code-quality,
+        test,
+        validate-migrations,
+        build,
+        docker-build,
+        migrate-staging,
+        deploy-staging,
+        verify-load-balancer,
+      ]
+    if: always() && github.event_name == 'push' && github.ref == 'refs/heads/develop'
+    timeout-minutes: 2
+
+    steps:
+      - name: Extract commit title
+        id: commit_info
+        env:
+          COMMIT_MSG: ${{ github.event.head_commit.message }}
+        run: |
+          # Get the first line of commit message (title) and sanitize it
+          COMMIT_TITLE=$(echo "$COMMIT_MSG" | head -n1 | cut -c1-100)
+          # Remove quotes and special chars that could break JSON
+          COMMIT_TITLE=$(echo "$COMMIT_TITLE" | tr -d '"' | tr -d "'" | tr -d '`')
+          echo "title=$COMMIT_TITLE" >> $GITHUB_OUTPUT
+
+      - name: Determine pipeline status
+        id: pipeline_status
+        run: |
+          # Determine overall status
+          if [ "${{ needs.code-quality.result }}" == "failure" ] || \
+             [ "${{ needs.test.result }}" == "failure" ] || \
+             [ "${{ needs.validate-migrations.result }}" == "failure" ] || \
+             [ "${{ needs.build.result }}" == "failure" ] || \
+             [ "${{ needs.docker-build.result }}" == "failure" ] || \
+             [ "${{ needs.migrate-staging.result }}" == "failure" ] || \
+             [ "${{ needs.deploy-staging.result }}" == "failure" ] || \
+             [ "${{ needs.verify-load-balancer.result }}" == "failure" ]; then
+            echo "status=failure" >> $GITHUB_OUTPUT
+            echo "emoji=❌" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.code-quality.result }}" == "cancelled" ] || \
+               [ "${{ needs.test.result }}" == "cancelled" ] || \
+               [ "${{ needs.validate-migrations.result }}" == "cancelled" ] || \
+               [ "${{ needs.build.result }}" == "cancelled" ] || \
+               [ "${{ needs.docker-build.result }}" == "cancelled" ] || \
+               [ "${{ needs.migrate-staging.result }}" == "cancelled" ] || \
+               [ "${{ needs.deploy-staging.result }}" == "cancelled" ] || \
+               [ "${{ needs.verify-load-balancer.result }}" == "cancelled" ]; then
+            echo "status=cancelled" >> $GITHUB_OUTPUT
+            echo "emoji=⚠️" >> $GITHUB_OUTPUT
+          else
+            echo "status=success" >> $GITHUB_OUTPUT
+            echo "emoji=✅" >> $GITHUB_OUTPUT
+          fi
+
+          # Determine individual job status indicators
+          # Code Quality
+          if [ "${{ needs.code-quality.result }}" == "success" ]; then
+            echo "code_quality_status=✅" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.code-quality.result }}" == "failure" ]; then
+            echo "code_quality_status=❌" >> $GITHUB_OUTPUT
+          else
+            echo "code_quality_status=⚠️" >> $GITHUB_OUTPUT
+          fi
+
+          # Tests
+          if [ "${{ needs.test.result }}" == "success" ]; then
+            echo "test_status=✅" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.test.result }}" == "failure" ]; then
+            echo "test_status=❌" >> $GITHUB_OUTPUT
+          else
+            echo "test_status=⚠️" >> $GITHUB_OUTPUT
+          fi
+
+          # Migrations Validation
+          if [ "${{ needs.validate-migrations.result }}" == "success" ]; then
+            echo "migrations_status=✅" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.validate-migrations.result }}" == "failure" ]; then
+            echo "migrations_status=❌" >> $GITHUB_OUTPUT
+          else
+            echo "migrations_status=⚠️" >> $GITHUB_OUTPUT
+          fi
+
+          # Build
+          if [ "${{ needs.build.result }}" == "success" ]; then
+            echo "build_status=✅" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.build.result }}" == "failure" ]; then
+            echo "build_status=❌" >> $GITHUB_OUTPUT
+          else
+            echo "build_status=⚠️" >> $GITHUB_OUTPUT
+          fi
+
+          # Docker Build
+          if [ "${{ needs.docker-build.result }}" == "success" ]; then
+            echo "docker_status=✅" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.docker-build.result }}" == "failure" ]; then
+            echo "docker_status=❌" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.docker-build.result }}" == "skipped" ]; then
+            echo "docker_status=⏭️" >> $GITHUB_OUTPUT
+          else
+            echo "docker_status=⚠️" >> $GITHUB_OUTPUT
+          fi
+
+          # Staging Migration
+          if [ "${{ needs.migrate-staging.result }}" == "success" ]; then
+            echo "migration_status=✅" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.migrate-staging.result }}" == "failure" ]; then
+            echo "migration_status=❌" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.migrate-staging.result }}" == "skipped" ]; then
+            echo "migration_status=⏭️" >> $GITHUB_OUTPUT
+          else
+            echo "migration_status=⚠️" >> $GITHUB_OUTPUT
+          fi
+
+          # Staging Deployment
+          if [ "${{ needs.deploy-staging.result }}" == "success" ]; then
+            echo "deploy_status=✅" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.deploy-staging.result }}" == "failure" ]; then
+            echo "deploy_status=❌" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.deploy-staging.result }}" == "skipped" ]; then
+            echo "deploy_status=⏭️" >> $GITHUB_OUTPUT
+          else
+            echo "deploy_status=⚠️" >> $GITHUB_OUTPUT
+          fi
+
+          # Load Balancer
+          if [ "${{ needs.verify-load-balancer.result }}" == "success" ]; then
+            echo "lb_status=✅" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.verify-load-balancer.result }}" == "failure" ]; then
+            echo "lb_status=❌" >> $GITHUB_OUTPUT
+          elif [ "${{ needs.verify-load-balancer.result }}" == "skipped" ]; then
+            echo "lb_status=⏭️" >> $GITHUB_OUTPUT
+          else
+            echo "lb_status=⚠️" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Send pipeline summary to Slack
         uses: slackapi/slack-github-action@v1.25.0
+        continue-on-error: true
         env:
           SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK }}
           SLACK_WEBHOOK_TYPE: INCOMING_WEBHOOK
         with:
           payload: |
             {
-              "text": "✅ Load Balancer Verification Complete",
+              "text": "${{ steps.pipeline_status.outputs.emoji }} ${{ steps.commit_info.outputs.title }}",
               "blocks": [
                 {
                   "type": "header",
                   "text": {
                     "type": "plain_text",
-                    "text": "✅ Load Balancer Verification Complete"
+                    "text": "${{ steps.pipeline_status.outputs.emoji }} CI/CD Pipeline: ${{ github.ref_name }}"
                   }
                 },
                 {
                   "type": "section",
                   "text": {
                     "type": "mrkdwn",
-                    "text": "Both staging droplets are healthy and serving traffic through the load balancer."
+                    "text": "*${{ steps.commit_info.outputs.title }}*"
                   }
                 },
                 {
@@ -896,11 +928,55 @@ jobs:
                   "fields": [
                     {
                       "type": "mrkdwn",
-                      "text": "*Load Balancer:*\nhttp://157.245.21.33"
+                      "text": "*Environment:*\nStaging"
                     },
                     {
                       "type": "mrkdwn",
-                      "text": "*Droplets:*\n• api-1 (165.227.129.93)\n• api-2 (161.35.21.86)"
+                      "text": "*Author:*\n${{ github.actor }}"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Commit:*\n<${{ github.event.head_commit.url }}|${{ github.sha }}>"
+                    },
+                    {
+                      "type": "mrkdwn",
+                      "text": "*Status:*\n${{ steps.pipeline_status.outputs.status }}"
+                    }
+                  ]
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": "*Pipeline Status:*\n• Code Quality: ${{ steps.pipeline_status.outputs.code_quality_status }}\n• Tests: ${{ steps.pipeline_status.outputs.test_status }}\n• Migrations Validation: ${{ steps.pipeline_status.outputs.migrations_status }}\n• Build: ${{ steps.pipeline_status.outputs.build_status }}\n• Docker Build: ${{ steps.pipeline_status.outputs.docker_status }}\n• Staging Migration: ${{ steps.pipeline_status.outputs.migration_status }}\n• Staging Deployment: ${{ steps.pipeline_status.outputs.deploy_status }}\n• Load Balancer: ${{ steps.pipeline_status.outputs.lb_status }}"
+                  }
+                },
+                {
+                  "type": "actions",
+                  "elements": [
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Pipeline"
+                      },
+                      "url": "${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View Commit"
+                      },
+                      "url": "${{ github.event.head_commit.url }}"
+                    },
+                    {
+                      "type": "button",
+                      "text": {
+                        "type": "plain_text",
+                        "text": "View API"
+                      },
+                      "url": "http://157.245.21.33/v1"
                     }
                   ]
                 }

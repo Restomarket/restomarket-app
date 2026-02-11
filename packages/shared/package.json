@@ -11,6 +11,16 @@
       "import": "./dist/index.js",
       "default": "./dist/index.js"
     },
+    "./database/schema": {
+      "types": "./dist/database/schema/index.d.ts",
+      "import": "./dist/database/schema/index.js",
+      "default": "./dist/database/schema/index.js"
+    },
+    "./auth": {
+      "types": "./dist/auth/index.d.ts",
+      "import": "./dist/auth/index.js",
+      "default": "./dist/auth/index.js"
+    },
     "./package.json": "./package.json"
   },
   "files": [
@@ -21,12 +31,23 @@
     "build": "tsc",
     "clean": "rm -rf dist",
     "lint": "eslint . --max-warnings 0",
-    "type-check": "tsc --noEmit"
+    "type-check": "tsc --noEmit",
+    "db:generate": "dotenv -e ../../.env -- drizzle-kit generate",
+    "db:migrate": "dotenv -e ../../.env -- drizzle-kit migrate",
+    "db:push": "dotenv -e ../../.env -- drizzle-kit push",
+    "db:studio": "dotenv -e ../../.env -- drizzle-kit studio"
+  },
+  "dependencies": {
+    "better-auth": "1.4.18",
+    "drizzle-orm": "^0.44.7",
+    "postgres": "^3.4.7"
   },
   "devDependencies": {
     "@repo/eslint-config": "workspace:*",
     "@repo/typescript-config": "workspace:*",
-    "typescript": "^5.9.3",
-    "eslint": "^9.39.2"
+    "dotenv-cli": "^11.0.0",
+    "drizzle-kit": "^0.31.6",
+    "eslint": "^9.39.2",
+    "typescript": "^5.9.3"
   }
 }

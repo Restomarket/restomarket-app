@@ -22,6 +22,7 @@ import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { ResponseInterceptor } from './common/interceptors/response.interceptor';
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TimeoutInterceptor } from './common/interceptors/timeout.interceptor';
+import { AuthModule } from './auth';
 
 @Module({
   imports: [
@@ -59,6 +60,7 @@ import { TimeoutInterceptor } from './common/interceptors/timeout.interceptor';
     // Core modules
     DatabaseModule,
     SharedModule,
+    AuthModule,
 
     // Feature modules
     HealthModule,

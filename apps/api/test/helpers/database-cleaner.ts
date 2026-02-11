@@ -1,6 +1,6 @@
 import { type PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import { sql } from 'drizzle-orm';
-import * as schema from '../../src/database/schema';
+import * as schema from '@repo/shared';
 
 /**
  * Database Cleaner - Handles cleanup of test database tables
@@ -16,7 +16,7 @@ export class DatabaseCleaner {
 
   /**
    * Clean all tables in the database
-   * Uses TRUNCATE for better performance (faster than DELETE)
+   * Uses TRUNCATE for better performance
    *
    * @param options.exclude - Table names to exclude from cleanup
    * @param options.cascade - Whether to cascade truncate to dependent tables
@@ -31,19 +31,21 @@ export class DatabaseCleaner {
   ): Promise<void> {
     const { exclude = [], cascade = true, restartIdentity = true } = options;
 
-    // Get all table names from schema
-    const tableNames = this.getTableNames().filter(name => !exclude.includes(name));
+    // Get all table names from the database (not from schema)
+    const existingTables = await this.getExistingTableNames();
+    const tableNames = existingTables.filter(name => !exclude.includes(name));
 
     if (tableNames.length === 0) {
       return;
     }
 
-    // Build TRUNCATE statement - order matters: CASCADE must come last
-    const restartClause = restartIdentity ? 'RESTART IDENTITY' : '';
-    const cascadeClause = cascade ? 'CASCADE' : '';
+    // Build TRUNCATE statement with proper spacing
+    const clauses = [restartIdentity && 'RESTART IDENTITY', cascade && 'CASCADE']
+      .filter(Boolean)
+      .join(' ');
 
     const sqlCommand =
-      `TRUNCATE TABLE ${tableNames.map(t => `"${t}"`).join(', ')} ${restartClause} ${cascadeClause}`.trim();
+      `TRUNCATE TABLE ${tableNames.map(t => `"${t}"`).join(', ')} ${clauses}`.trim();
 
     const truncateStatement = sql.raw(sqlCommand);
 
@@ -92,39 +94,18 @@ export class DatabaseCleaner {
   }
 
   /**
-   * Get all table names from the schema
+   * Get all table names from the database
    */
-  private getTableNames(): string[] {
-    const tables: string[] = [];
+  private async getExistingTableNames(): Promise<string[]> {
+    const result: any = await this.db.execute(sql`
+      SELECT tablename 
+      FROM pg_tables 
+      WHERE schemaname = 'public'
+      ORDER BY tablename
+    `);
 
-    for (const [key, value] of Object.entries(schema)) {
-      // Check if it's a Drizzle table
-      if (value && typeof value === 'object') {
-        // Try multiple ways to get the table name
-        const tableName =
-          (value as any)[Symbol.for('drizzle:Name')] ??
-          (value as any)._?.name ??
-          (value as any)[Symbol.for('drizzle:PgInlineForeignKeys')] ??
-          key;
-
-        // Drizzle tables have specific properties
-        if (
-          tableName &&
-          typeof tableName === 'string' &&
-          ((value as any)[Symbol.for('drizzle:Columns')] ||
-            (value as any)[Symbol.for('drizzle:Table')])
-        ) {
-          tables.push(tableName);
-        }
-      }
-    }
-
-    // Fallback to hardcoded table names if auto-detection fails
-    if (tables.length === 0) {
-      tables.push('users');
-    }
-
-    return tables;
+    // drizzle returns an array directly
+    return Array.isArray(result) ? result.map((row: any) => row.tablename) : [];
   }
 
   /**

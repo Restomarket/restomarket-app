@@ -93,6 +93,8 @@ docker-compose -f docker/docker-compose.yml up -d postgres
 
 ### 4. Run Database Migrations
 
+> **Note:** Database migrations are now managed in the `@repo/shared` package. Run these commands from the workspace root:
+
 ```bash
 # Generate migration files
 pnpm db:generate

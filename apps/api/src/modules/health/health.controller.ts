@@ -1,9 +1,11 @@
 import { Controller, Get, HttpStatus, Res } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { Response } from 'express';
+import { AllowAnonymous } from '../../auth/decorators';
 import { HealthService } from './health.service';
 
 @ApiTags('health')
+@AllowAnonymous()
 @Controller('health')
 export class HealthController {
   constructor(private readonly healthService: HealthService) {}
@@ -94,5 +96,31 @@ export class HealthController {
       healthStatus.status === 'healthy' ? HttpStatus.OK : HttpStatus.SERVICE_UNAVAILABLE;
 
     return res.status(statusCode).json(healthStatus);
+  }
+
+  @Get('ping')
+  @ApiOperation({
+    summary: 'Simple ping endpoint',
+    description:
+      'Returns a static pong response to verify API is responding. Used for CI/CD testing.',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Pong response',
+    schema: {
+      type: 'object',
+      properties: {
+        message: { type: 'string', example: 'pong' },
+        timestamp: { type: 'string', format: 'date-time' },
+        turboCacheEnabled: { type: 'boolean', example: true },
+      },
+    },
+  })
+  ping() {
+    return {
+      message: 'pong',
+      timestamp: new Date().toISOString(),
+      turboCacheEnabled: true,
+    };
   }
 }
