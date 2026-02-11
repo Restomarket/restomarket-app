@@ -23,8 +23,14 @@ export interface AuthContext {
     name: string;
     image?: string | null;
     emailVerified: boolean;
+    role?: string | null;
+    banned?: boolean | null;
+    banReason?: string | null;
+    banExpires?: number | null;
     firstName?: string | null;
     lastName?: string | null;
+    isActive?: boolean;
+    deletedAt?: Date | null;
     createdAt: Date;
     updatedAt: Date;
   };

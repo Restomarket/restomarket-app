@@ -1,6 +1,7 @@
 import type { BetterAuthOptions } from 'better-auth';
-import { bearer, admin } from 'better-auth/plugins';
-import { organization as organizationPlugin } from 'better-auth/plugins';
+import { bearer } from 'better-auth/plugins/bearer';
+import { admin } from 'better-auth/plugins/admin';
+import { organization as organizationPlugin } from 'better-auth/plugins/organization';
 import { createAccessControl } from 'better-auth/plugins/access';
 import { statements, rolePermissions } from './permissions.js';
 
@@ -109,7 +110,7 @@ export function createBetterAuthBaseConfig(): Partial<BetterAuthOptions> {
 
       // Admin plugin for user management
       admin({
-        defaultRole: 'admin',
+        defaultRole: 'member',
       }),
 
       // Organization management (multi-tenancy)
