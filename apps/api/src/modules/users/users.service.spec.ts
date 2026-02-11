@@ -19,6 +19,7 @@ describe('UsersService', () => {
     email: 'test@example.com',
     emailVerified: false,
     image: null,
+    role: 'member',
     firstName: 'John',
     lastName: 'Doe',
     isActive: true,

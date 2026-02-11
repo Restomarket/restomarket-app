@@ -44,6 +44,7 @@ export class UserFactory extends BaseFactory<typeof users, NewUser, User> {
       name: `${firstName} ${lastName}`,
       email: `user${sequence}@example.com`,
       emailVerified: false,
+      role: 'member',
       firstName,
       lastName,
       isActive: true,
