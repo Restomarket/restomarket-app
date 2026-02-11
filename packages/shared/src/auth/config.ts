@@ -60,12 +60,12 @@ export function createBetterAuthBaseConfig(): Partial<BetterAuthOptions> {
         firstName: {
           type: 'string',
           required: false,
-          input: false, // Don't require in signup form
+          input: true,
         },
         lastName: {
           type: 'string',
           required: false,
-          input: false,
+          input: true,
         },
         // Business logic fields (merged from old users table)
         isActive: {
@@ -96,7 +96,7 @@ export function createBetterAuthBaseConfig(): Partial<BetterAuthOptions> {
     account: {
       accountLinking: {
         enabled: true,
-        trustedProviders: ['google', 'github'],
+        trustedProviders: ['google'],
       },
     },
 
