@@ -2,7 +2,57 @@ import { Global, Inject, Module, type OnModuleDestroy } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { drizzle } from 'drizzle-orm/postgres-js';
 import postgres, { type Sql } from 'postgres';
-import * as schema from '@repo/shared/database/schema';
+import {
+  authUsers,
+  authSessions,
+  authAccounts,
+  authVerifications,
+  authRateLimits,
+  authUsersRelations,
+  authSessionsRelations,
+  authAccountsRelations,
+  authVerificationsRelations,
+  authRateLimitsRelations,
+  organizations,
+  members,
+  invitations,
+  teams,
+  teamMembers,
+  organizationRoles,
+  organizationsRelations,
+  membersRelations,
+  invitationsRelations,
+  teamsRelations,
+  teamMembersRelations,
+  organizationRolesRelations,
+} from '@repo/shared/database/schema';
+
+// Explicit schema object avoids CJS/ESM interop issues where `import *` adds
+// a `default` key with null prototype that crashes drizzle's extractTablesRelationalConfig
+const schema = {
+  authUsers,
+  authSessions,
+  authAccounts,
+  authVerifications,
+  authRateLimits,
+  authUsersRelations,
+  authSessionsRelations,
+  authAccountsRelations,
+  authVerificationsRelations,
+  authRateLimitsRelations,
+  organizations,
+  members,
+  invitations,
+  teams,
+  teamMembers,
+  organizationRoles,
+  organizationsRelations,
+  membersRelations,
+  invitationsRelations,
+  teamsRelations,
+  teamMembersRelations,
+  organizationRolesRelations,
+};
 import type { DatabaseConnection as SharedDatabaseConnection } from '@repo/shared';
 
 export const DATABASE_CONNECTION = 'DATABASE_CONNECTION';
