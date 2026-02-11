@@ -66,6 +66,7 @@ export const auth = betterAuth({
       session: schema.authSessions,
       account: schema.authAccounts,
       verification: schema.authVerifications,
+      rateLimit: schema.authRateLimits,
       // Organization tables
       organization: schema.organizations,
       member: schema.members,

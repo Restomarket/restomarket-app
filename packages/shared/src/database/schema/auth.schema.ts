@@ -1,4 +1,13 @@
-import { pgTable, text, varchar, boolean, timestamp, index } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  text,
+  varchar,
+  boolean,
+  timestamp,
+  integer,
+  bigint,
+  index,
+} from 'drizzle-orm/pg-core';
 import { relations } from 'drizzle-orm';
 
 /**
@@ -124,6 +133,22 @@ export const authVerifications = pgTable(
 );
 
 // ============================================
+// Rate Limit Table (Better Auth Core - Rate limiting)
+// ============================================
+export const authRateLimits = pgTable(
+  'rate_limit',
+  {
+    key: text('key').primaryKey(),
+    count: integer('count').notNull().default(0),
+    lastRequest: bigint('last_request', { mode: 'number' }).notNull(),
+  },
+  table => [
+    index('auth_rate_limits_key_idx').on(table.key),
+    index('auth_rate_limits_last_request_idx').on(table.lastRequest),
+  ],
+);
+
+// ============================================
 // Relations (Required for Drizzle Joins - Better Auth 1.4+)
 // ============================================
 export const authUsersRelations = relations(authUsers, ({ many }) => ({
@@ -156,3 +181,5 @@ export type AuthAccount = typeof authAccounts.$inferSelect;
 export type NewAuthAccount = typeof authAccounts.$inferInsert;
 export type AuthVerification = typeof authVerifications.$inferSelect;
 export type NewAuthVerification = typeof authVerifications.$inferInsert;
+export type AuthRateLimit = typeof authRateLimits.$inferSelect;
+export type NewAuthRateLimit = typeof authRateLimits.$inferInsert;

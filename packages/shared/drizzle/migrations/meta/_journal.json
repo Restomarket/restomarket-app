@@ -29,6 +29,13 @@
       "when": 1770389142000,
       "tag": "0003_add_missing_updated_at_columns",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1770832005892,
+      "tag": "0004_free_sumo",
+      "breakpoints": true
     }
   ]
 }
