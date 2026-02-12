@@ -1495,7 +1495,7 @@ pnpm turbo type-check
 | 10   | Sync Job Service                  | Outbound Sync | passing     |
 | 11   | Order Sync Processor + Callback   | Outbound Sync | passing     |
 | 11.5 | **Full Validation + Fix Issues**  | **Gate**      | passing     |
-| 12   | Dead Letter Queue Service         | Outbound Sync | not started |
+| 12   | Dead Letter Queue Service         | Outbound Sync | passing     |
 | 13   | Reconciliation Service            | Background    | not started |
 | 14   | Scheduler + Cleanup + Alerts      | Background    | not started |
 | 15   | Sync Metrics Service              | Background    | not started |

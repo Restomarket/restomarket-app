@@ -882,3 +882,76 @@ Service and tests:
 - ✅ No regression in existing functionality
 
 **Status:** Task 11.5 PASSING — validation gate passed, ready for Task 12
+
+## 2026-02-12 — Task 12: Dead Letter Queue Service (VERIFIED COMPLETE)
+
+**What was discovered:**
+
+Task 12 was already implemented and all components were in place. Performed comprehensive validation to confirm completion.
+
+**Existing implementation includes:**
+
+1. **DeadLetterQueueService** (`apps/api/src/modules/sync/services/dead-letter-queue.service.ts`):
+   - `add()` — Adds failed jobs to DLQ with full audit context
+   - `getUnresolved()` — Paginated list of unresolved entries (filterable by vendorId)
+   - `getDetails()` — Single entry retrieval with full payload
+   - `retry()` — Re-enqueues job to BullMQ with original payload and config
+   - `resolve()` — Marks entry as resolved with audit trail (resolvedBy, resolvedAt)
+   - `cleanup()` — Deletes old resolved entries (default 30 days)
+   - `getUnresolvedCount()` — Count for alerting (used by Task 14 scheduler)
+
+2. **SyncAdminController** populated with 4 DLQ endpoints:
+   - `GET /api/admin/dlq` — List unresolved entries (paginated, vendor-filterable)
+   - `GET /api/admin/dlq/:id` — Entry details with full payload
+   - `POST /api/admin/dlq/:id/retry` — Re-enqueue to BullMQ
+   - `POST /api/admin/dlq/:id/resolve` — Mark as manually resolved
+   - All protected with `@UseGuards(ApiKeyGuard)` + `@ApiSecurity('api-key')`
+   - Comprehensive Swagger decorators
+
+3. **OrderSyncProcessor** wired to DLQ:
+   - `@OnWorkerEvent('failed')` handler detects exhausted retries
+   - Calls `dlqService.add()` when `attemptsMade >= job.opts.attempts`
+   - Marks sync job as permanently failed
+   - Logs full audit context (vendorId, operation, correlationId)
+
+4. **SyncModule** registration:
+   - DeadLetterQueueService in providers and exports
+   - Injected into OrderSyncProcessor and SyncAdminController
+   - BullMQ queue 'order-sync' properly registered
+
+**Comprehensive unit tests** (21 test cases):
+
+- add(): success, repository failure, exception handling
+- getUnresolved(): without/with vendor filter, error handling
+- getDetails(): success, not found, exception handling
+- retry(): success, not found, BullMQ error
+- resolve(): success, not found, exception handling
+- cleanup(): success, default threshold, error handling
+- getUnresolvedCount(): success, vendor filtering, error handling
+
+**Files already implemented:**
+
+- `apps/api/src/modules/sync/services/dead-letter-queue.service.ts`
+- `apps/api/src/modules/sync/services/__tests__/dead-letter-queue.service.spec.ts`
+- `apps/api/src/modules/sync/controllers/sync-admin.controller.ts` (DLQ endpoints)
+- `apps/api/src/modules/sync/processors/order-sync.processor.ts` (DLQ integration)
+- `apps/api/src/modules/sync/sync.module.ts` (service registration)
+
+**Validation results:**
+
+- ✅ `pnpm turbo lint --filter=@apps/api -- --fix` — PASSED (0 errors, 0 warnings)
+- ✅ `pnpm turbo build --filter=@apps/api` — PASSED (cache hit, 122ms)
+- ✅ `pnpm turbo test --filter=@apps/api -- --testPathPattern=dead-letter` — PASSED (21/21 tests)
+- ✅ `pnpm turbo type-check` — PASSED (all 7 packages)
+
+**Key implementation details:**
+
+- DLQ entries store original payload for retry capability
+- Retry creates new BullMQ job with same config (5 attempts, exponential backoff)
+- Resolve operation requires `resolvedBy` identifier for audit trail
+- Cleanup uses 30-day default retention per data retention policy (REQ-8)
+- Unresolved count method supports scheduler alerts (Task 14)
+- All operations log comprehensive audit context
+- Error handling returns null/empty rather than throwing (consistent pattern)
+
+**Status:** Task 12 PASSING — ready for Task 13
