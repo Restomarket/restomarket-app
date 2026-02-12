@@ -100,6 +100,11 @@ import {
   ErpCodeMappingsRepository,
   DeadLetterQueueRepository,
   ReconciliationEventsRepository,
+  ItemsRepository,
+  WarehousesRepository,
+  StockRepository,
+  OrdersRepository,
+  OrderItemsRepository,
 } from './adapters';
 
 export { DATABASE_CONNECTION, POSTGRES_CLIENT };
@@ -149,6 +154,11 @@ export type DatabaseConnection = SharedDatabaseConnection;
     ErpCodeMappingsRepository,
     DeadLetterQueueRepository,
     ReconciliationEventsRepository,
+    ItemsRepository,
+    WarehousesRepository,
+    StockRepository,
+    OrdersRepository,
+    OrderItemsRepository,
   ],
   exports: [
     DATABASE_CONNECTION,
@@ -159,6 +169,11 @@ export type DatabaseConnection = SharedDatabaseConnection;
     ErpCodeMappingsRepository,
     DeadLetterQueueRepository,
     ReconciliationEventsRepository,
+    ItemsRepository,
+    WarehousesRepository,
+    StockRepository,
+    OrdersRepository,
+    OrderItemsRepository,
   ],
 })
 export class DatabaseModule implements OnModuleDestroy {

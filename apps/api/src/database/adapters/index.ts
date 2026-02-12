@@ -4,3 +4,8 @@ export * from './nestjs-agent-registry.repository';
 export * from './nestjs-erp-code-mappings.repository';
 export * from './nestjs-dead-letter-queue.repository';
 export * from './nestjs-reconciliation-events.repository';
+export * from './nestjs-items.repository';
+export * from './nestjs-warehouses.repository';
+export * from './nestjs-stock.repository';
+export * from './nestjs-orders.repository';
+export * from './nestjs-order-items.repository';

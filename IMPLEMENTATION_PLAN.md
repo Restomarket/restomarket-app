@@ -1370,7 +1370,7 @@ pnpm turbo type-check
 | 2.2  | Items Schema — Missing Fields      | Gap Closure   | P0       | passing         | 7 ERP fields added                  |
 | 2.3  | Warehouses Schema — Missing Fields | Gap Closure   | P1       | passing         | isDefault, isMain, type added       |
 | 2.4  | Stock Schema — Missing Fields      | Gap Closure   | P1       | passing         | 5 cost/inventory fields added       |
-| 2.5  | Business Entity Repositories       | Gap Closure   | P0       | **not started** | **BLOCKING** for Task 2.6, 2.7, 11  |
+| 2.5  | Business Entity Repositories       | Gap Closure   | P0       | passing         | 5 base repos + 5 adapters           |
 | 2.6  | Orders Module                      | Gap Closure   | P0       | **not started** | **BLOCKING** for Task 11            |
 | 2.7  | Refactor SyncIngest → Repositories | Gap Closure   | P1       | not started     | Tech debt cleanup                   |
 | 3    | Sync Repositories                  | Repositories  | P0       | passing         |                                     |
