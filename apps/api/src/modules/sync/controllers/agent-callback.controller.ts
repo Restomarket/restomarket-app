@@ -1,9 +1,19 @@
-import { Controller, Post, Body, UseGuards, HttpCode, HttpStatus } from '@nestjs/common';
+import {
+  Controller,
+  Post,
+  Body,
+  UseGuards,
+  HttpCode,
+  HttpStatus,
+  Inject,
+  forwardRef,
+} from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { PinoLogger } from 'nestjs-pino';
 import { AgentAuthGuard } from '../../../common/guards/agent-auth.guard';
 import { AgentCallbackDto } from '../dto/agent-callback.dto';
 import { SyncJobService } from '../services/sync-job.service';
+import { OrdersService } from '../../orders/orders.service';
 
 /**
  * AgentCallbackController
@@ -16,6 +26,7 @@ import { SyncJobService } from '../services/sync-job.service';
 export class AgentCallbackController {
   constructor(
     private readonly syncJobService: SyncJobService,
+    @Inject(forwardRef(() => OrdersService)) private readonly ordersService: OrdersService,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(AgentCallbackController.name);
@@ -71,11 +82,25 @@ export class AgentCallbackController {
 
     if (status === 'completed') {
       // Mark job as completed in sync_jobs table
-      await this.syncJobService.markCompleted(jobId, erpReference, metadata);
+      const job = await this.syncJobService.markCompleted(jobId, erpReference, metadata);
 
-      // TODO: Update order with ERP reference directly
-      // This requires OrdersRepository which will be created in a future task
-      // For now, we just update the sync job
+      // Update order with ERP reference if we have the order ID and a reference
+      if (job?.postgresOrderId && erpReference) {
+        const erpDocumentId =
+          metadata?.erpDocumentId !== undefined ? String(metadata.erpDocumentId) : undefined;
+        await this.ordersService.updateErpReference(
+          job.postgresOrderId,
+          erpReference,
+          erpDocumentId,
+        );
+        this.logger.info({
+          msg: 'Order ERP reference updated from callback',
+          jobId,
+          orderId: job.postgresOrderId,
+          erpReference,
+          erpDocumentId,
+        });
+      }
 
       this.logger.info({
         msg: 'Job marked as completed',

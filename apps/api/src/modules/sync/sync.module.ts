@@ -1,7 +1,8 @@
-import { Module } from '@nestjs/common';
+import { Module, forwardRef } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
 import { HttpModule } from '@nestjs/axios';
 import { DatabaseModule } from '@database/database.module';
+import { OrdersModule } from '../orders/orders.module';
 
 // Controllers
 import { AgentIngestController } from './controllers/agent-ingest.controller';
@@ -57,6 +58,7 @@ import { SyncSchedulerService } from './schedulers/sync-scheduler.service';
 @Module({
   imports: [
     DatabaseModule,
+    forwardRef(() => OrdersModule),
     HttpModule.register({
       timeout: 30_000, // 30s default timeout for agent communication
       maxRedirects: 0, // No redirects for agent calls

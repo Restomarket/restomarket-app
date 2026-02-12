@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Inject, forwardRef } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
 import { OrdersRepository } from '@database/adapters';
 import { OrderItemsRepository } from '@database/adapters';
@@ -11,7 +11,7 @@ export class OrdersService {
   constructor(
     private readonly ordersRepository: OrdersRepository,
     private readonly orderItemsRepository: OrderItemsRepository,
-    private readonly syncJobService: SyncJobService,
+    @Inject(forwardRef(() => SyncJobService)) private readonly syncJobService: SyncJobService,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(OrdersService.name);

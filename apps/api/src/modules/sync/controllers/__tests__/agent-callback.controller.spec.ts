@@ -3,18 +3,32 @@ import { PinoLogger } from 'nestjs-pino';
 import { ExecutionContext } from '@nestjs/common';
 import { AgentCallbackController } from '../agent-callback.controller';
 import { SyncJobService } from '../../services/sync-job.service';
+import { OrdersService } from '../../../orders/orders.service';
 import { AgentCallbackDto } from '../../dto/agent-callback.dto';
 import { AgentAuthGuard } from '../../../../common/guards/agent-auth.guard';
 
 describe('AgentCallbackController', () => {
   let controller: AgentCallbackController;
   let syncJobService: jest.Mocked<SyncJobService>;
+  let ordersService: jest.Mocked<OrdersService>;
   let logger: jest.Mocked<PinoLogger>;
+
+  const mockJob = {
+    id: 'job-123',
+    postgresOrderId: 'order-uuid',
+    vendorId: 'vendor-1',
+    operation: 'create_order',
+    status: 'completed',
+  };
 
   beforeEach(async () => {
     const mockSyncJobService = {
-      markCompleted: jest.fn().mockResolvedValue(undefined),
+      markCompleted: jest.fn().mockResolvedValue(mockJob),
       markFailed: jest.fn().mockResolvedValue(undefined),
+    };
+
+    const mockOrdersService = {
+      updateErpReference: jest.fn().mockResolvedValue(null),
     };
 
     const mockLogger = {
@@ -38,6 +52,10 @@ describe('AgentCallbackController', () => {
           useValue: mockSyncJobService,
         },
         {
+          provide: OrdersService,
+          useValue: mockOrdersService,
+        },
+        {
           provide: PinoLogger,
           useValue: mockLogger,
         },
@@ -49,6 +67,7 @@ describe('AgentCallbackController', () => {
 
     controller = module.get<AgentCallbackController>(AgentCallbackController);
     syncJobService = module.get(SyncJobService) as jest.Mocked<SyncJobService>;
+    ordersService = module.get(OrdersService) as jest.Mocked<OrdersService>;
     logger = module.get(PinoLogger) as jest.Mocked<PinoLogger>;
   });
 
@@ -70,6 +89,13 @@ describe('AgentCallbackController', () => {
       expect(syncJobService.markCompleted).toHaveBeenCalledWith('job-123', 'ERP-ORD-12345', {
         erpCustomerId: '67890',
       });
+
+      // Should update order ERP reference
+      expect(ordersService.updateErpReference).toHaveBeenCalledWith(
+        'order-uuid',
+        'ERP-ORD-12345',
+        undefined,
+      );
 
       expect(logger.info).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -103,6 +129,9 @@ describe('AgentCallbackController', () => {
       const result = await controller.handleCallback(dto);
 
       expect(syncJobService.markCompleted).toHaveBeenCalledWith('job-456', undefined, undefined);
+
+      // Should NOT update order ERP reference (no erpReference provided)
+      expect(ordersService.updateErpReference).not.toHaveBeenCalled();
 
       expect(result).toEqual({
         success: true,
