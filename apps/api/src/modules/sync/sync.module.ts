@@ -22,6 +22,7 @@ import { AgentCommunicationService } from './services/agent-communication.servic
 import { SyncIngestService } from './services/sync-ingest.service';
 import { SyncJobService } from './services/sync-job.service';
 import { DeadLetterQueueService } from './services/dead-letter-queue.service';
+import { ReconciliationService } from './services/reconciliation.service';
 
 // Processors
 import { OrderSyncProcessor } from './processors/order-sync.processor';
@@ -79,9 +80,10 @@ import { OrderSyncProcessor } from './processors/order-sync.processor';
     SyncIngestService,
     SyncJobService,
     DeadLetterQueueService,
+    ReconciliationService,
     // Processors
     OrderSyncProcessor,
-    // Additional services will be added in Tasks 13-15
+    // Additional services will be added in Tasks 14-15
     // Schedulers will be added in Task 14
   ],
   exports: [
@@ -93,6 +95,7 @@ import { OrderSyncProcessor } from './processors/order-sync.processor';
     SyncIngestService,
     SyncJobService,
     DeadLetterQueueService,
+    ReconciliationService,
   ],
 })
 export class SyncModule {}

@@ -20,6 +20,8 @@ import {
 } from '@nestjs/swagger';
 import { ApiKeyGuard } from '@common/guards';
 import { DeadLetterQueueService } from '../services/dead-letter-queue.service';
+import { ReconciliationService } from '../services/reconciliation.service';
+import { ReconciliationEventsRepository } from '../../../database/adapters';
 
 /**
  * SyncAdminController
@@ -50,7 +52,11 @@ import { DeadLetterQueueService } from '../services/dead-letter-queue.service';
 @UseGuards(ApiKeyGuard)
 @ApiSecurity('api-key')
 export class SyncAdminController {
-  constructor(private readonly dlqService: DeadLetterQueueService) {}
+  constructor(
+    private readonly dlqService: DeadLetterQueueService,
+    private readonly reconciliationService: ReconciliationService,
+    private readonly reconciliationRepo: ReconciliationEventsRepository,
+  ) {}
 
   /**
    * List unresolved DLQ entries (paginated)
@@ -286,5 +292,145 @@ export class SyncAdminController {
     };
   }
 
-  // Additional endpoints will be added in Tasks 13-15
+  /**
+   * Trigger manual reconciliation
+   *
+   * POST /api/admin/reconciliation/trigger
+   */
+  @Post('reconciliation/trigger')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({
+    summary: 'Trigger manual reconciliation',
+    description:
+      'Manually triggers drift detection and reconciliation for a specific vendor or all active vendors.',
+  })
+  @ApiQuery({
+    name: 'vendorId',
+    required: false,
+    type: String,
+    description: 'Vendor ID to reconcile (omit to reconcile all active vendors)',
+    example: 'vendor-123',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Reconciliation triggered successfully',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          vendorId: 'vendor-123',
+          hasDrift: true,
+          erpChecksum: 'abc123',
+          dbChecksum: 'def456',
+          itemCount: 1000,
+          driftedItems: ['SKU001', 'SKU002'],
+          durationMs: 5432,
+        },
+        message: 'Reconciliation completed',
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - invalid API key',
+  })
+  async triggerReconciliation(@Query('vendorId') vendorId?: string) {
+    if (vendorId) {
+      const result = await this.reconciliationService.triggerFullSync(vendorId);
+      return {
+        success: true,
+        data: result,
+        message: 'Reconciliation completed',
+      };
+    }
+
+    // Trigger for all active vendors
+    const results = await this.reconciliationService.triggerFullSyncAll();
+    return {
+      success: true,
+      data: results,
+      message: `Reconciliation completed for ${results.length} vendor(s)`,
+    };
+  }
+
+  /**
+   * Get reconciliation event log
+   *
+   * GET /api/admin/reconciliation/events
+   */
+  @Get('reconciliation/events')
+  @ApiOperation({
+    summary: 'Get reconciliation event log',
+    description: 'Retrieves paginated list of reconciliation events with drift detection results.',
+  })
+  @ApiQuery({
+    name: 'vendorId',
+    required: false,
+    type: String,
+    description: 'Filter by vendor ID',
+  })
+  @ApiQuery({
+    name: 'page',
+    required: false,
+    type: Number,
+    description: 'Page number (1-indexed)',
+    example: 1,
+  })
+  @ApiQuery({
+    name: 'limit',
+    required: false,
+    type: Number,
+    description: 'Results per page (max 100)',
+    example: 50,
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Paginated reconciliation event log',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          data: [
+            {
+              id: 'event-123',
+              vendorId: 'vendor-1',
+              eventType: 'drift_detected',
+              summary: {
+                erpChecksum: 'abc123',
+                dbChecksum: 'def456',
+                itemCount: 1000,
+                hasDrift: true,
+              },
+              timestamp: '2025-01-15T10:00:00Z',
+              durationMs: 5432,
+            },
+          ],
+          total: 1,
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - invalid API key',
+  })
+  async getReconciliationEvents(
+    @Query('vendorId') vendorId?: string,
+    @Query('page', new DefaultValuePipe(1), ParseIntPipe) page = 1,
+    @Query('limit', new DefaultValuePipe(50), ParseIntPipe) limit = 50,
+  ) {
+    // If no vendorId provided, return empty result (or implement findAll in future)
+    if (!vendorId) {
+      return {
+        success: true,
+        data: { data: [], total: 0 },
+        message: 'Vendor ID required for reconciliation events',
+      };
+    }
+
+    const result = await this.reconciliationRepo.findByVendor(vendorId, page, Math.min(limit, 100));
+    return result;
+  }
+
+  // Additional endpoints will be added in Tasks 14-15
 }

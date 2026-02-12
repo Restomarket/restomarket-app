@@ -955,3 +955,74 @@ Task 12 was already implemented and all components were in place. Performed comp
 - Error handling returns null/empty rather than throwing (consistent pattern)
 
 **Status:** Task 12 PASSING — ready for Task 13
+
+## 2026-02-12 — Task 13: Reconciliation Service (COMPLETED)
+
+**What was done:**
+
+- Created `ReconciliationService` for drift detection between ERP and PostgreSQL:
+  - `detectDrift(vendorId)` — Checksum comparison at vendor level with binary search on mismatch
+  - `binarySearchSync(vendorId, rangeStart, rangeEnd)` — Recursive narrowing algorithm (terminates at ≤10 items)
+  - `resolveConflict(vendorId, driftedSkus)` — ERP-wins upsert strategy with full item data
+  - `triggerFullSync(vendorId)` — Manual trigger for admin endpoint
+  - `triggerFullSyncAll()` — Trigger for all active vendors
+- Checksum algorithm:
+  - Concatenates `sku:contentHash` for all items ordered by SKU
+  - SHA-256 hash for comparison
+  - Range-based checksums for binary search efficiency
+- Binary search implementation:
+  - Queries SKU range from DB (MIN/MAX)
+  - Splits range at midpoint, checksums each half
+  - Recursively narrows mismatched ranges until ≤10 items
+  - Item-by-item comparison at terminal level
+- Conflict resolution with ERP-wins strategy:
+  - Calls agent `/sync/items` with drifted SKU list
+  - Upserts ERP data to items table with all required fields (unitCode, unitLabel, vatCode, vatRate)
+  - Logs reconciliation_events for audit trail
+  - Returns detailed result (found, resolved, duration)
+- Created reconciliation DTOs and interfaces:
+  - `TriggerReconciliationDto`, `ReconciliationEventsQueryDto`
+  - `AgentChecksumResponse`, `DriftDetectionResult`, `ReconciliationResult`, `SkuRange`
+- Populated `SyncAdminController` with 2 reconciliation endpoints:
+  - `POST /api/admin/reconciliation/trigger` — Manual drift detection (single vendor or all)
+  - `GET /api/admin/reconciliation/events` — Paginated event log (requires vendorId)
+- Registered `ReconciliationService` in SyncModule providers and exports
+- Created comprehensive unit tests (8 test cases):
+  - detectDrift: agent failure, error handling
+  - binarySearchSync: empty range
+  - resolveConflict: success, agent failure, partial failure
+  - triggerFullSync: single vendor
+  - triggerFullSyncAll: multi-vendor filtering
+
+**Files created:**
+
+- `apps/api/src/modules/sync/interfaces/reconciliation.interface.ts`
+- `apps/api/src/modules/sync/dto/reconciliation.dto.ts`
+- `apps/api/src/modules/sync/services/reconciliation.service.ts`
+- `apps/api/src/modules/sync/services/__tests__/reconciliation.service.spec.ts`
+
+**Files modified:**
+
+- `apps/api/src/modules/sync/dto/index.ts` — Added reconciliation DTO export
+- `apps/api/src/modules/sync/controllers/sync-admin.controller.ts` — Added 2 reconciliation endpoints
+- `apps/api/src/modules/sync/sync.module.ts` — Registered ReconciliationService
+
+**Key decisions:**
+
+- Checksum uses SHA-256 of ordered `sku:contentHash` pairs for consistency
+- Binary search terminates at ≤10 items (per spec REQ-9)
+- ERP always wins on conflict (source of truth for physical inventory)
+- Reconciliation events logged with detailed summary (checksums, SKUs, duration)
+- Admin endpoint requires vendorId for event listing (no global list yet)
+- Item upsert includes all required fields from items schema (unitCode, unitLabel, vatCode, vatRate, etc.)
+- Individual item failures logged but don't stop batch processing
+- Active vendors filtered by status: online OR degraded (not offline)
+
+**Validation results:**
+
+- ✅ `pnpm turbo lint --filter=@apps/api -- --fix` — PASSED (0 errors, 0 warnings)
+- ✅ `pnpm turbo build --filter=@apps/api` — PASSED (compiled in 4.05s)
+- ✅ `pnpm turbo test --filter=@apps/api -- --testPathPattern=reconciliation` — PASSED (8/8 tests)
+- ✅ `pnpm turbo type-check` — PASSED (all 7 packages)
+
+**Status:** Task 13 PASSING — ready for Task 14
