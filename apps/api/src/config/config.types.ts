@@ -47,6 +47,17 @@ export interface SwaggerConfig {
   version: string;
 }
 
+export interface RedisConfig {
+  url: string;
+}
+
+export interface SyncConfig {
+  agentSecret?: string;
+  apiSecret?: string;
+  slackWebhookUrl?: string;
+  bullmqConcurrency: number;
+}
+
 export interface Configuration {
   app: AppConfig;
   database: DatabaseConfig;
@@ -54,6 +65,8 @@ export interface Configuration {
   cors: CorsConfig;
   throttler: ThrottlerConfig;
   swagger: SwaggerConfig;
+  redis: RedisConfig;
+  sync: SyncConfig;
 }
 
 export type TypedConfigService = ConfigService<Configuration, true>;

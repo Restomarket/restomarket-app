@@ -70,3 +70,52 @@ All 6 Ralph Wiggum loop documents audited against actual codebase and corrected:
 - Added database migration commands
 
 **Status**: All documents now accurately reflect the codebase. Ready for Phase 1, Task 1.
+
+## 2026-02-12 — Task 1: Dependencies + Redis + Config (COMPLETED)
+
+**What was done:**
+
+- Installed NEW sync dependencies:
+  - Production: `@nestjs/bullmq`, `bullmq`, `ioredis`, `@nestjs/schedule`, `@nestjs/terminus`, `opossum`, `bcrypt`
+  - Development: `@types/opossum`, `@types/bcrypt`
+- Added sync-specific env vars to `apps/api/src/config/validation.schema.ts`:
+  - `REDIS_URL` (default: redis://localhost:6379)
+  - `AGENT_SECRET` (min 16 chars, optional in dev)
+  - `API_SECRET` (min 32 chars, optional in dev)
+  - `SLACK_WEBHOOK_URL` (optional)
+  - `BULLMQ_CONCURRENCY` (1-20, default 5)
+- Created `apps/api/src/config/redis.config.ts` (registerAs factory)
+- Created `apps/api/src/config/sync.config.ts` (registerAs factory)
+- Updated `apps/api/src/config/config.types.ts` with `RedisConfig` and `SyncConfig` interfaces
+- Updated `apps/api/src/app.module.ts`:
+  - Added `ScheduleModule.forRoot()` import
+  - Added `BullModule.forRootAsync()` with Redis URL from config
+  - Loaded `redisConfig` and `syncConfig` in ConfigModule
+- Updated `apps/api/.env.example` with comprehensive sync configuration section
+
+**Files created:**
+
+- `apps/api/src/config/redis.config.ts`
+- `apps/api/src/config/sync.config.ts`
+
+**Files modified:**
+
+- `apps/api/package.json`
+- `apps/api/src/config/validation.schema.ts`
+- `apps/api/src/config/config.types.ts`
+- `apps/api/src/app.module.ts`
+- `apps/api/.env.example`
+
+**Validation results:**
+
+- ✅ `pnpm turbo build --filter=@apps/api` — PASSED
+- ✅ `docker compose config` — VALID
+- ✅ `pnpm turbo lint --filter=@apps/api` — PASSED (6 warnings about turbo env vars, expected)
+
+**Key decisions:**
+
+- Did NOT re-add existing features (helmet, ThrottlerModule, ValidationPipe, Redis in docker-compose)
+- Followed existing config pattern (registerAs factories with typed interfaces)
+- Made AGENT_SECRET and API_SECRET optional in dev, required in prod (validation enforces min length when present)
+
+**Status:** Task 1 PASSING — ready for Task 2

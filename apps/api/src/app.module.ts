@@ -1,6 +1,8 @@
 import { Module, NestModule, MiddlewareConsumer } from '@nestjs/common';
 import { ConfigModule, ConfigService } from '@nestjs/config';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ScheduleModule } from '@nestjs/schedule';
+import { BullModule } from '@nestjs/bullmq';
 import { APP_GUARD, APP_FILTER, APP_INTERCEPTOR } from '@nestjs/core';
 import { LoggerModule } from 'nestjs-pino';
 import type { Configuration } from './config/config.types';
@@ -10,6 +12,8 @@ import loggerConfig from './config/logger.config';
 import corsConfig from './config/cors.config';
 import throttlerConfig from './config/throttler.config';
 import swaggerConfigFactory from './config/swagger-config.config';
+import redisConfig from './config/redis.config';
+import syncConfig from './config/sync.config';
 import { validateEnv } from './config/validation.schema';
 import { getPinoConfig } from './logger/pino.config';
 import { DatabaseModule } from './database/database.module';
@@ -37,6 +41,8 @@ import { AuthModule } from './auth';
         corsConfig,
         throttlerConfig,
         swaggerConfigFactory,
+        redisConfig,
+        syncConfig,
       ],
       validate: validateEnv,
       cache: true,
@@ -55,6 +61,19 @@ import { AuthModule } from './auth';
           limit: config.get('throttler.limit', { infer: true }),
         },
       ],
+    }),
+
+    // Scheduling - for cron jobs and intervals
+    ScheduleModule.forRoot(),
+
+    // BullMQ - for job queues
+    BullModule.forRootAsync({
+      inject: [ConfigService],
+      useFactory: (config: ConfigService<Configuration, true>) => ({
+        connection: {
+          url: config.get('redis.url', { infer: true }),
+        },
+      }),
     }),
 
     // Core modules

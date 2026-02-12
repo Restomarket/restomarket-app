@@ -28,7 +28,7 @@ Phase 8: Hardening        ─── Security, performance, CI/CD, deployment
 
 - **Priority:** P0
 - **Risk:** low
-- **Status:** not started
+- **Status:** passing
 - **Depends on:** nothing
 - **Estimated effort:** 45 min
 - **Spec reference:** REQ-1, REQ-13
@@ -1321,7 +1321,7 @@ pnpm turbo test:e2e --filter=@apps/api
 
 | #   | Task                              | Phase         | Status      |
 | --- | --------------------------------- | ------------- | ----------- |
-| 1   | Dependencies + Redis + Config     | Foundation    | not started |
+| 1   | Dependencies + Redis + Config     | Foundation    | passing     |
 | 2   | Database Schemas (Drizzle)        | Foundation    | not started |
 | 3   | Sync Repositories                 | Repositories  | not started |
 | 4   | SyncModule Skeleton + Guards      | Scaffold      | not started |

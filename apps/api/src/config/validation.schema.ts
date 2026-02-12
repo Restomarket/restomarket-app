@@ -46,6 +46,15 @@ export const envSchema = z.object({
   // Auth Configuration
   BETTER_AUTH_SECRET: z.string().optional(),
   BETTER_AUTH_URL: z.string().url().optional(),
+
+  // Redis Configuration
+  REDIS_URL: z.string().url().default('redis://localhost:6379'),
+
+  // ERP Sync Configuration
+  AGENT_SECRET: z.string().min(16).optional(), // optional during dev, required in prod
+  API_SECRET: z.string().min(32).optional(), // optional during dev, required in prod
+  SLACK_WEBHOOK_URL: z.string().url().optional(),
+  BULLMQ_CONCURRENCY: z.string().default('5').transform(Number).pipe(z.number().min(1).max(20)),
 });
 
 export type EnvironmentVariables = z.infer<typeof envSchema>;
