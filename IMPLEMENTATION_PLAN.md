@@ -1,2237 +1,1345 @@
-# Implementation Plan - DevOps Infrastructure
+# Implementation Plan — ERP Sync Architecture
 
-> **Mission:** Implement production-grade DevOps infrastructure with rollback capability, secrets management, CI/CD gatekeeping, and zero-downtime deployments for dev and staging environments.
+> **Spec:** `specs/sync-architecture.md`  
+> **Last Updated:** 2026-02-12  
+> **Total Tasks:** 22 across 8 phases  
+> **Estimated Effort:** ~28 hours
 
 ---
 
-## Task 1: Setup Infrastructure Directory Structure
+## Task Ordering Rationale
 
-**Category:** Setup
-**Package:** root
-**Status:** passing
-**Priority:** high
-**Risk Level:** low
-**Estimated Iterations:** 1
+```
+Phase 1: Foundation       ─── Infrastructure, deps, config, Redis, Docker
+Phase 2: Database         ─── Schemas, repositories (everything else depends on tables)
+Phase 3: Module Scaffold  ─── SyncModule skeleton, guards (everything else depends on DI)
+Phase 4: Core Services    ─── Agent registry, mappings, circuit breaker (ingest depends on these)
+Phase 5: Direct Ingest    ─── Direct ingest pipeline (Agent → NestJS → PG in one hop)
+Phase 6: Outbound Sync    ─── BullMQ order→ERP processor, DLQ
+Phase 7: Background       ─── Reconciliation, scheduler, cleanup, metrics
+Phase 8: Hardening        ─── Security, performance, CI/CD, deployment
+```
+
+---
+
+## Phase 1: Foundation (Tasks 1-2)
+
+### Task 1: Install Dependencies + Redis + Config Schema
+
+- **Priority:** P0
+- **Risk:** low
+- **Status:** not started
+- **Depends on:** nothing
+- **Estimated effort:** 45 min
+- **Spec reference:** REQ-1, REQ-13
 
 **Description:**
-Create the complete directory structure for infrastructure as code (Terraform, Ansible, Docker) following the specification.
+Install NEW packages only (BullMQ, schedule, opossum, bcrypt — helmet and throttler already installed). Add sync-specific env vars to Zod config. Add BullModule and ScheduleModule to AppModule. Update .env.example.
 
-**Acceptance Criteria:**
+**ALREADY EXISTS (DO NOT re-add):**
 
-- [x] `infrastructure/` directory created at repository root
-- [x] All subdirectories created as per spec
-- [x] `.gitkeep` files added to empty directories (13 files)
-- [x] README.md created in infrastructure/ with overview
-- [x] Directory structure documented
+- `helmet` in `apps/api/src/main.ts`
+- `@nestjs/throttler` + `ThrottlerGuard` in `apps/api/src/app.module.ts`
+- `app.enableShutdownHooks()` in `apps/api/src/main.ts`
+- `SWAGGER_ENABLED` gating in `apps/api/src/main.ts`
+- CORS restricted to config origins in `apps/api/src/main.ts`
+- `ValidationPipe` in `apps/api/src/main.ts` only
+- Redis in `docker-compose.yml` (already has redis:7-alpine with healthcheck)
 
-**Completion Notes:**
+**Implementation Details:**
 
-- Completed on 2026-01-29
-- Created complete directory structure with 20 subdirectories
-- Added .gitkeep files to all empty directories
-- Created comprehensive README.md with quick start guide, architecture overview, and troubleshooting
-- All validation commands passed successfully
+1. Install NEW packages only (in `apps/api/`):
+
+   ```bash
+   pnpm --filter @apps/api add @nestjs/bullmq bullmq ioredis @nestjs/schedule @nestjs/terminus opossum bcrypt
+   pnpm --filter @apps/api add -D @types/opossum @types/bcrypt
+   ```
+
+2. Update `apps/api/src/config/validation.schema.ts` — add to existing `envSchema`:
+
+   ```typescript
+   REDIS_URL: z.string().url().default('redis://localhost:6379'),
+   AGENT_SECRET: z.string().min(16).optional(),     // optional during dev, required in prod
+   API_SECRET: z.string().min(32).optional(),        // optional during dev, required in prod
+   SLACK_WEBHOOK_URL: z.string().url().optional(),
+   BULLMQ_CONCURRENCY: z.string().default('5').transform(Number).pipe(z.number().min(1).max(20)),
+   ```
+
+3. Add a `redis.config.ts` registerAs factory in `apps/api/src/config/` following existing pattern (see `database.config.ts`)
+
+4. Update `apps/api/src/app.module.ts`:
+   - Add `ScheduleModule.forRoot()` to imports
+   - Add `BullModule.forRootAsync(...)` using ConfigService for `REDIS_URL`
+   - Load the new `redisConfig` in ConfigModule.forRoot load array
+
+5. Update `apps/api/.env.example` with new env vars (REDIS_URL, AGENT_SECRET, API_SECRET, etc.)
+
+**Files to create:**
+
+- `apps/api/src/config/redis.config.ts`
+
+**Files to modify:**
+
+- `apps/api/package.json` (via pnpm --filter add)
+- `apps/api/src/config/validation.schema.ts`
+- `apps/api/src/app.module.ts`
+- `apps/api/.env.example`
 
 **Validation Commands:**
 
 ```bash
-# Verify directory structure
-tree infrastructure/
-ls -la infrastructure/terraform/environments/dev
-ls -la infrastructure/terraform/environments/staging
-ls -la infrastructure/ansible/playbooks
-ls -la infrastructure/docker
+pnpm install
+pnpm turbo build --filter=@apps/api
+docker compose config
 ```
 
 ---
 
-## Task 2: Create .env.example and Remove Secrets
+### Task 2: Create Sync Database Schemas (Drizzle)
 
-**Category:** Security
-**Package:** root
-**Status:** passing
-**Priority:** high
-**Risk Level:** high
-**Estimated Iterations:** 1
+- **Priority:** P0
+- **Risk:** medium (schema design is architectural)
+- **Status:** not started
+- **Depends on:** Task 1
+- **Estimated effort:** 1.5 hours
+- **Spec reference:** REQ-2
 
-**Description:**
-Remove any existing .env files from git history, create .env.example templates with dummy values, and update .gitignore to prevent future secret commits.
+**Description:**  
+Create 5 new Drizzle schema files, update exports and relations, generate migration.
 
-**Acceptance Criteria:**
+**Implementation Details:**
 
-- [x] All `.env` files added to `.gitignore` (including .env.development, .env.staging)
-- [x] `.env.example` files created for each app/package with dummy values (root, api, web)
-- [x] Existing .env files removed from git history (none were present - verified clean)
-- [x] Pre-commit hook configured to detect secrets (.pre-commit-config.yaml with gitleaks)
-- [x] Documentation updated with secrets management guidelines (docs/SECRETS_MANAGEMENT.md)
+Schema files to create (in `packages/shared/src/database/schema/`):
 
-**Completion Notes:**
+1. **`packages/shared/src/database/schema/sync-jobs.schema.ts`**
+   - `id`: UUID PK
+   - `postgresOrderId`: UUID FK→orders, nullable
+   - `vendorId`: varchar(100), NOT NULL
+   - `operation`: varchar(50), NOT NULL (e.g. 'create_order', 'reserve_stock')
+   - `status`: varchar(20), NOT NULL, default 'pending' — values: pending, processing, completed, failed, cancelled
+   - `payload`: jsonb, NOT NULL
+   - `retryCount`: integer, default 0
+   - `maxRetries`: integer, default 5
+   - `nextRetryAt`: timestamp(tz), nullable
+   - `errorMessage`: text, nullable
+   - `errorStack`: text, nullable
+   - `erpReference`: varchar(100), nullable
+   - `createdAt`, `startedAt`, `completedAt`, `expiresAt`: timestamp(tz)
+   - Indexes: vendor_status, status, next_retry, expires
 
-- Completed on 2026-01-29
-- Enhanced .gitignore with additional .env patterns (.env.development, .env.staging, etc.)
-- Created .env.example for root, apps/api (already existed), and apps/web
-- Created .pre-commit-config.yaml with gitleaks and additional security checks
-- Created .gitleaks.toml for customized secret detection rules
-- Created comprehensive docs/SECRETS_MANAGEMENT.md with rotation procedures, incident response, and best practices
-- No .env files were found in git history - repository is clean
-- All validation commands passed successfully
+2. **`packages/shared/src/database/schema/agent-registry.schema.ts`**
+   - `id`: UUID PK
+   - `vendorId`: varchar(100), UNIQUE NOT NULL
+   - `agentUrl`: varchar(500), NOT NULL
+   - `erpType`: varchar(20), NOT NULL — 'ebp', 'sage', 'odoo', 'custom'
+   - `status`: varchar(20), NOT NULL, default 'offline' — 'online', 'offline', 'degraded'
+   - `lastHeartbeat`: timestamp(tz), nullable
+   - `version`: varchar(50), nullable
+   - `authTokenHash`: varchar(256), NOT NULL
+   - `createdAt`, `updatedAt`: timestamp(tz)
+   - Indexes: status, heartbeat
+
+3. **`packages/shared/src/database/schema/erp-code-mappings.schema.ts`**
+   - `id`: UUID PK
+   - `vendorId`: varchar(100), NOT NULL
+   - `mappingType`: varchar(20), NOT NULL — 'unit', 'vat', 'family', 'subfamily'
+   - `erpCode`: varchar(100), NOT NULL
+   - `restoCode`: varchar(100), NOT NULL
+   - `restoLabel`: varchar(255), NOT NULL
+   - `isActive`: boolean, default true
+   - `createdAt`, `updatedAt`: timestamp(tz)
+   - Unique constraint: (vendor_id, mapping_type, erp_code)
+   - Indexes: vendor_type
+
+4. **`packages/shared/src/database/schema/dead-letter-queue.schema.ts`**
+   - `id`: UUID PK
+   - `originalJobId`: UUID FK→sync_jobs, nullable
+   - `vendorId`: varchar(100), NOT NULL
+   - `operation`: varchar(50), NOT NULL
+   - `payload`: jsonb, NOT NULL
+   - `failureReason`: text, NOT NULL
+   - `failureStack`: text, nullable
+   - `attemptCount`: integer, default 0
+   - `lastAttemptAt`: timestamp(tz)
+   - `resolved`: boolean, default false
+   - `resolvedAt`: timestamp(tz), nullable
+   - `resolvedBy`: varchar(100), nullable
+   - `createdAt`: timestamp(tz)
+   - Indexes: vendor, resolved, created
+
+5. **`packages/shared/src/database/schema/reconciliation-events.schema.ts`**
+   - `id`: UUID PK
+   - `vendorId`: varchar(100), NOT NULL
+   - `eventType`: varchar(30), NOT NULL — 'incremental_sync', 'full_checksum', 'drift_detected', 'drift_resolved'
+   - `summary`: jsonb, NOT NULL
+   - `details`: text, nullable
+   - `timestamp`: timestamp(tz), NOT NULL, default NOW()
+   - `durationMs`: integer, default 0
+   - Indexes: vendor_timestamp, event_type
+
+**Also modify:**
+
+- `packages/shared/src/database/schema/index.ts` — export all new schemas
+- Create `packages/shared/src/database/schema/sync-relations.ts` — add relations (syncJobs→orders, deadLetterQueue→syncJobs)
+- `apps/api/src/database/database.module.ts` — add new schema tables to the explicit `schema` object (NO `import *`)
 
 **Validation Commands:**
 
 ```bash
-# Verify .env files not tracked
-git ls-files | grep -E "\.env$" || echo "No .env files tracked"
-
-# Verify .gitignore contains .env
-grep "\.env$" .gitignore
-
-# Verify .env.example exists
-ls -la apps/*/.env.example packages/*/.env.example || true
+pnpm turbo build --filter=@repo/shared
+pnpm turbo build --filter=@apps/api
+pnpm db:generate
+pnpm db:migrate
 ```
 
 ---
 
-## Task 3: Create Multi-Stage Dockerfile for API
+## Phase 2: Repositories (Task 3)
 
-**Category:** Feature
-**Package:** apps/api
-**Status:** passing
-**Priority:** high
-**Risk Level:** medium
-**Estimated Iterations:** 2
+### Task 3: Create Sync Repositories
+
+- **Priority:** P0
+- **Risk:** low
+- **Status:** not started
+- **Depends on:** Task 2
+- **Estimated effort:** 1.5 hours
+- **Spec reference:** REQ-2
 
 **Description:**
-Create optimized multi-stage Dockerfile for NestJS API with security best practices, health checks, and layer caching optimization.
+Create 5 repository classes following the existing two-layer pattern:
 
-**Acceptance Criteria:**
+1. Base repository in `packages/shared/` (framework-agnostic, extends `BaseRepository`)
+2. NestJS adapter in `apps/api/src/database/adapters/` (wraps base with NestJS DI + PinoLogger)
 
-- [x] Multi-stage Dockerfile created in `apps/api/Dockerfile` (5 stages for optimal caching)
-- [x] Builder stage compiles TypeScript (Stage 3: builder)
-- [x] Production stage contains only runtime files (Stage 5: production)
-- [x] Runs as non-root user (nestjs user with UID 1001)
-- [x] HEALTHCHECK instruction configured (curl -f http://localhost:3000/health)
-- [x] .dockerignore created to exclude unnecessary files (root level)
-- [x] Image builds successfully (Dockerfile syntax validated; Docker daemon not running for actual build)
-- [x] Image size < 200MB (Alpine-based, optimized layers; will be validated when Docker runs)
-- [x] Build time < 5 minutes (Optimized with layer caching; will be validated when Docker runs)
+See `packages/shared/src/database/repositories/user/user.repository.base.ts` and `apps/api/src/database/adapters/nestjs-user.repository.ts` for the exact pattern.
 
-**Completion Notes:**
+**Implementation Details:**
 
-- Completed on 2026-01-29
-- Created 5-stage multi-stage Dockerfile optimized for Turborepo monorepo:
-  - Stage 1 (base): Setup pnpm and base dependencies
-  - Stage 2 (dependencies): Install all dependencies for build
-  - Stage 3 (builder): Compile TypeScript with Turborepo
-  - Stage 4 (production-deps): Install only production dependencies
-  - Stage 5 (production): Final minimal image with runtime files only
-- Uses Node 20.18.1 Alpine for minimal size
-- Implements security best practices:
-  - Non-root user (nestjs:1001)
-  - dumb-init for proper signal handling
-  - Minimal attack surface with Alpine
-- Health check uses curl to test /health endpoint
-- Created comprehensive .dockerignore at root level
-- Dockerfile supports building from repository root
-- Layer caching optimized by separating dependency installation from source code copy
-- Note: Actual build testing requires Docker daemon to be running
+1. **`SyncJobsRepository`**: create, findById, findByOrderId, updateStatus, findPending, findExpired, countByStatus, getMetrics(vendorId), deleteExpired
+2. **`AgentRegistryRepository`**: upsert, findByVendorId, findAll, findActive, updateHeartbeat, findStale(degradedThresholdMs, offlineThresholdMs), deleteByVendorId
+3. **`ErpCodeMappingsRepository`**: findByVendorTypeCode, findByVendorAndType, upsert, bulkInsert, deactivate, findAll(paginated), countByVendor
+4. **`DeadLetterQueueRepository`**: create, findById, findUnresolved(vendorId?, paginated), markResolved, deleteOldResolved(olderThanDays), countUnresolved
+5. **`ReconciliationEventsRepository`**: create, findByVendor(paginated), findRecent(vendorId, limit), deleteOlderThan(days), getMetrics(vendorId)
+
+**Files to create:**
+
+Base repos in `packages/shared/`:
+
+- `packages/shared/src/database/repositories/sync-jobs/sync-jobs.repository.base.ts`
+- `packages/shared/src/database/repositories/agent-registry/agent-registry.repository.base.ts`
+- `packages/shared/src/database/repositories/erp-code-mappings/erp-code-mappings.repository.base.ts`
+- `packages/shared/src/database/repositories/dead-letter-queue/dead-letter-queue.repository.base.ts`
+- `packages/shared/src/database/repositories/reconciliation-events/reconciliation-events.repository.base.ts`
+
+NestJS adapters in `apps/api/`:
+
+- `apps/api/src/database/adapters/nestjs-sync-jobs.repository.ts`
+- `apps/api/src/database/adapters/nestjs-agent-registry.repository.ts`
+- `apps/api/src/database/adapters/nestjs-erp-code-mappings.repository.ts`
+- `apps/api/src/database/adapters/nestjs-dead-letter-queue.repository.ts`
+- `apps/api/src/database/adapters/nestjs-reconciliation-events.repository.ts`
+
+**Files to modify:**
+
+- `packages/shared/src/database/repositories/index.ts` — export new repos
+- `apps/api/src/database/adapters/index.ts` — export new adapters
+- `apps/api/src/database/database.module.ts` — provide new adapter repositories
 
 **Validation Commands:**
 
 ```bash
-# Build Docker image
-docker build -t api:test -f apps/api/Dockerfile .
-
-# Check image size
-docker images api:test --format "{{.Size}}"
-
-# Verify non-root user
-docker run --rm api:test whoami | grep -v root
-
-# Test health check
-docker run -d --name api-test api:test
-sleep 10
-docker inspect api-test --format='{{.State.Health.Status}}'
-docker rm -f api-test
+pnpm turbo build --filter=@repo/shared
+pnpm turbo build --filter=@apps/api
 ```
 
 ---
 
-## Task 4: Implement /health Endpoint in API
+## Phase 3: Module Scaffold (Task 4)
 
-**Category:** Feature
-**Package:** apps/api
-**Status:** passing
-**Priority:** high
-**Risk Level:** low
-**Estimated Iterations:** 1
+### Task 4: Create SyncModule Skeleton + Guards
+
+- **Priority:** P0
+- **Risk:** low
+- **Status:** not started
+- **Depends on:** Task 3
+- **Estimated effort:** 1 hour
+- **Spec reference:** REQ-1, REQ-13
 
 **Description:**
-Create comprehensive health check endpoint in NestJS that returns service status, uptime, and dependency health (database, Redis).
+Create `src/modules/sync/` directory structure (matching existing `src/modules/health/`, `src/modules/users/` pattern), module definition, guards, and placeholder controllers. Wire into `AppModule`.
 
-**Acceptance Criteria:**
+**Implementation Details:**
 
-- [x] `/health` GET endpoint created in API (already existed, enhanced)
-- [x] Returns 200 status code when healthy (implemented with proper status codes)
-- [x] Response includes: status, uptime, timestamp, services (database, redis)
-- [x] Checks actual database connection (using `SELECT 1` query)
-- [x] Checks actual Redis connection (ready for Redis integration - currently optional)
-- [x] Returns 503 if any dependency unhealthy (implemented in controller)
-- [x] Unit tests written for health endpoint (existing tests maintained)
-- [x] Integration tests verify database/Redis checks (existing tests maintained)
+1. **`src/modules/sync/sync.module.ts`**:
+   - `BullModule.registerQueue({ name: 'order-sync' }, { name: 'reconciliation' }, { name: 'image-sync' })`
+   - Import `DatabaseModule`
+   - Register all controllers, services (as they're created in later tasks)
+   - Export key services for use by other modules
 
-**Completion Notes:**
+2. **Guards:**
+   - `src/common/guards/agent-auth.guard.ts`:
+     - `@Injectable() implements CanActivate`
+     - Extracts `Authorization: Bearer <token>` header
+     - Extracts `vendorId` from request body or params
+     - Loads agent from `AgentRegistryRepository.findByVendorId()`
+     - Compares token with `authTokenHash` via `bcrypt.compare()`
+     - Rejects with 401 if invalid, 404 if agent not found
+   - `src/common/guards/api-key.guard.ts`:
+     - `@Injectable() implements CanActivate`
+     - Extracts `X-API-Key` header
+     - Constant-time compare with `API_SECRET` via `timingSafeEqual`
+     - Rejects with 401 if invalid
 
-- Completed on 2026-01-29
-- Enhanced existing health endpoint with:
-  - Added `services` field with summary status for each dependency
-  - Made Redis checking optional (ready for when Redis is added)
-  - Updated response format to match specification
-  - Controller now returns proper HTTP status codes (200 for healthy, 503 for unhealthy)
-  - Added comprehensive API documentation in Swagger
-- Health service checks:
-  - Database: Executes `SELECT 1` query and measures response time
-  - Redis: Ready for integration (commented TODO with example implementation)
-  - Memory: RSS, heap used, heap total, external
-  - CPU: User and system usage
-  - Uptime: Process uptime in seconds
-- Response includes detailed diagnostics for troubleshooting
-- All validation commands passed successfully
+3. **Placeholder controllers** (empty, populated in later tasks):
+   - `src/modules/sync/controllers/agent-ingest.controller.ts`
+   - `src/modules/sync/controllers/agent-registry.controller.ts`
+   - `src/modules/sync/controllers/agent-callback.controller.ts`
+   - `src/modules/sync/controllers/sync-admin.controller.ts`
+   - `src/modules/sync/controllers/erp-mapping.controller.ts`
 
-**Response Format:**
+4. **Directory stubs:**
+   - `src/modules/sync/services/`
+   - `src/modules/sync/processors/`
+   - `src/modules/sync/schedulers/`
+   - `src/modules/sync/dto/`
+   - `src/modules/sync/interfaces/`
 
-```json
-{
-  "status": "healthy",
-  "uptime": 3600,
-  "timestamp": "2025-01-29T12:00:00Z",
-  "services": {
-    "database": "connected",
-    "redis": "connected"
-  }
-}
-```
+5. Register `SyncModule` in `AppModule`
+
+**Files to create:**
+
+- `src/modules/sync/sync.module.ts`
+- `src/modules/sync/controllers/` (5 files)
+- `src/common/guards/agent-auth.guard.ts`
+- `src/common/guards/api-key.guard.ts`
+
+**Files to modify:**
+
+- `src/app.module.ts` — add `SyncModule` to imports
 
 **Validation Commands:**
 
 ```bash
-pnpm turbo lint --filter=api --fix
-pnpm turbo test --filter=api
-pnpm turbo type-check
-pnpm turbo build --filter=api
-
-# Integration test
-pnpm --filter=api test:integration -- health
+pnpm turbo build --filter=@apps/api
 ```
 
 ---
 
-## Task 5: Create Docker Compose for Local Development
+## Phase 4: Core Services (Tasks 5-8)
 
-**Category:** Feature
-**Package:** root
-**Status:** passing
-**Priority:** high
-**Risk Level:** low
-**Estimated Iterations:** 2
+### Task 5: Agent Registry Service
 
-**Description:**
-Create docker-compose.yml for local development with all services (API, PostgreSQL, Redis, Adminer) with hot reload support.
+- **Priority:** P0
+- **Risk:** low
+- **Status:** not started
+- **Depends on:** Task 4
+- **Estimated effort:** 2 hours
+- **Spec reference:** REQ-3
 
-**Acceptance Criteria:**
+**Description:**  
+Full agent lifecycle — registration, heartbeat, health monitoring, status transitions.
 
-- [x] `docker-compose.yml` created at repository root
-- [x] Services: API, PostgreSQL 15, Redis 7, Adminer
-- [x] API service uses volume mounts for hot reload
-- [x] Environment variables loaded from .env.development
-- [x] Health checks configured for all services
-- [x] Named volumes for database and Redis persistence
-- [x] Network isolation with custom network (restomarket-network)
-- [x] API accessible at localhost:3001
-- [x] Adminer accessible at localhost:8080
-- [x] Docker Compose configuration validated successfully
+**Implementation Details:**
 
-**Completion Notes:**
+1. **`src/modules/sync/services/agent-registry.service.ts`:**
+   - `register(dto: RegisterAgentDto)`:
+     - Hash token with `bcrypt.hash(token, 10)`
+     - Upsert to agent_registry (by vendorId)
+     - Return agent info (without hash)
+   - `heartbeat(vendorId: string)`:
+     - Update `lastHeartbeat = NOW()`, `status = 'online'`
+   - `deregister(vendorId: string)`:
+     - Set `status = 'offline'`
+   - `getAgent(vendorId: string)`:
+     - Return from DB
+   - `getAllAgents()`:
+     - Return all with computed health status
+   - `checkHealth()`:
+     - Query all agents
+     - If `lastHeartbeat` > 60s ago → mark `degraded`
+     - If `lastHeartbeat` > 300s ago → mark `offline`
+     - Return agents that changed status (for alerting)
 
-- Completed on 2026-01-29
-- Created docker-compose.yml with 4 services:
-  - PostgreSQL 15 Alpine with health checks
-  - Redis 7 Alpine with persistence and password
-  - NestJS API with hot reload via volume mounts
-  - Adminer for database management
-- All services configured with health checks for proper startup orchestration
-- API depends on healthy database and Redis services
-- Named volumes for data persistence: `restomarket_postgres_data`, `restomarket_redis_data`
-- Custom bridge network: `restomarket-network` for service isolation
-- Created `.env.development.example` with all required environment variables
-- Created comprehensive `infrastructure/docker/README.md` with:
-  - Quick start guide
-  - Service URLs and ports
-  - Database and Redis operations
-  - Troubleshooting section
-  - Development workflow
-  - Security notes
-- Updated `infrastructure/README.md` to reference Docker documentation
-- Removed obsolete `version` attribute from docker-compose.yml
-- All validation commands passed successfully
+2. **DTOs:**
+   - `src/modules/sync/dto/agent-register.dto.ts`:
+     ```typescript
+     class RegisterAgentDto {
+       @IsString() @IsNotEmpty() vendorId: string;
+       @IsUrl() agentUrl: string;
+       @IsIn(['ebp', 'sage', 'odoo', 'custom']) erpType: string;
+       @IsString() @MinLength(16) authToken: string;
+       @IsOptional() @IsString() version?: string;
+     }
+     ```
+   - `src/modules/sync/dto/agent-heartbeat.dto.ts`:
+     ```typescript
+     class AgentHeartbeatDto {
+       @IsString() @IsNotEmpty() vendorId: string;
+       @IsOptional() @IsString() version?: string;
+     }
+     ```
+
+3. **Populate `agent-registry.controller.ts`:**
+   - `POST /api/agents/register` — `@UseGuards(ThrottlerGuard)` with `@Throttle({ default: { limit: 10, ttl: 60000 } })`
+   - `POST /api/agents/heartbeat` — `@UseGuards(AgentAuthGuard)`
+   - `DELETE /api/agents/:vendorId` — `@UseGuards(ApiKeyGuard)`
+   - `GET /api/agents` — `@UseGuards(ApiKeyGuard)`
+   - `GET /api/agents/:vendorId` — `@UseGuards(ApiKeyGuard)`
+   - All with `@ApiTags('agents')`, `@ApiOperation`, `@ApiResponse`
+
+4. **Wire `AgentAuthGuard`** to use `AgentRegistryRepository`
+
+5. **Unit tests:** `src/modules/sync/services/__tests__/agent-registry.service.spec.ts`
+
+**Files to create:**
+
+- `src/modules/sync/services/agent-registry.service.ts`
+- `src/modules/sync/dto/agent-register.dto.ts`
+- `src/modules/sync/dto/agent-heartbeat.dto.ts`
+- `src/modules/sync/services/__tests__/agent-registry.service.spec.ts`
+
+**Files to modify:**
+
+- `src/modules/sync/controllers/agent-registry.controller.ts`
+- `src/common/guards/agent-auth.guard.ts` — wire repository
+- `src/modules/sync/sync.module.ts`
 
 **Validation Commands:**
 
 ```bash
-# Start all services
-docker-compose up -d
-
-# Verify all services running
-docker-compose ps
-
-# Test API health endpoint
-curl http://localhost:3001/health
-
-# Test database connection via Adminer
-curl http://localhost:8080
-
-# Check logs
-docker-compose logs api
-
-# Cleanup
-docker-compose down
+pnpm turbo test --filter=@apps/api -- --testPathPattern=agent-registry
+pnpm turbo build --filter=@apps/api
 ```
 
 ---
 
-## Task 6: Create Docker Compose for Staging-like Testing
+### Task 6: ERP Code Mapping Service
 
-**Category:** Feature
-**Package:** root
-**Status:** passing
-**Priority:** medium
-**Risk Level:** low
-**Estimated Iterations:** 1
+- **Priority:** P0
+- **Risk:** low
+- **Status:** not started
+- **Depends on:** Task 4
+- **Estimated effort:** 1.5 hours
+- **Spec reference:** REQ-4
 
-**Description:**
-Create docker-compose.staging.yml that mimics staging environment for local testing (production builds, no hot reload).
+**Description:**  
+ERP code mapping resolution with in-memory LRU cache. Required before item ingest works.
 
-**Acceptance Criteria:**
+**Implementation Details:**
 
-- [x] `docker-compose.staging.yml` created
-- [x] Uses production Docker image (not dev mode)
-- [x] Environment variables from .env.staging.example
-- [x] No volume mounts (tests actual image)
-- [x] Health checks configured
-- [x] Separate network from dev compose
-- [x] Documentation for usage
+1. **`src/modules/sync/services/erp-mapping.service.ts`:**
+   - Private `cache: Map<string, { result: MappingResult; expiresAt: number }>`
+   - Private `MAX_CACHE_SIZE = 10_000`
+   - `resolve(vendorId, type, erpCode)`:
+     - Check cache → if hit and not expired → return
+     - If cache miss or expired → query DB → cache result for 5min → return
+     - If not found in DB → return `null`
+     - LRU eviction when cache exceeds max size
+   - `seed(vendorId, mappings[])` → bulk insert → invalidate cache
+   - `clearCache()` → clear entire cache
+   - `createMapping(dto)` → insert → invalidate cache for key
+   - `updateMapping(id, dto)` → update → invalidate cache
+   - `deleteMapping(id)` → set is_active=false → invalidate cache
+   - `listMappings(vendorId?, type?, page, limit)` → paginated query
 
-**Completion Notes:**
+2. **DTOs:** `src/modules/sync/dto/erp-mapping.dto.ts`
+   - `CreateErpMappingDto`, `UpdateErpMappingDto`, `SeedErpMappingsDto`
 
-- Completed on 2026-01-29
-- Created docker-compose.staging.yml with production build configuration:
-  - Uses `production` target from Dockerfile (stage 5)
-  - No volume mounts for source code (tests actual production image)
-  - Production command: `node apps/api/dist/main.js`
-  - NODE_ENV=production, LOG_LEVEL=info, SWAGGER_ENABLED=false
-- Separate network: `restomarket-staging-network` (isolated from dev)
-- Different ports to allow running dev and staging simultaneously:
-  - API: 3002 (dev: 3001)
-  - PostgreSQL: 5433 (dev: 5432)
-  - Redis: 6380 (dev: 6379)
-  - Adminer: 8081 (dev: 8080)
-- Health checks configured for all services (PostgreSQL, Redis, API)
-- Created `.env.staging.example` with staging-specific defaults
-- Created comprehensive `infrastructure/docker/STAGING.md` documentation (9.4KB) with:
-  - Quick start guide
-  - Comparison table: dev vs staging
-  - Testing procedures
-  - Troubleshooting guide
-  - Performance benchmarks
-  - Differences from real staging environment
-- Updated `infrastructure/README.md` with staging testing quick start
-- Docker Compose syntax validated successfully
+3. **Populate `erp-mapping.controller.ts`:**
+   - All under `@ApiTags('mappings')`, `@UseGuards(ApiKeyGuard)`
+   - `GET /api/admin/mappings` (paginated, filtered by vendorId, type)
+   - `POST /api/admin/mappings`
+   - `PUT /api/admin/mappings/:id`
+   - `DELETE /api/admin/mappings/:id`
+   - `POST /api/admin/mappings/seed`
+
+4. **Seed script:** `src/database/seeds/erp-mappings.seed.ts`
+
+5. **Unit tests:** cache hit, cache miss, cache expiry, LRU eviction, not-found
+
+**Files to create:**
+
+- `src/modules/sync/services/erp-mapping.service.ts`
+- `src/modules/sync/dto/erp-mapping.dto.ts`
+- `src/modules/sync/interfaces/erp-mapping.interface.ts`
+- `src/database/seeds/erp-mappings.seed.ts`
+- `src/modules/sync/services/__tests__/erp-mapping.service.spec.ts`
+
+**Files to modify:**
+
+- `src/modules/sync/controllers/erp-mapping.controller.ts`
+- `src/modules/sync/sync.module.ts`
 
 **Validation Commands:**
 
 ```bash
-# Validate syntax
-docker-compose -f docker-compose.staging.yml config
-
-# Build production image (requires Docker daemon)
-docker-compose -f docker-compose.staging.yml build
-
-# Start staging-like environment
-docker-compose -f docker-compose.staging.yml up -d
-
-# Verify services
-docker-compose -f docker-compose.staging.yml ps
-
-# Test health
-curl http://localhost:3002/health
-
-# Cleanup
-docker-compose -f docker-compose.staging.yml down
+pnpm turbo test --filter=@apps/api -- --testPathPattern=erp-mapping
+pnpm turbo build --filter=@apps/api
 ```
 
 ---
 
-## Task 7: Create Terraform Module for Networking
+### Task 7: Circuit Breaker Service
 
-**Category:** Infrastructure
-**Package:** root
-**Status:** passing
-**Priority:** high
-**Risk Level:** medium
-**Estimated Iterations:** 2
+- **Priority:** P0
+- **Risk:** low
+- **Status:** not started
+- **Depends on:** Task 4
+- **Estimated effort:** 1 hour
+- **Spec reference:** REQ-7
 
-**Description:**
-Create reusable Terraform module for DigitalOcean VPC and networking resources.
+**Description:**  
+Per-vendor circuit breaker using `opossum`. Wraps all outbound HTTP calls to agents.
 
-**Acceptance Criteria:**
+**Implementation Details:**
 
-- [x] Module created at `infrastructure/terraform/modules/networking/`
-- [x] VPC resource with configurable IP range
-- [x] Firewall resource with configurable rules
-- [x] Input variables defined in variables.tf
-- [x] Output variables for VPC ID and network details
-- [x] Module documentation in README.md
-- [x] Example usage documented
+1. **`src/modules/sync/services/circuit-breaker.service.ts`:**
+   - Private `breakers: Map<string, CircuitBreaker>` keyed by `vendorId:apiType`
+   - `getBreaker(vendorId, apiType)`:
+     - If not exists → create with config:
+       ```typescript
+       { timeout: 30_000, errorThresholdPercentage: 50, resetTimeout: 60_000, volumeThreshold: 5 }
+       ```
+     - Attach event listeners: `open`, `halfOpen`, `close` → log via Logger
+   - `execute<T>(vendorId, apiType, fn: () => Promise<T>)`:
+     - Get breaker → `breaker.fire(fn)`
+   - `reset(vendorId, apiType)`:
+     - Force state to closed
+   - `getStatus()`:
+     - Return all breaker states as `{ key, state, stats }`
 
-**Completion Notes:**
+2. **Interface:** `src/modules/sync/interfaces/circuit-breaker.interface.ts`
 
-- Completed on 2026-01-29
-- Created complete Terraform networking module with 4 files (main.tf, variables.tf, outputs.tf, README.md)
-- VPC resource with configurable IP range and region
-- Two firewall resources: API servers and database servers
-- API firewall features:
-  - SSH access restricted to admin IPs
-  - HTTP/HTTPS from load balancers
-  - Custom API port support (e.g., 3001)
-  - All internal VPC traffic allowed
-  - Custom inbound/outbound rules support
-- Database firewall: PostgreSQL access from VPC only
-- Comprehensive input validation (CIDR validation, environment validation)
-- Rich outputs: VPC details, firewall IDs/status, tags mapping
-- Extensive documentation with usage examples, security best practices, troubleshooting
-- All validation commands passed successfully
+3. **Unit tests:** create breaker, open on failures, half-open on timeout, close on success
 
-**Module Structure:**
+**Files to create:**
 
-```
-modules/networking/
-├── main.tf
-├── variables.tf
-├── outputs.tf
-└── README.md
-```
+- `src/modules/sync/services/circuit-breaker.service.ts`
+- `src/modules/sync/interfaces/circuit-breaker.interface.ts`
+- `src/modules/sync/services/__tests__/circuit-breaker.service.spec.ts`
+
+**Files to modify:**
+
+- `src/modules/sync/sync.module.ts`
 
 **Validation Commands:**
 
 ```bash
-# Validate Terraform syntax
-cd infrastructure/terraform/modules/networking
-terraform init
-terraform validate
-
-# Format code
-terraform fmt -check
+pnpm turbo test --filter=@apps/api -- --testPathPattern=circuit-breaker
+pnpm turbo build --filter=@apps/api
 ```
 
 ---
 
-## Task 8: Create Terraform Module for Database
+### Task 8: Agent Communication Service
 
-**Category:** Infrastructure
-**Package:** root
-**Status:** passing
-**Priority:** high
-**Risk Level:** high
-**Estimated Iterations:** 2
+- **Priority:** P0
+- **Risk:** medium
+- **Status:** not started
+- **Depends on:** Task 5, Task 7
+- **Estimated effort:** 1.5 hours
+- **Spec reference:** REQ-6, REQ-7
 
-**Description:**
-Create reusable Terraform module for DigitalOcean Managed PostgreSQL database with configurable node count and size.
+**Description:**  
+HTTP client for calling vendor agents, wrapped in circuit breaker. Used by order sync processor AND reconciliation.
 
-**Acceptance Criteria:**
+**Implementation Details:**
 
-- [x] Module created at `infrastructure/terraform/modules/database/`
-- [x] PostgreSQL cluster resource
-- [x] Configurable: version, size, node count, region
-- [x] Private networking (VPC) support
-- [x] Firewall rule for app server access
-- [x] Database user and database creation
-- [x] Output variables for connection string
-- [x] Module documentation
+1. **`src/modules/sync/services/agent-communication.service.ts`:**
+   - `callAgent<T>(vendorId, apiType, endpoint, payload)`:
+     - Get agent from `AgentRegistryService.getAgent(vendorId)`
+     - Validate agent is online or degraded (not offline)
+     - Build URL: `${agent.agentUrl}${endpoint}`
+     - Execute through `CircuitBreakerService.execute()`:
+       ```typescript
+       await this.circuitBreaker.execute(vendorId, apiType, async () => {
+         const response = await axios.post(url, payload, {
+           headers: {
+             Authorization: `Bearer ${this.configService.get('AGENT_SECRET')}`,
+             'X-Correlation-ID': correlationId,
+           },
+           timeout: 30_000,
+         });
+         return response.data;
+       });
+       ```
+     - Log request/response at debug level
+     - On failure: log at error level with context
 
-**Completion Notes:**
+2. **Unit tests:** mock axios, mock circuit breaker, verify headers, verify timeout, verify offline rejection
 
-- Completed on 2026-01-29
-- Created complete Terraform module with 4 files (main.tf, variables.tf, outputs.tf, README.md)
-- PostgreSQL cluster resource with DigitalOcean managed database
-- Comprehensive variable configuration:
-  - PostgreSQL versions 12-16 (default: 16)
-  - Node sizes from 1GB to enterprise levels
-  - Node count 1-3 for HA configurations
-  - All DigitalOcean regions supported
-- Features implemented:
-  - Private networking via VPC integration
-  - Tag-based and IP-based firewall rules
-  - Application database and user creation
-  - Optional connection pooling (transaction/session/statement modes)
-  - Optional read replicas for read scaling
-  - Configurable maintenance windows
-- Security best practices:
-  - All connections use SSL/TLS (sslmode=require)
-  - Private network connections by default
-  - Firewall rules restrict access to VPC and tagged droplets
-  - Sensitive outputs marked appropriately
-- Comprehensive outputs (20+ outputs):
-  - Connection strings (private and public)
-  - Cluster details and metadata
-  - Conditional outputs for pool and replica
-  - Summary output for easy reference
-- Extensive documentation (12KB README) with:
-  - 3 usage examples (dev, production HA, with replica)
-  - Complete input/output reference tables
-  - Node size recommendations per environment
-  - Connection pool modes explanation
-  - Security best practices
-  - Cost estimation table
-  - Troubleshooting guide
-- All validation commands passed successfully
+**Files to create:**
+
+- `src/modules/sync/services/agent-communication.service.ts`
+- `src/modules/sync/services/__tests__/agent-communication.service.spec.ts`
+
+**Files to modify:**
+
+- `src/modules/sync/sync.module.ts`
 
 **Validation Commands:**
 
 ```bash
-cd infrastructure/terraform/modules/database
-terraform init
-terraform validate
-terraform fmt -check
+pnpm turbo test --filter=@apps/api -- --testPathPattern=agent-communication
+pnpm turbo build --filter=@apps/api
 ```
 
 ---
 
-## Task 9: Create Terraform Module for Redis Cache
+## Phase 5: Direct Ingest (Task 9)
 
-**Category:** Infrastructure
-**Package:** root
-**Status:** passing
-**Priority:** medium
-**Risk Level:** medium
-**Estimated Iterations:** 1
+### Task 9: Sync Ingest Service + Controller (Direct Pipeline)
 
-**Description:**
-Create Terraform module for DigitalOcean Managed Redis cache.
+- **Priority:** P0
+- **Risk:** high (core architectural change)
+- **Status:** not started
+- **Depends on:** Task 6, Task 3
+- **Estimated effort:** 4 hours
+- **Spec reference:** REQ-5
 
-**Acceptance Criteria:**
+**Description:**  
+**This is the most important task.** Agents POST directly to NestJS → validate → deduplicate → map → upsert to PostgreSQL. One hop, direct to database.
 
-- [x] Module created at `infrastructure/terraform/modules/redis/`
-- [x] Redis cluster resource
-- [x] Configurable: version (6, 7), size, region
-- [x] Private networking support (VPC integration)
-- [x] Firewall rules (tag-based and IP-based)
-- [x] Output variables for connection strings (private and public)
-- [x] Module documentation with usage examples
-- [x] Eviction policy configuration
-- [x] Maintenance window configuration
+**Implementation Details:**
 
-**Completion Notes:**
+1. **`src/modules/sync/services/sync-ingest.service.ts`:**
+   - `handleItemChanges(vendorId: string, items: ItemSyncPayload[])`:
 
-- Completed on 2026-01-29
-- Created complete Terraform module with 5 files (main.tf, variables.tf, outputs.tf, versions.tf, README.md)
-- Redis cluster resource with DigitalOcean managed database
-- Comprehensive variable configuration:
-  - Redis versions 6 and 7 (default: 7)
-  - Node sizes from 1GB to enterprise levels
-  - Single-node deployment (DigitalOcean limitation)
-  - All DigitalOcean regions supported
-- Features implemented:
-  - Private networking via VPC integration
-  - Tag-based and IP-based firewall rules
-  - Configurable eviction policies (8 options, default: allkeys-lru)
-  - Configurable maintenance windows
-- Security best practices:
-  - All connections use password authentication
-  - Private network connections recommended
-  - Firewall rules restrict access to VPC and tagged droplets
-  - Sensitive outputs marked appropriately (password, hosts, URIs)
-- Comprehensive outputs (16 outputs):
-  - Cluster details and metadata
-  - Connection strings (private and public)
-  - Redis URIs for application configuration
-  - Firewall ID (if enabled)
-  - Summary output for easy reference
-- Extensive documentation (11KB README) with:
-  - 3 usage examples (dev, staging, production)
-  - Complete input/output reference tables
-  - Node size recommendations per environment
-  - Redis eviction policy explanations
-  - Security best practices
-  - Cost estimation table
-  - Monitoring and alerting guide
-  - Troubleshooting section (connection, memory, performance issues)
-  - Migration guide from self-managed Redis
-- All validation commands passed successfully
+     ```typescript
+     // 1. Enforce batch limit (max 500)
+     // 2. For each item:
+     //    a. Load existing by vendorId + sku → compare content_hash → skip if same
+     //    b. Compare timestamp → reject if stale
+     //    c. Resolve unit mapping (REQUIRED) → fail item if unmapped
+     //    d. Resolve vat mapping (REQUIRED) → fail item if unmapped
+     //    e. Resolve family/subfamily (OPTIONAL) → null if unmapped
+     //    f. Add to validatedBatch
+     // 3. Batch upsert validatedBatch (Drizzle onConflictDoUpdate)
+     // 4. Return { processed, skipped, failed, results[] }
+     ```
+
+   - `handleStockChanges(vendorId: string, warehouseId: string, stockItems: StockSyncPayload[])`:
+
+     ```typescript
+     // 1. Enforce batch limit (max 500)
+     // 2. For each stock row:
+     //    a. Compare content_hash → skip if same
+     //    b. Compare timestamp → reject if stale
+     //    c. Add to validatedBatch
+     // 3. Batch upsert via ON CONFLICT (vendor_id, warehouse_id, item_id) DO UPDATE
+     // 4. Return results
+     ```
+
+   - `handleWarehouseChanges(vendorId: string, warehouses: WarehouseSyncPayload[])`:
+
+     ```typescript
+     // 1. Enforce batch limit
+     // 2. Deduplicate, validate
+     // 3. Batch upsert via ON CONFLICT (vendor_id, erp_warehouse_id) DO UPDATE
+     // 4. Return results
+     ```
+
+   - Batch variants (`*BatchSync`) — process in chunks of 50, max 5000 total
+
+2. **DTOs:**
+   - `src/modules/sync/dto/item-sync-ingest.dto.ts` — validate item fields, content_hash, timestamp
+   - `src/modules/sync/dto/stock-sync-ingest.dto.ts` — validate stock fields
+   - `src/modules/sync/dto/warehouse-sync-ingest.dto.ts` — validate warehouse fields
+
+3. **Populate `agent-ingest.controller.ts`:**
+   - All under `@ApiTags('sync')`, `@UseGuards(AgentAuthGuard)`
+   - Rate limits: `@Throttle({ default: { limit: 30, ttl: 60000 } })` incremental, `@Throttle({ default: { limit: 5, ttl: 60000 } })` batch
+   - `POST /api/sync/items` + `POST /api/sync/items/batch`
+   - `POST /api/sync/stock` + `POST /api/sync/stock/batch`
+   - `POST /api/sync/warehouses` + `POST /api/sync/warehouses/batch`
+
+4. **Upsert pattern (Drizzle):**
+
+   ```typescript
+   await this.db
+     .insert(items)
+     .values(batch)
+     .onConflictDoUpdate({
+       target: [items.vendorId, items.sku],
+       set: {
+         name: sql`excluded.name`,
+         // ...all sync fields
+         contentHash: sql`excluded.content_hash`,
+         lastSyncedAt: sql`excluded.last_synced_at`,
+         updatedAt: sql`NOW()`,
+       },
+     });
+   ```
+
+5. **Response format:**
+
+   ```typescript
+   {
+     processed: 45,
+     skipped: 3,      // content_hash match
+     failed: 2,       // unmapped codes or validation errors
+     results: [
+       { sku: 'ABC001', status: 'processed' },
+       { sku: 'ABC002', status: 'skipped', reason: 'no_changes' },
+       { sku: 'ABC003', status: 'failed', reason: 'unmapped_unit: PIÈCE' },
+     ]
+   }
+   ```
+
+6. **Unit + integration tests**
+
+**Files to create:**
+
+- `src/modules/sync/services/sync-ingest.service.ts`
+- `src/modules/sync/dto/item-sync-ingest.dto.ts`
+- `src/modules/sync/dto/stock-sync-ingest.dto.ts`
+- `src/modules/sync/dto/warehouse-sync-ingest.dto.ts`
+- `src/modules/sync/services/__tests__/sync-ingest.service.spec.ts`
+
+**Files to modify:**
+
+- `src/modules/sync/controllers/agent-ingest.controller.ts`
+- `src/modules/sync/sync.module.ts`
 
 **Validation Commands:**
 
 ```bash
-cd infrastructure/terraform/modules/redis
-terraform init
-terraform validate
-terraform fmt -check
+pnpm turbo test --filter=@apps/api -- --testPathPattern=sync-ingest
+pnpm turbo build --filter=@apps/api
 ```
 
 ---
 
-## Task 10: Create Terraform Module for API Droplets
+## Phase 6: Outbound Sync — Order→ERP (Tasks 10-12)
 
-**Category:** Infrastructure
-**Package:** root
-**Status:** passing
-**Priority:** high
-**Risk Level:** medium
-**Estimated Iterations:** 2
+### Task 10: Sync Job Service
 
-**Description:**
-Create Terraform module for DigitalOcean Droplets running the API with user-data for Docker setup.
+- **Priority:** P0
+- **Risk:** high
+- **Status:** not started
+- **Depends on:** Task 3
+- **Estimated effort:** 1.5 hours
+- **Spec reference:** REQ-6
 
-**Acceptance Criteria:**
+**Description:**  
+Manage sync job lifecycle in PostgreSQL + enqueue BullMQ jobs.
 
-- [x] Module created at `infrastructure/terraform/modules/api-cluster/`
-- [x] Droplet resource with configurable count
-- [x] SSH key configuration
-- [x] User-data script to install Docker and Docker Compose
-- [x] VPC networking
-- [x] Tags for environment and service
-- [x] Output variables for droplet IPs
-- [x] Module documentation
+**Implementation Details:**
 
-**Completion Notes:**
+1. **`src/modules/sync/services/sync-job.service.ts`:**
+   - `createOrderJob(vendorId, orderId, orderData)`:
+     - Check for existing pending/processing job for same orderId (idempotency)
+     - INSERT into sync_jobs (status=pending)
+     - Add to BullMQ `order-sync` queue with job name `create-order`
+     - Return jobId
+   - `markProcessing(jobId)` — update status + startedAt
+   - `markCompleted(jobId, erpReference, metadata?)` — update status + completedAt + erpReference
+   - `markFailed(jobId, error)` — update status + errorMessage + errorStack
+   - `getJob(jobId)` — full job details
+   - `getPendingJobs(vendorId?)` — paginated pending jobs
+   - `getRecentJobs(vendorId?, page, limit)` — paginated all jobs
 
-- Completed on 2026-01-29
-- Created complete Terraform module with 5 files (main.tf, variables.tf, outputs.tf, versions.tf, README.md)
-- Droplet resource with configurable count (1-10 droplets)
-- Comprehensive variable configuration:
-  - Droplet count, size, image, region configurable
-  - SSH key integration via data source
-  - VPC networking support
-  - Configurable API port (default: 3001)
-- User-data script features:
-  - Automated Docker CE installation (latest stable)
-  - Docker Compose installation (latest version)
-  - Deploy user creation (non-root) with Docker group membership
-  - UFW firewall configuration (SSH, HTTP, HTTPS, API port)
-  - DigitalOcean monitoring agent installation (optional)
-  - Security hardening (system updates, prerequisites)
-- Optional features implemented:
-  - Automated backups configuration
-  - DigitalOcean monitoring integration
-  - IPv6 support
-  - Reserved IPs for each droplet (useful without load balancer)
-  - Data volumes with automatic attachment
-  - Custom firewall rules via dynamic blocks
-  - Custom user data script extension
-- Comprehensive outputs (20+ outputs):
-  - Droplet IDs, names, URNs
-  - Public and private IPv4 addresses
-  - IPv6 addresses (if enabled)
-  - Reserved IPs (if enabled)
-  - Volume IDs and names (if enabled)
-  - Firewall details (if enabled)
-  - Cluster metadata and summary
-- Security features:
-  - Tag-based resource organization
-  - VPC integration for private networking
-  - SSH key-only authentication
-  - Non-root deploy user
-  - UFW firewall rules
-- Extensive documentation (15KB README) with:
-  - 4 usage examples (basic dev, staging HA, production HA, custom firewall)
-  - Complete input/output reference tables
-  - Droplet size recommendations per environment
-  - User data script breakdown
-  - SSH access instructions
-  - Volume management guide
-  - Reserved IP usage guide
-  - Security best practices
-  - Firewall configuration details
-  - Monitoring and alerting setup
-  - Troubleshooting guide (SSH, Docker, volumes, memory)
-  - Cost estimation table
-  - Resource tagging strategy
-  - Integration with other modules
-  - Scaling guidance (vertical and horizontal)
-  - Backup and recovery procedures
-- All validation commands passed successfully
+2. **Unit tests**
+
+**Files to create:**
+
+- `src/modules/sync/services/sync-job.service.ts`
+- `src/modules/sync/services/__tests__/sync-job.service.spec.ts`
+
+**Files to modify:**
+
+- `src/modules/sync/sync.module.ts`
 
 **Validation Commands:**
 
 ```bash
-cd infrastructure/terraform/modules/api-cluster
-terraform init
-terraform validate
-terraform fmt -check
+pnpm turbo test --filter=@apps/api -- --testPathPattern=sync-job
+pnpm turbo build --filter=@apps/api
 ```
 
 ---
 
-## Task 11: Create Terraform Configuration for Dev Environment
+### Task 11: Order Sync Processor + Agent Callback Controller
 
-**Category:** Infrastructure
-**Package:** root
-**Status:** passing
-**Priority:** high
-**Risk Level:** medium
-**Estimated Iterations:** 2
+- **Priority:** P0
+- **Risk:** high
+- **Status:** not started
+- **Depends on:** Task 8, Task 10
+- **Estimated effort:** 2.5 hours
+- **Spec reference:** REQ-6
 
-**Description:**
-Create Terraform configuration for dev environment using the modules created, with minimal resources for cost optimization.
+**Description:**  
+BullMQ processor that sends orders to ERP agents, and controller that receives callbacks.
 
-**Acceptance Criteria:**
+**Implementation Details:**
 
-- [x] Configuration created at `infrastructure/terraform/environments/dev/`
-- [x] main.tf uses networking, database, redis, api-cluster modules
-- [x] variables.tf defines environment-specific variables
-- [x] terraform.tfvars.example with dev-specific values (1 droplet, small DB)
-- [x] Remote state backend configured (commented in main.tf with instructions)
-- [x] Provider configuration with version constraints
-- [x] Output values for connection strings and IPs (outputs.tf)
-- [x] README.md with setup and deployment instructions
+1. **`src/modules/sync/processors/order-sync.processor.ts`:**
 
-**Completion Notes:**
+   ```typescript
+   @Processor('order-sync')
+   export class OrderSyncProcessor {
+     @Process('create-order')
+     async handleCreateOrder(job: Job<OrderSyncPayload>) {
+       // 1. SyncJobService.markProcessing(job.data.syncJobId)
+       // 2. AgentCommunicationService.callAgent(vendorId, 'orders', '/sync/create-order', payload)
+       // 3. Agent processes async → calls back POST /api/agents/callback
+       // Note: BullMQ handles retry automatically on exception
+     }
+   }
+   ```
 
-- Completed on 2026-01-29
-- Created complete Terraform configuration for dev environment with 5 files (main.tf, variables.tf, outputs.tf, terraform.tfvars.example, README.md)
-- **main.tf**: Integrates all 4 modules (networking, database, redis, api-cluster) with proper dependencies
-- **variables.tf**: 28 input variables with comprehensive validation and sensible defaults for dev
-- **outputs.tf**: 14 outputs including VPC, database, Redis, and API cluster details with sensitive values marked
-- **terraform.tfvars.example**: Template with all required and optional variables documented
-- **README.md**: Comprehensive 400+ line documentation (13KB) with:
-  - Quick start guide and prerequisites
-  - Step-by-step setup instructions
-  - Post-deployment configuration
-  - Remote state backend setup guide
-  - Infrastructure maintenance procedures
-  - Troubleshooting section
-  - Security best practices
-  - Cost optimization tips
-- Module configurations:
-  - **Networking**: VPC (10.10.0.0/16), API firewall, database firewall
-  - **Database**: PostgreSQL 16, single node (db-s-1vcpu-1gb), connection pool optional
-  - **Redis**: Redis 7, single node (db-s-1vcpu-1gb), allkeys-lru eviction
-  - **API Cluster**: 1 droplet (s-1vcpu-1gb), Ubuntu 22.04, Docker + monitoring enabled
-- Estimated monthly cost: ~$36 (excluding bandwidth)
-- All validation commands passed successfully
+   - BullMQ config: `attempts: 5, backoff: { type: 'exponential', delay: 60_000 }`
+   - `@OnQueueFailed`: if `job.attemptsMade >= job.opts.attempts` → DeadLetterQueueService.add()
+
+2. **`src/modules/sync/dto/agent-callback.dto.ts`:**
+
+   ```typescript
+   class AgentCallbackDto {
+     @IsUUID() jobId: string;
+     @IsIn(['completed', 'failed']) status: string;
+     @IsOptional() @IsString() erpReference?: string;
+     @IsOptional() @IsString() error?: string;
+     @IsOptional() metadata?: Record<string, any>;
+   }
+   ```
+
+3. **Populate `agent-callback.controller.ts`:**
+   - `POST /api/agents/callback` — `@UseGuards(AgentAuthGuard)`
+   - On `completed`: `SyncJobService.markCompleted()` + update order erpReference directly
+   - On `failed`: `SyncJobService.markFailed()`
+
+4. **Create `src/modules/sync/listeners/order-erp-sync.listener.ts`:**
+   - Listen for order creation events (EventEmitter2 if available, or inject via module)
+   - Use `SyncJobService.createOrderJob()` for order sync
+   - Note: No existing listener file — this is a NEW file
+
+5. **Unit tests**
+
+**Files to create:**
+
+- `src/modules/sync/processors/order-sync.processor.ts`
+- `src/modules/sync/dto/agent-callback.dto.ts`
+- `src/modules/sync/processors/__tests__/order-sync.processor.spec.ts`
+
+**Files to modify:**
+
+- `src/modules/sync/controllers/agent-callback.controller.ts`
+- `src/modules/sync/listeners/order-erp-sync.listener.ts` — NEW (listen for order events)
+- `src/modules/sync/sync.module.ts`
 
 **Validation Commands:**
 
 ```bash
-cd infrastructure/terraform/environments/dev
-
-# Initialize Terraform
-terraform init
-
-# Validate configuration
-terraform validate
-
-# Plan (dry run)
-terraform plan
-
-# Check formatting
-terraform fmt -check -recursive
+pnpm turbo test --filter=@apps/api -- --testPathPattern=order-sync|agent-callback
+pnpm turbo build --filter=@apps/api
 ```
 
 ---
 
-## Task 12: Create Terraform Configuration for Staging Environment
+### Task 12: Dead Letter Queue Service
 
-**Category:** Infrastructure
-**Package:** root
-**Status:** passing
-**Priority:** high
-**Risk Level:** medium
-**Estimated Iterations:** 2
+- **Priority:** P0
+- **Risk:** low
+- **Status:** not started
+- **Depends on:** Task 11
+- **Estimated effort:** 1.5 hours
+- **Spec reference:** REQ-8
 
-**Description:**
-Create Terraform configuration for staging environment with production-like setup (2 API droplets, HA database).
+**Description:**  
+Manage permanently failed jobs — add, list, retry, resolve with audit trail.
 
-**Acceptance Criteria:**
+**Implementation Details:**
 
-- [x] Configuration created at `infrastructure/terraform/environments/staging/`
-- [x] main.tf uses all modules (networking, database, redis, api-cluster)
-- [x] Load balancer configured with SSL and health checks
-- [x] variables.tf and terraform.tfvars.example for staging
-- [x] 2 API droplets for redundancy (configurable via variable)
-- [x] PostgreSQL with 2 nodes (HA configuration)
-- [x] Firewall rules: SSH from admin IPs, HTTP/HTTPS from LB
-- [x] Monitoring alerts configured (CPU, memory, disk, load)
-- [x] Remote state backend configured (commented in main.tf with instructions)
-- [x] Output values documented (14 outputs + load balancer + alerts)
-- [x] README.md with comprehensive setup and deployment guide
+1. **`src/modules/sync/services/dead-letter-queue.service.ts`:**
+   - `add(data: AddToDLQDto)` → INSERT dead_letter_queue
+   - `getUnresolved(vendorId?, page, limit)` → paginated unresolved entries
+   - `getDetails(id)` → single entry with full payload
+   - `retry(id)`:
+     - Load DLQ entry
+     - Create new BullMQ job from original payload
+     - Log audit: "DLQ entry {id} retried"
+     - Return new job ID
+   - `resolve(id, resolvedBy)`:
+     - Mark `resolved=true`, `resolvedAt=NOW()`, `resolvedBy`
+     - Log audit: "DLQ entry {id} resolved by {resolvedBy}"
+   - `cleanup(olderThanDays)` → DELETE old resolved entries
+   - `alertIfNeeded()` → return count of unresolved entries (for scheduler alerts)
 
-**Completion Notes:**
+2. **Populate DLQ endpoints in `sync-admin.controller.ts`:**
+   - All under `@UseGuards(ApiKeyGuard)`, `@ApiTags('admin')`
 
-- Completed on 2026-01-29
-- Created complete staging environment configuration with 5 files (main.tf, variables.tf, outputs.tf, terraform.tfvars.example, README.md)
-- **main.tf features**:
-  - Integrates all 4 modules (networking, database, redis, api-cluster)
-  - Load balancer resource with SSL termination, health checks, HTTP→HTTPS redirect
-  - 4 monitoring alert resources (CPU, memory, disk, load average)
-  - Production-like setup with HA database (2 nodes)
-- **variables.tf**: 36 input variables with staging-specific defaults:
-  - 2 API droplets (s-2vcpu-4gb, $24/month each)
-  - 2 database nodes (db-s-2vcpu-4gb, $60/month each) - HA enabled
-  - Redis (db-s-2vcpu-4gb, $60/month)
-  - Load balancer and monitoring alert configurations
-  - SSL certificate and HTTPS redirect options
-- **outputs.tf**: 20+ outputs including:
-  - VPC and networking details
-  - Database connection info (including pool URI)
-  - Redis connection info
-  - API cluster details
-  - Load balancer (ID, IP, URN, status)
-  - Monitoring alert IDs
-  - Environment summary with cost estimation
-  - Quick start commands and deployment notes
-- **terraform.tfvars.example**: Complete template with:
-  - All required and optional variables documented
-  - Helpful comments and security warnings
-  - Estimated monthly cost: ~$245
-- **README.md**: Comprehensive 500+ line documentation (18KB) including:
-  - Quick start guide (5 steps from setup to deployment)
-  - Post-deployment configuration (DNS, SSL, app setup)
-  - Deployment procedures and zero-downtime deployment
-  - Infrastructure maintenance (scaling, upgrades, state management)
-  - Monitoring and alerting configuration
-  - Backup and recovery procedures
-  - Security best practices (5 recommendations)
-  - Troubleshooting section (8 common issues with solutions)
-  - Cost optimization tips (5 strategies)
-  - Remote state backend setup guide
-  - Comparison table: staging vs production
-- Load balancer configuration:
-  - HTTPS (443) → HTTP (3001) with optional SSL certificate
-  - HTTP (80) → HTTP (3001) with optional redirect to HTTPS
-  - Health check: /health endpoint (10s interval, 3 unhealthy threshold)
-  - Tag-based droplet attachment
-  - VPC integration, sticky sessions disabled
-- Monitoring alerts (DigitalOcean):
-  - CPU > 80% for 5 minutes
-  - Memory > 85% for 5 minutes
-  - Disk > 90% for 5 minutes
-  - Load average > 3 for 5 minutes
-  - Email and Slack notification support
-- All validation commands passed successfully
+3. **Wire `@OnQueueFailed` in processor** (Task 11) to call `DeadLetterQueueService.add()`
+
+4. **Unit tests**
+
+**Files to create:**
+
+- `src/modules/sync/services/dead-letter-queue.service.ts`
+- `src/modules/sync/services/__tests__/dead-letter-queue.service.spec.ts`
+
+**Files to modify:**
+
+- `src/modules/sync/controllers/sync-admin.controller.ts`
+- `src/modules/sync/processors/order-sync.processor.ts` — wire DLQ
+- `src/modules/sync/sync.module.ts`
 
 **Validation Commands:**
 
 ```bash
-cd infrastructure/terraform/environments/staging
-terraform init
-terraform validate
-terraform plan
-terraform fmt -check -recursive
+pnpm turbo test --filter=@apps/api -- --testPathPattern=dead-letter
+pnpm turbo build --filter=@apps/api
 ```
 
 ---
 
-## Task 13: Create Load Balancer Configuration in Terraform
+## Phase 7: Background Services (Tasks 13-16)
 
-**Category:** Infrastructure
-**Package:** root
-**Status:** passing
-**Priority:** high
-**Risk Level:** medium
-**Estimated Iterations:** 2
+### Task 13: Reconciliation Service
 
-**Description:**
-Add DigitalOcean Load Balancer to staging Terraform config with SSL, health checks, and forwarding rules.
+- **Priority:** P1
+- **Risk:** medium
+- **Status:** not started
+- **Depends on:** Task 8
+- **Estimated effort:** 2.5 hours
+- **Spec reference:** REQ-9
 
-**Acceptance Criteria:**
+**Description:**  
+Drift detection via checksum comparison, binary search resolution.
 
-- [x] Load balancer resource added to staging main.tf
-- [x] SSL certificate configured (managed by DigitalOcean or Let's Encrypt)
-- [x] Forwarding rule: HTTPS (443) → HTTP (3001)
-- [x] Health check configured for /health endpoint
-- [x] Sticky sessions disabled (stateless API)
-- [x] Droplets automatically registered (via tag-based attachment)
-- [x] Output variable for load balancer IP
-- [x] DNS instructions in README
+**Implementation Details:**
 
-**Completion Notes:**
+1. **`src/modules/sync/services/reconciliation.service.ts`:**
+   - `detectDrift(vendorId)`:
+     - Call agent `GET /sync/checksum` → ERP hash
+     - Compute PostgreSQL hash from items table
+     - If match → log "no drift" → return
+     - If mismatch → `binarySearchSync(vendorId, minSku, maxSku)`
+   - `binarySearchSync(vendorId, rangeStart, rangeEnd)`:
+     - If range ≤ 10 items → item-by-item comparison
+     - Split range midpoint → checksum each half → recurse on mismatched half
+   - `resolveConflict(vendorId, erpItems[])`:
+     - ERP always wins → upsert to PostgreSQL
+     - Log to reconciliation_events
+   - `triggerFullSync(vendorId)` → public method for admin endpoint
 
-- Completed as part of Task 12 on 2026-01-29
-- Load balancer resource `digitalocean_loadbalancer.api` created in staging main.tf
-- Features implemented:
-  - Two forwarding rules:
-    - HTTPS (443) → HTTP (3001) with optional SSL certificate
-    - HTTP (80) → HTTP (3001) with optional HTTPS redirect
-  - Health check configuration:
-    - Protocol: HTTP, Port: 3001, Path: /health
-    - Check interval: 10s, Response timeout: 5s
-    - Unhealthy threshold: 3, Healthy threshold: 2
-  - Sticky sessions: none (stateless API)
-  - Droplet attachment: tag-based (`${project}-${environment}-api`)
-  - VPC integration for private networking
-  - PROXY protocol support (configurable)
-- Outputs added:
-  - load_balancer_id, load_balancer_ip, load_balancer_urn
-  - load_balancer_name, load_balancer_status
-  - load_balancer_url (HTTP and HTTPS)
-  - health_check_url
-- README includes:
-  - Complete SSL certificate setup guide (Let's Encrypt and custom)
-  - DNS configuration instructions
-  - Post-deployment testing procedures
-  - HTTPS verification commands
-- SSL certificate handling:
-  - Variable: `ssl_certificate_name` (optional)
-  - HTTPS redirect: configurable via `enable_https_redirect`
-  - Instructions for Let's Encrypt setup in README
-- All validation commands passed
+2. **Admin endpoints:**
+   - `POST /api/admin/reconciliation/trigger` — `@UseGuards(ApiKeyGuard)`
+   - `GET /api/admin/reconciliation/events` — paginated event log
+
+3. **Unit tests**
+
+**Files to create:**
+
+- `src/modules/sync/services/reconciliation.service.ts`
+- `src/modules/sync/dto/reconciliation.dto.ts`
+- `src/modules/sync/services/__tests__/reconciliation.service.spec.ts`
+
+**Files to modify:**
+
+- `src/modules/sync/controllers/sync-admin.controller.ts`
+- `src/modules/sync/sync.module.ts`
 
 **Validation Commands:**
 
 ```bash
-cd infrastructure/terraform/environments/staging
-terraform validate
-terraform plan | grep digitalocean_loadbalancer
+pnpm turbo test --filter=@apps/api -- --testPathPattern=reconciliation
+pnpm turbo build --filter=@apps/api
 ```
 
 ---
 
-## Task 14: Create Terraform Backend Configuration Script
+### Task 14: Sync Scheduler + Cleanup + Alert Services
 
-**Category:** Infrastructure
-**Package:** root
-**Status:** passing
-**Priority:** high
-**Risk Level:** low
-**Estimated Iterations:** 1
+- **Priority:** P1
+- **Risk:** low
+- **Status:** not started
+- **Depends on:** Task 5, Task 12, Task 13
+- **Estimated effort:** 2 hours
+- **Spec reference:** REQ-10
 
-**Description:**
-Create initialization script to set up Terraform remote state backend (DigitalOcean Spaces or S3).
+**Description:**  
+Replace all cron jobs with `@nestjs/schedule` decorators.
 
-**Acceptance Criteria:**
+**Implementation Details:**
 
-- [x] Script created at `infrastructure/terraform/scripts/init-backend.sh`
-- [x] Creates S3-compatible bucket (DigitalOcean Spaces)
-- [x] Configures bucket for state storage
-- [x] Enables versioning for state files
-- [x] Creates state lock table (if using DynamoDB) - N/A (DigitalOcean Spaces doesn't require DynamoDB)
-- [x] Script is idempotent
-- [x] Documentation in README
+1. **`src/modules/sync/schedulers/sync-scheduler.service.ts`:**
 
-**Completion Notes:**
+   ```typescript
+   @Cron('0 * * * *') async detectDrift()         // hourly
+   @Interval(300_000)  async checkAgentHealth()    // every 5 min
+   @Interval(900_000)  async checkDLQ()            // every 15 min
+   @Cron('0 2 * * *')  async cleanupExpiredJobs()  // daily 2AM
+   @Cron('0 3 * * 0')  async archiveReconEvents()  // Sun 3AM
+   @Cron('0 4 * * 6')  async cleanupResolvedDLQ()  // Sat 4AM
+   ```
 
-- Completed on 2026-01-29
-- Created `infrastructure/terraform/scripts/init-backend.sh` (8.5KB, 300+ lines)
-- Created `infrastructure/terraform/scripts/README.md` (5.8KB comprehensive documentation)
-- Updated main infrastructure README with backend setup instructions
-- Updated dev and staging environment READMEs with automated setup instructions
-- Script features:
-  - Validates all inputs (environment: dev/staging/production, region: nyc3/sfo3/sgp1/fra1/ams3)
-  - Checks prerequisites (AWS CLI, credentials)
-  - Creates DigitalOcean Spaces bucket if not exists
-  - Enables versioning for state rollback capability
-  - Sets lifecycle policy (deletes versions older than 90 days)
-  - Generates `backend-config.tfvars` in environment directory
-  - Color-coded output for easy reading
-  - Comprehensive error handling and logging
-  - Idempotent - safe to run multiple times
-  - Usage examples and help message
-- Documentation includes:
-  - Prerequisites (AWS CLI, Spaces keys)
-  - Setup credentials (environment variables or ~/.aws/credentials)
-  - Usage examples for all 3 environments
-  - Security best practices
-  - Troubleshooting section
-  - Cost considerations (~$5/month for all environments)
-  - State management commands
-  - Migration guide from local state
-- All validation commands passed successfully
+2. **`src/modules/sync/services/sync-cleanup.service.ts`:**
+   - `cleanupExpiredJobs()` → delete sync_jobs where expiresAt < NOW()
+   - `archiveReconciliationEvents(olderThanDays: 30)` → delete old events
+   - `cleanupResolvedDLQ(olderThanDays: 30)` → delete resolved DLQ entries
+
+3. **`src/modules/sync/services/alert.service.ts`:**
+   - `sendAlert(type, message, context)`:
+     - Always log via Logger (warn level)
+     - If `SLACK_WEBHOOK_URL` configured → POST to Slack
+   - Alert types: `agent_offline`, `dlq_entries_found`, `circuit_breaker_open`, `reconciliation_drift`
+
+4. **Unit tests**
+
+**Files to create:**
+
+- `src/modules/sync/schedulers/sync-scheduler.service.ts`
+- `src/modules/sync/services/sync-cleanup.service.ts`
+- `src/modules/sync/services/alert.service.ts`
+- `src/modules/sync/services/__tests__/sync-scheduler.service.spec.ts`
+- `src/modules/sync/services/__tests__/alert.service.spec.ts`
+
+**Files to modify:**
+
+- `src/modules/sync/sync.module.ts`
 
 **Validation Commands:**
 
 ```bash
-cd infrastructure/terraform/scripts
-chmod +x init-backend.sh
-
-# Dry run
-bash -n init-backend.sh
-
-# shellcheck
-shellcheck init-backend.sh || echo "shellcheck not installed"
+pnpm turbo test --filter=@apps/api -- --testPathPattern=sync-scheduler|alert|sync-cleanup
+pnpm turbo build --filter=@apps/api
 ```
 
 ---
 
-## Task 15: Create Ansible Playbook for Initial Server Setup
+### Task 15: Sync Metrics Service
 
-**Category:** Configuration Management
-**Package:** root
-**Status:** passing
-**Priority:** medium
-**Risk Level:** low
-**Estimated Iterations:** 2
+- **Priority:** P1
+- **Risk:** low
+- **Status:** not started
+- **Depends on:** Task 10
+- **Estimated effort:** 1.5 hours
+- **Spec reference:** REQ-11
 
-**Description:**
-Create Ansible playbook to configure fresh droplets with Docker, security hardening, and monitoring.
+**Description:**  
+PostgreSQL aggregation queries for sync job metrics, reconciliation metrics, and agent health dashboard.
 
-**Acceptance Criteria:**
+**Implementation Details:**
 
-- [x] Playbook created at `infrastructure/ansible/playbooks/setup-api.yml` (460 lines, 46 tasks)
-- [x] Tasks: install Docker CE, Docker Compose, configure firewall (UFW with SSH rate limiting)
-- [x] Create non-root deploy user (deploy:1001 with Docker group membership)
-- [x] Configure automatic security updates (unattended-upgrades)
-- [x] Install monitoring agent (DigitalOcean agent, Node Exporter optional)
-- [x] SSH hardening (disable root, password auth, enable key-only, max 3 retries)
-- [x] Playbook is idempotent (all tasks use proper Ansible modules)
-- [x] Inventory files for dev and staging (dev.yml, staging.yml)
+1. **`src/modules/sync/services/sync-metrics.service.ts`:**
+   - `getSyncMetrics(vendorId)`:
+     ```typescript
+     // Query sync_jobs: COUNT by status, AVG(completedAt-createdAt) for latency,
+     // SUM(retryCount > 0) / COUNT(*) for retry rate
+     return {
+       total,
+       pending,
+       processing,
+       completed,
+       failed,
+       successRate: ((completed / total) * 100).toFixed(1),
+       avgLatencyMs: number,
+       p95LatencyMs: number,
+       retryRate: ((retried / total) * 100).toFixed(1),
+     };
+     ```
+   - `getReconciliationMetrics(vendorId)`:
+     - Event counts by type, last run timestamp, drift frequency (drifts/total checks)
+   - `getAgentHealth()`:
+     - All agents with status, last heartbeat, uptime percentage
+   - `getJobDetails(jobId)`:
+     - Full job record
 
-**Completion Notes:**
+2. **Admin endpoints in `sync-admin.controller.ts`:**
+   - `GET /api/admin/metrics/:vendorId`
+   - `GET /api/admin/metrics/reconciliation/:vendorId`
+   - `GET /api/admin/sync-status/:jobId`
 
-- Completed on 2026-01-29
-- Created comprehensive Ansible playbook with 46 tasks covering:
-  - System updates and prerequisites (apt packages)
-  - Docker CE installation from official repository
-  - Docker Compose v2.24.5 installation
-  - Deploy user creation with sudo privileges for Docker commands
-  - UFW firewall configuration (SSH rate-limited, HTTP, HTTPS, API port)
-  - SSH hardening (8 security measures applied)
-  - Fail2ban configuration for brute-force protection
-  - Automatic security updates (daily package updates, auto security patches)
-  - DigitalOcean monitoring agent (optional via variable)
-  - Prometheus Node Exporter v1.7.0 (optional via variable)
-  - System tuning for production (sysctl, file descriptor limits)
-  - Docker daemon configuration (log rotation, live-restore)
-- Created inventory files for dev (1 droplet) and staging (2 droplets)
-- Created ansible.cfg with optimized settings
-- Created comprehensive README.md (466 lines) with:
-  - Complete usage guide and examples
-  - Prerequisites and installation
-  - Security best practices section
-  - Troubleshooting guide (8 common issues)
-  - Post-setup verification steps
-  - CI/CD integration examples
-- Created keys/ directory for SSH public key management
-- All validation checks passed (YAML structure, file creation, task count)
+3. **Unit tests**
+
+**Files to create:**
+
+- `src/modules/sync/services/sync-metrics.service.ts`
+- `src/modules/sync/services/__tests__/sync-metrics.service.spec.ts`
+
+**Files to modify:**
+
+- `src/modules/sync/controllers/sync-admin.controller.ts`
+- `src/modules/sync/sync.module.ts`
 
 **Validation Commands:**
 
 ```bash
-cd infrastructure/ansible
-
-# Syntax check (requires Ansible installed)
-ansible-playbook playbooks/setup-api.yml --syntax-check
-
-# Dry run
-ansible-playbook playbooks/setup-api.yml --check -i inventory/dev.yml
+pnpm turbo test --filter=@apps/api -- --testPathPattern=sync-metrics
+pnpm turbo build --filter=@apps/api
 ```
 
 ---
 
-## Task 16: Create Ansible Playbook for API Deployment
+### Task 16: Enhanced Health Checks
 
-**Category:** Configuration Management
-**Package:** root
-**Status:** passing
-**Priority:** medium
-**Risk Level:** medium
-**Estimated Iterations:** 2
+- **Priority:** P1
+- **Risk:** low
+- **Status:** not started
+- **Depends on:** Task 4
+- **Estimated effort:** 1 hour
+- **Spec reference:** REQ-11
 
-**Description:**
-Create Ansible playbook to deploy API updates with zero-downtime strategy.
+**Description:**  
+Add Redis, BullMQ, database, and agent health indicators to the existing `/health` endpoint.
 
-**Acceptance Criteria:**
+**Implementation Details:**
 
-- [x] Playbook created at `infrastructure/ansible/playbooks/update-api.yml`
-- [x] Tasks: pull new Docker image, run health check, update container
-- [x] Blue-green deployment logic
-- [x] Rollback capability if health check fails
-- [x] Environment-specific variables
-- [x] Playbook tested in dev environment (validation ready, requires Ansible + Docker)
+1. **Custom health indicators:**
+   - `src/modules/health/indicators/redis.health.ts` — `PING` redis → up/down
+   - `src/modules/health/indicators/bullmq.health.ts` — check queue sizes → warning if > 100 waiting
+   - `src/modules/health/indicators/agent.health.ts` — count online agents vs total
+   - `src/modules/health/indicators/database.health.ts` — `SELECT 1` → up/down
 
-**Completion Notes:**
+2. **Update `health.controller.ts`:**
+   - Add all 4 new indicators to `health.check([...])`
 
-- Completed on 2026-01-29
-- Created comprehensive Ansible playbook with 35 tasks (11KB)
-- Implements complete blue-green deployment workflow with zero downtime
-- Key features implemented:
-  - Pre-deployment backup of current state
-  - Docker registry login and image pull with retries
-  - Blue-green container determination (alternates between api-blue and api-green)
-  - New container startup with health checks
-  - Configurable health check with timeout (60s default) and interval (5s)
-  - Graceful old container shutdown after new one is healthy
-  - Automatic image cleanup (keeps last 5)
-  - Complete rollback logic on any failure (rescue block)
-  - Comprehensive error handling and logging
-- Playbook variables:
-  - Required: `image_tag`, `environment`, `docker_registry_token`
-  - Optional: `registry_url`, `health_check_url`, `health_check_timeout`, `rollback_on_failure`
-- Updated infrastructure/ansible/README.md with:
-  - Complete playbook description and features
-  - 7 usage examples (dev, staging, rollback disabled, environment variables)
-  - Deploy to multiple droplets strategy (one at a time for safety)
-- Updated inventory files (dev.yml, staging.yml) with deployment configuration variables
-- Deployment workflow: Pull image → Start new container → Health check → Stop old container → Cleanup → Verify
-- Rollback workflow: Stop new container → Restart old container → Display logs → Fail playbook
-- All validation checks passed (YAML structure, task count, key features verified)
+3. **Update `health.module.ts`:**
+   - Import indicators, provide them
+
+4. **Unit tests**
+
+**Files to create:**
+
+- `src/modules/health/indicators/redis.health.ts`
+- `src/modules/health/indicators/bullmq.health.ts`
+- `src/modules/health/indicators/agent.health.ts`
+- `src/modules/health/indicators/database.health.ts`
+
+**Files to modify:**
+
+- `src/modules/health/health.controller.ts`
+- `src/modules/health/health.module.ts`
 
 **Validation Commands:**
 
 ```bash
-cd infrastructure/ansible
-ansible-playbook playbooks/update-api.yml --syntax-check
-ansible-playbook playbooks/update-api.yml --check -i inventory/dev.yml
+pnpm turbo test --filter=@apps/api -- --testPathPattern=health
+pnpm turbo build --filter=@apps/api
 ```
 
 ---
 
-## Task 17: Create GitHub Actions Workflow - Code Quality
+## Phase 8: DevOps & Hardening (Tasks 17-22)
 
-**Category:** CI/CD
-**Package:** root
-**Status:** passing
-**Priority:** high
-**Risk Level:** low
-**Estimated Iterations:** 2
+### Task 17: Secrets Management + .env Hardening
 
-**Description:**
-Create GitHub Actions workflow job for code quality checks (lint, format, type-check, security scan).
+- **Priority:** P0
+- **Risk:** medium
+- **Status:** not started
+- **Depends on:** Task 1
+- **Estimated effort:** 45 min
 
-**Acceptance Criteria:**
+**Description:**  
+Ensure no secrets in code, complete `.env.example`, add gitignore rules.
 
-- [x] Workflow file created: `.github/workflows/ci-cd.yml`
-- [x] Code quality job configured with 10 steps
-- [x] Steps: checkout, setup pnpm, install deps (with cache), lint, format check, type-check
-- [x] Trivy security scan integrated (filesystem scan with SARIF upload)
-- [x] Gitleaks secret detection integrated
-- [x] Dependency audit step (pnpm audit --audit-level=high)
-- [x] Job runs on pull requests and pushes to main/develop branches
-- [x] Uses Turborepo filters: `--filter=...[origin/${{ github.base_ref || 'main' }}]`
-- [x] Caching configured for pnpm (via setup-node) and turbo (via actions/cache)
+**Files to create:**
 
-**Completion Notes:**
+- `scripts/check-secrets.sh` — grep for potential leaked secrets
+- `docs/secrets-guide.md` — document all env vars
 
-- Completed on 2026-01-29
-- Created `.github/workflows/ci-cd.yml` with comprehensive code quality job
-- Configured concurrency control to cancel in-progress runs
-- Environment variables: NODE_VERSION: 20.18.1, PNPM_VERSION: 8
-- Quality check steps:
-  1. Checkout with full history (fetch-depth: 0 for Turborepo)
-  2. Setup pnpm v8
-  3. Setup Node.js 20.18.1 with pnpm cache
-  4. Install dependencies with --frozen-lockfile
-  5. Cache Turborepo build outputs
-  6. Run linter with Turborepo filter (only changed packages)
-  7. Check formatting with prettier
-  8. Run type check across all packages
-  9. Dependency audit (high severity, continue-on-error)
-  10. Gitleaks secret scan
-  11. Trivy filesystem scan (CRITICAL/HIGH vulnerabilities, exit-code 1)
-  12. Upload Trivy results to GitHub Security (SARIF format)
-- Turborepo filter dynamically uses base_ref for PRs: `--filter=...[origin/${{ github.base_ref || 'main' }}]`
-- Fail-fast on critical/high vulnerabilities from Trivy
-- Timeout: 15 minutes
-- All validation commands passed
+**Files to modify:**
+
+- `.gitignore` — ensure `*.env`, `!.env.example`, `!.env.prod.example`
+- `.env.example` — all variables with dummy values + comments
+- `.env.prod.example` — production variable template
 
 **Validation Commands:**
 
 ```bash
-# Validate workflow syntax
-cat .github/workflows/ci-cd.yml | grep -q "code-quality"
-
-# Test locally with act (if installed)
-act pull_request --job code-quality || echo "act not installed"
+bash scripts/check-secrets.sh
 ```
 
 ---
 
-## Task 18: Create GitHub Actions Workflow - Test Job
+### Task 18: Docker Image Tagging + Rollback Script
 
-**Category:** CI/CD
-**Package:** root
-**Status:** passing
-**Priority:** high
-**Risk Level:** low
-**Estimated Iterations:** 2
+- **Priority:** P1
+- **Risk:** low
+- **Status:** not started
+- **Depends on:** Task 16
+- **Estimated effort:** 1 hour
 
-**Description:**
-Create test job in GitHub Actions with service containers for PostgreSQL and Redis, running unit, integration, and E2E tests.
+**Description:**  
+Tag Docker images with Git SHA, create rollback script.
 
-**Acceptance Criteria:**
+**Files to create:**
 
-- [x] Test job added to ci-cd.yml workflow
-- [x] Runs after code-quality job (needs: code-quality)
-- [x] Service containers: PostgreSQL 15-alpine, Redis 7-alpine
-- [x] Health checks for service containers (pg_isready, redis-cli ping)
-- [x] Steps: install deps, run unit tests, integration tests, E2E tests
-- [x] Coverage report generated (test:cov)
-- [x] Coverage uploaded to Codecov
-- [x] Job has coverage threshold check placeholder (80% threshold documented)
-- [x] Uses Turborepo filters for test and coverage
-
-**Completion Notes:**
-
-- Completed on 2026-01-29
-- Added comprehensive test job to `.github/workflows/ci-cd.yml`
-- Service containers configured:
-  - PostgreSQL 15-alpine (port 5432, database: restomarket_test)
-  - Redis 7-alpine (port 6379)
-  - Health checks with intervals (10s) and retries (5)
-- Test job configuration:
-  - Depends on: code-quality job (runs after quality checks pass)
-  - Timeout: 20 minutes
-  - Runner: ubuntu-latest
-- Test steps (11 total):
-  1. Checkout with full history
-  2. Setup pnpm v8
-  3. Setup Node.js with cache
-  4. Install dependencies (--frozen-lockfile)
-  5. Cache Turbo outputs with test-specific key
-  6. Run unit tests with Turborepo filter (only changed packages)
-  7. Run integration tests (continue-on-error for now)
-  8. Run E2E tests (continue-on-error for now)
-  9. Generate coverage report with Turborepo filter
-  10. Upload coverage to Codecov (fail_ci_if_error: false)
-  11. Check coverage threshold (placeholder for 80% threshold)
-- Environment variables for tests:
-  - NODE_ENV: test
-  - DATABASE_URL: postgresql://postgres:postgres@localhost:5432/restomarket_test
-  - REDIS_HOST: localhost
-  - REDIS_PORT: 6379
-- Turborepo optimization: `--filter=...[origin/${{ github.base_ref || 'main' }}]`
-- continue-on-error for integration/E2E tests (not all configured yet)
-- Codecov integration with LCOV coverage files
-- Workflow now has 208 lines total
+- `scripts/build-and-tag.sh`
+- `scripts/rollback.sh`
+- `docs/rollback-runbook.md`
 
 **Validation Commands:**
 
 ```bash
-# Verify test job in workflow
-grep -A 20 "test:" .github/workflows/ci-cd.yml
-
-# Check service containers configured
-grep "services:" .github/workflows/ci-cd.yml
+bash scripts/build-and-tag.sh
+docker images | grep restomarket-api
 ```
 
 ---
 
-## Task 19: Create GitHub Actions Workflow - Build Job
+### Task 19: GitHub Actions CI/CD
 
-**Category:** CI/CD
-**Package:** root
-**Status:** passing
-**Priority:** high
-**Risk Level:** low
-**Estimated Iterations:** 1
+- **Priority:** P1
+- **Risk:** medium
+- **Status:** not started
+- **Depends on:** Task 18
+- **Estimated effort:** 2 hours
 
-**Description:**
-Create build job that compiles all packages and uploads artifacts.
+**Description:**  
+CI/CD pipeline: lint → test → build → Docker → deploy.
 
-**Acceptance Criteria:**
+**Files to create:**
 
-- [x] Build job added to workflow
-- [x] Runs after test job (needs: test)
-- [x] Steps: install deps, build all packages
-- [x] Command: `pnpm turbo build`
-- [x] Build artifacts uploaded for later jobs (API, Web, Packages)
-- [x] Uses Turborepo caching (with build-specific key)
-- [x] Job timeout configured to 15 minutes (target < 10 minutes with caching)
-
-**Completion Notes:**
-
-- Completed on 2026-01-29
-- Added build job to `.github/workflows/ci-cd.yml`
-- Build job configuration:
-  - Depends on: test job (needs: test)
-  - Timeout: 15 minutes (allows buffer, target is < 10 with caching)
-  - Runner: ubuntu-latest
-- Build steps (10 total):
-  1. Checkout with full history (fetch-depth: 0)
-  2. Setup pnpm v8
-  3. Setup Node.js with pnpm cache
-  4. Install dependencies (--frozen-lockfile)
-  5. Cache Turbo build outputs (build-specific key)
-  6. Build all packages with `pnpm turbo build`
-  7. Upload API build artifacts (dist, package.json)
-  8. Upload Web build artifacts (.next, package.json)
-  9. Upload Packages build artifacts (dist, package.json from all packages)
-- Artifact configuration:
-  - Retention: 7 days
-  - API artifacts: apps/api/dist + package.json
-  - Web artifacts: apps/web/.next + package.json (warn if not found)
-  - Packages artifacts: packages/\*/dist + package.json (warn if not found)
-  - if-no-files-found: warn (for web/packages that may not have builds yet)
-- Turborepo caching:
-  - Cache key: `${{ runner.os }}-turbo-build-${{ github.sha }}`
-  - Restore keys: turbo-build prefix, then any turbo cache
-  - Shared cache across test and build jobs
-- Workflow now 277 lines with 3 jobs
+- `.github/workflows/ci-cd.yml` — main pipeline
+- `.github/workflows/security-scan.yml` — Trivy + npm audit
+- `.github/dependabot.yml`
 
 **Validation Commands:**
 
 ```bash
-# Verify build job
-grep -A 15 "build:" .github/workflows/ci-cd.yml
-
-# Test build locally
-pnpm turbo build
+cat .github/workflows/ci-cd.yml | python3 -c "import sys,yaml; yaml.safe_load(sys.stdin)"
 ```
 
 ---
 
-## Task 20: Create GitHub Actions Workflow - Docker Build Job
+### Task 20: Zero-Downtime Deployment Script
 
-**Category:** CI/CD
-**Package:** root
-**Status:** passing
-**Priority:** high
-**Risk Level:** medium
-**Estimated Iterations:** 3
+- **Priority:** P1
+- **Risk:** medium
+- **Status:** not started
+- **Depends on:** Task 18
+- **Estimated effort:** 1.5 hours
 
-**Description:**
-Create job to build Docker images, tag with Git SHA, push to registry, and scan for vulnerabilities.
+**Description:**  
+Blue-green deployment with health verification and automatic rollback.
 
-**Acceptance Criteria:**
+**Files to create:**
 
-- [x] Docker build job added to workflow
-- [x] Runs after build job, only on push events (not PRs)
-- [x] Uses Docker Buildx for efficient builds
-- [x] Logs into GitHub Container Registry (GHCR)
-- [x] Builds image with multiple tags: `<sha>`, `<branch>`, `<branch>-<sha>`, `latest` (main only)
-- [x] Pushes to registry
-- [x] Runs Trivy vulnerability scan on built image
-- [x] Uploads scan results to GitHub Security
-- [x] Fails on high/critical vulnerabilities (exit-code: 1)
-- [x] Uses GitHub Actions cache for layer caching (type=gha)
+- `scripts/deploy-blue-green.sh`
+- `docs/deployment-runbook.md`
 
-**Completion Notes:**
+**Files to modify:**
 
-- Completed on 2026-01-29
-- Added docker-build job to `.github/workflows/ci-cd.yml`
-- Docker build job configuration:
-  - Depends on: build job (needs: build)
-  - Runs only on: push events (if: github.event_name == 'push')
-  - Timeout: 30 minutes
-  - Runner: ubuntu-latest
-  - Permissions: contents: read, packages: write, security-events: write
-- Docker build steps (8 total):
-  1. Checkout repository
-  2. Set up Docker Buildx for efficient multi-platform builds
-  3. Log in to GitHub Container Registry (ghcr.io)
-  4. Extract Docker metadata (tags and labels)
-  5. Build and push Docker image to GHCR
-  6. Run Trivy vulnerability scan on pushed image
-  7. Upload Trivy scan results to GitHub Security (category: docker-image)
-- Image tagging strategy:
-  - Short SHA: `sha-abc1234`
-  - Branch name: `main` or `develop`
-  - Branch + SHA: `main-abc1234`
-  - Latest: only on main branch (conditional)
-  - Full image path: `ghcr.io/{owner}/restomarket-api:{tag}`
-- Docker build configuration:
-  - Context: repository root (.)
-  - Dockerfile: apps/api/Dockerfile
-  - Target: production (multi-stage final stage)
-  - Build args: NODE_ENV=production
-  - Cache: GitHub Actions cache (type=gha, mode=max)
-  - Push: true (pushes to registry)
-- Security scanning:
-  - Trivy scans pushed image by reference
-  - Severity: CRITICAL, HIGH only
-  - Format: SARIF for GitHub Security integration
-  - Exit code: 1 (fails pipeline on vulnerabilities)
-  - Upload: always runs, even if scan fails
-- Layer caching:
-  - cache-from: type=gha (restore from GHA cache)
-  - cache-to: type=gha,mode=max (save to GHA cache)
-  - Enables fast incremental builds
-- Workflow now 345 lines with 4 jobs
-
-**Image Tags:**
-
-```
-ghcr.io/{owner}/restomarket-api:sha-abc1234
-ghcr.io/{owner}/restomarket-api:main
-ghcr.io/{owner}/restomarket-api:main-abc1234
-ghcr.io/{owner}/restomarket-api:latest (only on main branch)
-```
+- Note: `apps/api/src/main.ts` already has `app.enableShutdownHooks()` — no changes needed there
 
 **Validation Commands:**
 
 ```bash
-# Verify docker build job
-grep -A 30 "docker-build:" .github/workflows/ci-cd.yml
-
-# Test Docker build locally
-docker build -t api:test -f apps/api/Dockerfile .
+bash scripts/deploy-blue-green.sh --dry-run
 ```
 
 ---
 
-## Task 21: Create GitHub Actions Workflow - Deploy Staging Job
+### Task 21: Verify Correlation ID Propagation in Sync Services
 
-**Category:** CI/CD
-**Package:** root
-**Status:** passing
-**Priority:** high
-**Risk Level:** medium
-**Estimated Iterations:** 3
+- **Priority:** P1
+- **Risk:** low
+- **Status:** not started
+- **Depends on:** Task 4
+- **Estimated effort:** 30 min
 
 **Description:**
-Create deployment job for staging environment with SSH deployment, health checks, and notifications.
+`CorrelationIdMiddleware` ALREADY EXISTS at `apps/api/src/common/middleware/correlation-id.middleware.ts` and is already applied globally to all routes via `AppModule.configure()`. This task verifies that sync services properly propagate the correlation ID through agent HTTP calls and BullMQ jobs.
 
-**Acceptance Criteria:**
+**Implementation Details:**
 
-- [x] Deploy staging job added to workflow
-- [x] Runs after docker-build, only on `develop` branch
-- [x] Uses GitHub environment: staging
-- [x] SSH deployment to DigitalOcean droplet
-- [x] Steps: SSH in, pull new image, update containers with zero-downtime
-- [x] Health check after deployment
-- [x] Rollback on failed health check
-- [x] Smoke tests after deployment
-- [x] Slack notification on completion
-- [x] Environment secrets documented (requires manual GitHub configuration)
+1. Verify `AgentCommunicationService` passes `req.correlationId` in the `X-Correlation-ID` header to agents
+2. Verify BullMQ job payloads include `correlationId` for traceability
+3. Verify pino logger context includes `correlationId` (already handled by `LoggerContextMiddleware`)
 
-**Completion Notes:**
+**Files to create:** none (middleware already exists)
 
-- Completed on 2026-01-29
-- Added comprehensive deploy-staging job to `.github/workflows/ci-cd.yml` (257 new lines)
-- Job features:
-  - Depends on docker-build job (needs: docker-build)
-  - Conditional: only runs on push to develop branch
-  - Timeout: 15 minutes
-  - Uses GitHub environment: staging
-- Deployment workflow (9 steps):
-  1. Checkout repository
-  2. Set up SSH key from secrets
-  3. Deploy to staging droplet via SSH (appleboy/ssh-action@v1.0.3)
-  4. Run health check with retries (12 attempts, 5s interval)
-  5. Run smoke tests (health endpoint, API version header)
-  6. Rollback on failure (if: failure())
-  7. Notify Slack on success (with deployment details)
-  8. Notify Slack on failure (with rollback notification)
-- SSH deployment features:
-  - Uses deploy.sh script for zero-downtime blue-green deployment
-  - Logs in to GHCR with GitHub token
-  - Pulls image with SHA tag: ghcr.io/{owner}/restomarket-api:sha-{sha}
-  - Exports environment variables (IMAGE_TAG, ENVIRONMENT)
-- Health check configuration:
-  - Tests https://staging-api.example.com/health
-  - 12 retries with 5s delay (total ~60s timeout)
-  - Validates 200 status code
-- Smoke tests verify:
-  - Health endpoint returns valid JSON with "status" field
-  - API version header present (non-critical warning)
-- Rollback logic:
-  - Triggers on any step failure (if: failure())
-  - Identifies previous container image
-  - Uses rollback.sh script with extracted SHA
-  - Restores previous stable version
-- Slack notifications:
-  - Success: Green notification with commit details, author, deployment links
-  - Failure: Red notification with rollback message and log links
-- Required GitHub secrets (documented):
-  - STAGING_HOST: Droplet IP address
-  - STAGING_USERNAME: SSH username (e.g., deploy)
-  - STAGING_SSH_KEY: Private SSH key for authentication
-  - SLACK_WEBHOOK: Slack webhook URL for notifications
-  - GITHUB_TOKEN: Auto-provided by GitHub Actions
-- Workflow now has 602 lines with 5 jobs
-- All validation commands passed successfully
+**Files to modify (if needed):**
+
+- `src/modules/sync/services/agent-communication.service.ts` — ensure correlation ID forwarded
+- `src/modules/sync/services/sync-job.service.ts` — include correlation ID in BullMQ job data
 
 **Validation Commands:**
 
 ```bash
-# Verify deploy job
-grep -A 40 "deploy-staging:" .github/workflows/ci-cd.yml
-
-# Check SSH action configured
-grep "appleboy/ssh-action" .github/workflows/ci-cd.yml
+pnpm turbo build --filter=@apps/api
 ```
 
 ---
 
-## Task 22: Create Deployment Script for Zero-Downtime Deploy
+### Task 22: Integration Tests
 
-**Category:** Deployment
-**Package:** root
-**Status:** passing
-**Priority:** high
-**Risk Level:** high
-**Estimated Iterations:** 2
+- **Priority:** P1
+- **Risk:** low
+- **Status:** not started
+- **Depends on:** Tasks 9, 11, 13
+- **Estimated effort:** 3 hours
 
-**Description:**
-Create bash script for blue-green deployment on droplets, ensuring zero-downtime with health checks.
+**Description:**  
+End-to-end tests for all sync flows.
 
-**Acceptance Criteria:**
+**Test scenarios:**
 
-- [x] Script created at `infrastructure/scripts/deploy.sh`
-- [x] Accepts parameters: image tag, environment
-- [x] Pulls new Docker image
-- [x] Starts new container (blue)
-- [x] Waits for health check to pass
-- [x] Stops old container (green)
-- [x] Renames containers for next deployment
-- [x] Rolls back on failed health check
-- [x] Logs each step
-- [x] Script tested in staging (validation syntax passed, requires Docker daemon for full test)
+1. Agent register → heartbeat → status check → show online
+2. Seed mappings → POST items → verify items in DB with resolved codes
+3. POST items with same content_hash → all skipped
+4. POST items with old timestamp → rejected
+5. POST items with unmapped unit code → item fails, others succeed
+6. POST stock → verify stock in DB
+7. POST warehouses → verify warehouses in DB
+8. Order created → BullMQ job → mock agent callback → order updated
+9. Health endpoint → all subsystems reported
+10. Rate limiting: exceed limit → 429 response
 
-**Completion Notes:**
+**Files to create:**
 
-- Completed on 2026-01-29
-- Created comprehensive blue-green deployment script (300+ lines)
-- Script features:
-  - Blue-green deployment strategy (alternates between blue and green containers)
-  - Configurable health checks with timeout and retry logic
-  - Automatic rollback on failed health checks
-  - Cleanup of old Docker images (keeps last 5)
-  - Color-coded logging (info, success, warning, error)
-  - Comprehensive error handling with trap for cleanup
-  - Environment validation (dev, staging, production)
-  - Configurable via environment variables
-- Health check configuration:
-  - Default URL: http://localhost:3001/health
-  - Timeout: 60 seconds, Interval: 5 seconds
-  - Initial startup wait: 10 seconds
-- Deployment flow implemented:
-  1. Pulls new Docker image
-  2. Starts new container (blue or green)
-  3. Waits for startup + performs health checks
-  4. Stops old container only after new one is healthy
-  5. Cleans up old container and images
-- Rollback logic: If health check fails, stops new container and keeps old one running
-- All validation commands passed successfully
-
-**Deployment Flow:**
-
-```
-1. Pull new image
-2. Start api-blue container
-3. Wait 10s + health check
-4. If healthy: stop api-green, rename blue→green
-5. If unhealthy: stop api-blue, exit 1
-6. Cleanup old images
-```
+- `test/sync-ingest.e2e-spec.ts`
+- `test/order-sync.e2e-spec.ts`
+- `test/agent-registry.e2e-spec.ts`
 
 **Validation Commands:**
 
 ```bash
-cd infrastructure/scripts
-chmod +x deploy.sh
-bash -n deploy.sh  # Syntax check
-shellcheck deploy.sh || echo "shellcheck not installed"
-
-# Test in staging (manual step)
-# ./deploy.sh api:abc1234 staging
+pnpm turbo test:e2e --filter=@apps/api
 ```
 
 ---
 
-## Task 23: Create Rollback Script
+## Summary
 
-**Category:** Deployment
-**Package:** root
-**Status:** passing
-**Priority:** high
-**Risk Level:** medium
-**Estimated Iterations:** 1
-
-**Description:**
-Create script for one-command rollback to previous Docker image version.
-
-**Acceptance Criteria:**
-
-- [x] Script created at `infrastructure/scripts/rollback.sh`
-- [x] Accepts parameter: Git SHA or image tag
-- [x] Lists recent images if no parameter provided (`--list` flag)
-- [x] Pulls specified image (with verification)
-- [x] Deploys using zero-downtime strategy (calls deploy.sh)
-- [x] Verifies rollback with health check (via deploy.sh)
-- [x] Logs rollback action (timestamped log files)
-- [x] Documentation for usage (comprehensive help message and comments)
-
-**Completion Notes:**
-
-- Completed on 2026-01-29
-- Created comprehensive rollback script (11KB, 300+ lines)
-- Script features:
-  - Interactive confirmation before rollback
-  - Image tag normalization (converts Git SHA to sha- prefix)
-  - Image verification before deployment
-  - Zero-downtime deployment via deploy.sh
-  - Comprehensive error handling
-  - Color-coded logging with timestamps
-  - Automatic log file creation (/var/log/rollback-\*.log)
-- List deployments functionality:
-  - Shows local Docker images with created date and size
-  - Shows currently running containers
-  - Provides usage examples
-- Rollback workflow:
-  1. Validates prerequisites (Docker, deploy.sh)
-  2. Normalizes image tag (abc1234 → sha-abc1234)
-  3. Verifies image exists (docker pull)
-  4. Requests user confirmation
-  5. Calls deploy.sh with rollback image
-  6. Verifies deployment success
-  7. Shows current running containers
-- Configuration via environment variables:
-  - REGISTRY_URL (default: ghcr.io)
-  - IMAGE_NAME (default: restomarket-api)
-  - REGISTRY_USERNAME (auto-detected from git or manual)
-  - GITHUB_TOKEN (for private repos)
-- All validation commands passed successfully
-
-**Usage:**
-
-```bash
-# List recent deployments
-./rollback.sh --list
-
-# Rollback to specific version
-./rollback.sh abc1234
-```
-
-**Validation Commands:**
-
-```bash
-cd infrastructure/scripts
-chmod +x rollback.sh
-bash -n rollback.sh
-shellcheck rollback.sh || echo "shellcheck not installed"
-```
+| Phase              | Tasks  | Effort   | Key Deliverable                                       |
+| ------------------ | ------ | -------- | ----------------------------------------------------- |
+| 1: Foundation      | 1-2    | 2.25h    | BullMQ, schedule, opossum deps, config, schemas       |
+| 2: Repositories    | 3      | 1.5h     | 5 typed Drizzle repositories                          |
+| 3: Module Scaffold | 4      | 1h       | SyncModule, guards, directory structure               |
+| 4: Core Services   | 5-8    | 6h       | Agent registry, mappings, circuit breaker, agent HTTP |
+| 5: Direct Ingest   | 9      | 4h       | **Agent → NestJS → PG (direct pipeline)**             |
+| 6: Outbound Sync   | 10-12  | 5.5h     | BullMQ order→ERP, callback, DLQ                       |
+| 7: Background      | 13-16  | 7h       | Reconciliation, scheduler, metrics, health            |
+| 8: Hardening       | 17-22  | 8.75h    | Secrets, CI/CD, deployment, verify correlation, E2E   |
+| **Total**          | **22** | **~28h** | **Production-grade NestJS ERP sync**                  |
 
 ---
 
-## Task 24: Configure Image Retention Policy
-
-**Category:** Deployment
-**Package:** root
-**Status:** passing
-**Priority:** medium
-**Risk Level:** low
-**Estimated Iterations:** 1
-
-**Description:**
-Create script or GitHub Action to automatically clean up old Docker images, keeping only the 5 most recent.
-
-**Acceptance Criteria:**
-
-- [x] Cleanup script created at `infrastructure/scripts/cleanup-images.sh`
-- [x] Lists images for a given repository
-- [x] Keeps 5 most recent images (by timestamp)
-- [x] Deletes older images
-- [x] Preserves images tagged with `latest`, `stable`, semantic versions
-- [x] Runs weekly via cron or GitHub Actions scheduled workflow
-- [x] Logs deleted images
-
-**Completion Notes:**
-
-- Completed on 2026-01-29
-- Created comprehensive cleanup-images.sh script (300+ lines, 9KB) with:
-  - Blue-green deployment-aware cleanup
-  - Protected tag preservation (latest, stable, semantic versions, branch tags)
-  - Configurable retention count (default: 5)
-  - Dry-run mode for safe testing
-  - Color-coded logging with timestamps
-  - Support for both local and registry cleanup
-- Created GitHub Actions workflow `.github/workflows/cleanup-images.yml`:
-  - Scheduled weekly (Sundays at 2:00 AM UTC)
-  - Manual trigger support with configurable parameters
-  - Artifact upload for cleanup logs (30-day retention)
-  - Slack notification on failure
-  - Registry cleanup instructions included
-- Created comprehensive documentation in `infrastructure/scripts/README.md`:
-  - Complete usage guide for all 3 scripts (deploy, rollback, cleanup)
-  - Prerequisites and installation instructions
-  - Security considerations
-  - Troubleshooting section
-  - CI/CD integration details
-- All validation commands passed successfully
-
-**Validation Commands:**
-
-```bash
-cd infrastructure/scripts
-chmod +x cleanup-images.sh
-bash -n cleanup-images.sh
-shellcheck cleanup-images.sh || echo "shellcheck not installed"
-```
-
----
-
-## Task 25: Setup Secrets in GitHub Actions
-
-**Category:** Security
-**Package:** root
-**Status:** passing
-**Priority:** high
-**Risk Level:** high
-**Estimated Iterations:** 1
-
-**Description:**
-Configure all required secrets in GitHub repository settings for CI/CD pipeline.
-
-**Acceptance Criteria:**
-
-- [x] GitHub repository secrets configured
-- [x] Secrets for staging environment (required for deploy-staging):
-  - `STAGING_HOST` - Droplet IP
-  - `STAGING_USERNAME` - SSH user (e.g. deploy)
-  - `STAGING_SSH_KEY` - Private SSH key
-  - Optional when used: `DO_REGISTRY_TOKEN`, `DATABASE_URL`, `REDIS_URL`
-- [x] Secrets for registries:
-  - `GITHUB_TOKEN` (auto-provided; do not create)
-  - `SNYK_TOKEN` (optional, if using Snyk)
-- [x] Secrets for notifications:
-  - `SLACK_WEBHOOK` - Slack webhook URL
-- [x] Documentation of all required secrets in README and MANUAL_TASKS.md
-
-**Completion Notes:**
-
-- Completed on 2026-01-29
-- Repository secrets verified: STAGING_HOST, STAGING_USERNAME, STAGING_SSH_KEY, SLACK_WEBHOOK
-- Environment `staging` created with deployment branch rule for `develop`
-- Validation: `gh-list-secrets-env.sh` and `gh-setup-staging-secrets.sh` both pass; Verify Secrets workflow available in Actions
-
-**Validation:**
-This is a manual configuration task. Validation:
-
-- [x] All required secrets listed in Settings > Secrets and variables > Actions
-- [x] Secrets match the workflow file references (ci-cd.yml, verify-secrets.yml)
-- [ ] Test deployment runs successfully without secret errors (run on next push to develop)
-
----
-
-## Task 26: Configure Branch Protection Rules
-
-**Category:** CI/CD
-**Package:** root
-**Status:** blocked
-**Priority:** high
-**Risk Level:** low
-**Estimated Iterations:** 1
-
-**Blocker:** Requires GitHub repository admin access to configure branch protection rules in Settings > Branches. This task must be completed manually by someone with repository admin permissions.
-
-**Description:**
-Set up branch protection rules on `main` and `develop` branches to require CI checks before merging.
-
-**Acceptance Criteria:**
-
-- [ ] Branch protection enabled for `main` branch
-- [ ] Branch protection enabled for `develop` branch
-- [ ] Required status checks: code-quality, test, build
-- [ ] Require pull request before merging
-- [ ] Require at least 1 approval for main
-- [ ] Dismiss stale reviews when new commits pushed
-- [ ] Require linear history (optional)
-- [ ] Do not allow force pushes
-- [ ] Do not allow deletions
-
-**Validation:**
-Manual configuration in GitHub Settings > Branches
-
-- [ ] Rules visible in Settings > Branches
-- [ ] Test by creating PR - verify checks must pass
-
----
-
-## Task 27: Create Pre-commit Hook for Secret Detection
-
-**Category:** Security
-**Package:** root
-**Status:** passing
-**Priority:** high
-**Risk Level:** low
-**Estimated Iterations:** 1
-
-**Description:**
-Set up pre-commit hook using `gitleaks` or `detect-secrets` to prevent committing secrets.
-
-**Acceptance Criteria:**
-
-- [x] `.pre-commit-config.yaml` created
-- [x] Secret detection configured (gitleaks or detect-secrets)
-- [x] Hook runs on every commit
-- [x] Blocks commit if secrets detected
-- [x] Instructions in README for developers to install pre-commit
-- [x] CI also runs secret scan (redundancy)
-- [x] False positives documented
-
-**Completion Notes:**
-
-- Completed as part of Task 2 on 2026-01-29
-- Created comprehensive .pre-commit-config.yaml with gitleaks v8.18.2
-- Configured 3 hook categories:
-  - Secret Detection: gitleaks hook
-  - General file checks: trailing whitespace, end-of-file, YAML/JSON validation, large files, merge conflicts, private key detection
-  - Terraform validation: terraform_fmt, terraform_validate, terraform_tflint
-- Created .gitleaks.toml for custom secret detection rules and allowlists
-- Documentation in docs/SECRETS_MANAGEMENT.md includes pre-commit setup instructions
-- CI/CD workflow (Task 17) includes gitleaks scan for redundancy
-- All validation commands passed successfully
-
-**Validation Commands:**
-
-```bash
-# Install pre-commit
-pip install pre-commit
-
-# Install hooks
-pre-commit install
-
-# Test hook
-pre-commit run --all-files
-
-# Test by adding fake secret
-echo "API_KEY=sk-1234567890abcdef" > test.env
-git add test.env
-git commit -m "test" # Should fail
-```
-
----
-
-## Task 28: Create Monitoring Alert Configuration
-
-**Category:** Monitoring
-**Package:** root
-**Status:** passing
-**Priority:** medium
-**Risk Level:** low
-**Estimated Iterations:** 1
-
-**Description:**
-Add monitoring alerts to staging Terraform config for CPU, memory, disk, and health check failures.
-
-**Acceptance Criteria:**
-
-- [x] Terraform resource for DigitalOcean monitoring alerts
-- [x] Alert: CPU usage > 80% for 5 minutes
-- [x] Alert: Memory usage > 85% for 5 minutes
-- [x] Alert: Disk usage > 90%
-- [x] Alert: Health check failures (via load balancer health checks)
-- [x] Email notifications configured
-- [x] Slack notifications configured (optional)
-- [x] Alerts tested in staging (ready for testing when infrastructure deployed)
-
-**Completion Notes:**
-
-- Completed as part of Task 12 on 2026-01-29
-- Created 4 DigitalOcean monitoring alert resources in staging Terraform configuration:
-  - CPU alert: Triggers when CPU usage > 80% for 5 minutes
-  - Memory alert: Triggers when memory usage > 85% for 5 minutes
-  - Disk alert: Triggers when disk usage > 90% for 5 minutes
-  - Load average alert: Triggers when load > 3 for 5 minutes
-- Alert configuration features:
-  - Email notification support via `alert_email` variable
-  - Optional Slack notification via `alert_slack_url` variable
-  - Alerts apply to all droplets with staging API tag
-  - Alert outputs: IDs for all 4 alert resources
-- Health check monitoring handled by load balancer:
-  - /health endpoint checked every 10 seconds
-  - 3 failed checks marks droplet unhealthy
-  - Automatically removes unhealthy droplets from rotation
-- Documentation in staging README.md includes alert configuration and setup
-- All validation commands passed successfully
-
-**Validation Commands:**
-
-```bash
-cd infrastructure/terraform/environments/staging
-terraform validate
-terraform plan | grep digitalocean_monitor_alert
-```
-
----
-
-## Task 29: Create Documentation - Deployment Runbook
-
-**Category:** Documentation
-**Package:** root
-**Status:** passing
-**Priority:** medium
-**Risk Level:** low
-**Estimated Iterations:** 1
-
-**Description:**
-Write comprehensive deployment runbook with step-by-step procedures for deployments, rollbacks, and incident response.
-
-**Acceptance Criteria:**
-
-- [x] Document created at `infrastructure/docs/deployment-runbook.md` (1,019 lines, 25KB)
-- [x] Sections: Normal deployment, Rollback, Emergency procedures
-- [x] Step-by-step instructions with commands
-- [x] Troubleshooting section (8 common issues with solutions)
-- [x] Contact information for escalations
-- [x] Links to monitoring dashboards
-- [x] Runbook tested by following it for a staging deployment (documented, ready for manual test)
-
-**Completion Notes:**
-
-- Completed on 2026-01-29
-- Created comprehensive deployment runbook with 1,019 lines covering:
-  - Normal deployment procedures (3 methods: GitHub Actions, Manual SSH, Ansible)
-  - Rollback procedures (3 methods: Automated, Manual, Database rollback)
-  - Emergency procedures (critical outage, partial outage, database issues)
-  - Troubleshooting section with 8 common issues and solutions
-  - Monitoring and alerts configuration
-  - Post-deployment verification checklist and smoke tests
-  - Contact information and escalation paths
-  - Command reference appendix
-- All sections include detailed step-by-step instructions with actual commands
-- Covers dev, staging, and production (when ready) environments
-- All validation commands passed successfully
-
-**Validation Commands:**
-
-```bash
-# Verify document exists and is complete
-cat infrastructure/docs/deployment-runbook.md | grep -i rollback
-cat infrastructure/docs/deployment-runbook.md | grep -i emergency
-```
-
----
-
-## Task 30: Create Documentation - Secrets Management Guide
-
-**Category:** Documentation
-**Package:** root
-**Status:** passing
-**Priority:** medium
-**Risk Level:** low
-**Estimated Iterations:** 1
-
-**Description:**
-Document secrets management practices, rotation procedures, and access controls.
-
-**Acceptance Criteria:**
-
-- [x] Document created at `docs/SECRETS_MANAGEMENT.md` (11.7KB)
-- [x] Sections: Where secrets are stored, How to add new secrets, Rotation procedures
-- [x] List of all secrets and their purposes
-- [x] Access control documentation
-- [x] Incident response for leaked secrets
-- [x] Secret rotation schedule (90 days)
-- [x] Examples for each platform (GitHub, DigitalOcean, Vercel)
-
-**Completion Notes:**
-
-- Completed as part of Task 2 on 2026-01-29
-- Created comprehensive secrets management guide at docs/SECRETS_MANAGEMENT.md (11.7KB, 400+ lines)
-- Document sections include:
-  - Overview and security principles
-  - Where secrets are stored (local development, GitHub Actions, DigitalOcean, Vercel)
-  - Complete list of secrets by category (database, API keys, tokens, certificates)
-  - How to add new secrets (step-by-step for each platform)
-  - Rotation procedures with detailed steps for each secret type
-  - Rotation schedule (critical: 30 days, high: 90 days, medium: 180 days, low: annual)
-  - Access control best practices and audit procedures
-  - Incident response playbook for leaked secrets (detection, immediate actions, investigation, recovery)
-  - Best practices and security guidelines
-  - Prohibited practices
-  - Pre-commit hook setup instructions
-- Platform-specific examples provided for GitHub Actions, DigitalOcean, and Vercel
-- Integrated with .pre-commit-config.yaml and .gitleaks.toml
-- All validation commands passed successfully
-
-**Validation Commands:**
-
-```bash
-cat infrastructure/docs/secrets-management.md | grep -i rotation
-cat infrastructure/docs/secrets-management.md | grep -i github
-```
-
----
-
-## Task 31: Create Architecture Diagrams
-
-**Category:** Documentation
-**Package:** root
-**Status:** passing
-**Priority:** low
-**Risk Level:** low
-**Estimated Iterations:** 2
-
-**Description:**
-Create visual diagrams for infrastructure topology, CI/CD pipeline, deployment flow, and network security.
-
-**Acceptance Criteria:**
-
-- [x] Diagrams created in `infrastructure/docs/diagrams/`
-- [x] Infrastructure topology diagram (using Mermaid)
-- [x] CI/CD pipeline flow diagram
-- [x] Deployment flow diagram (blue-green)
-- [x] Network security diagram (VPC, firewall, LB)
-- [x] Diagrams referenced in main README
-- [x] Source files included (editable Mermaid format)
-
-**Completion Notes:**
-
-- Completed on 2026-01-29
-- Created comprehensive Mermaid diagrams (4 diagram files) in infrastructure/docs/diagrams/:
-  - **topology.md**: Infrastructure architecture for dev and staging environments with VPC, services, firewalls, monitoring, cost breakdown (staging: $245/month, dev: $36/month)
-  - **cicd-pipeline.md**: Complete CI/CD pipeline flow with 5 stages, job dependencies, caching strategy, security scanning points, performance targets, branch protection rules
-  - **deployment-flow.md**: Blue-green deployment sequence diagram with health checks, rollback logic, deployment methods comparison, zero-downtime timeline, deployment artifacts, time breakdown (~2 minutes)
-  - **network-security.md**: Comprehensive security architecture with security zones, firewall rules detail (API, database, Redis), UFW/Fail2ban configuration, SSH hardening flow, SSL/TLS setup, 5-layer security model, attack surface minimization, security monitoring
-- Created comprehensive README.md in diagrams directory with:
-  - Diagram descriptions and links
-  - Viewing instructions for GitHub, VS Code, Mermaid Live Editor
-  - Diagram types reference and syntax examples
-  - Consistent color scheme documentation
-  - Export instructions (PNG, SVG, PDF, CLI)
-  - Integration references and update procedures
-- Updated infrastructure/README.md with:
-  - Diagrams directory added to structure
-  - New "Architecture Diagrams" section with links to all 4 diagrams
-  - Reference to diagrams README for viewing/editing
-- All diagrams use Mermaid syntax for automatic GitHub rendering
-- Diagrams are fully editable (text-based, version control friendly)
-- Total documentation: 5 files created, ~15KB of diagram content
-- All validation commands passed successfully
-
-**Validation Commands:**
-
-```bash
-ls infrastructure/docs/diagrams/
-# Should contain: topology.png, cicd.png, deployment.png, network.png
-```
-
----
-
-## Task 32: Create Infrastructure README
-
-**Category:** Documentation
-**Package:** root
-**Status:** passing
-**Priority:** medium
-**Risk Level:** low
-**Estimated Iterations:** 1
-
-**Description:**
-Write comprehensive README for infrastructure directory with setup instructions, usage guide, and troubleshooting.
-
-**Acceptance Criteria:**
-
-- [x] README created at `infrastructure/README.md` (9KB)
-- [x] Sections: Overview, Prerequisites, Setup, Deployment, Rollback, Troubleshooting
-- [x] Links to all documentation
-- [x] Quick start guide for new developers
-- [x] Architecture overview
-- [x] Links to external resources (Terraform docs, DigitalOcean docs)
-
-**Completion Notes:**
-
-- Completed as part of Task 1 on 2026-01-29, updated throughout subsequent tasks
-- Created comprehensive infrastructure README (9KB) with complete documentation
-- Document sections include:
-  - Overview of infrastructure as code approach
-  - Complete directory structure with descriptions
-  - Prerequisites (Terraform, Ansible, Docker, SSH keys, DigitalOcean account)
-  - Quick start guides for:
-    - Local development with Docker Compose
-    - Staging-like testing environment
-    - Provisioning infrastructure with Terraform
-    - Server configuration with Ansible
-  - Deployment procedures with step-by-step instructions
-  - Rollback procedures (automated and manual)
-  - Monitoring and alerts setup
-  - Security guidelines and best practices
-  - Troubleshooting section with common issues
-  - Links to all specialized documentation (deployment runbook, secrets management, scripts)
-- References all infrastructure components: Terraform modules, Ansible playbooks, Docker configs, deployment scripts
-- Includes external resource links to Terraform, Ansible, Docker, and DigitalOcean documentation
-- All validation commands passed successfully
-
-**Validation Commands:**
-
-```bash
-cat infrastructure/README.md | grep -i "quick start"
-cat infrastructure/README.md | grep -i prerequisites
-```
-
----
-
-## Task 33: Test Complete CI/CD Pipeline in Dev
-
-**Category:** Testing
-**Package:** root
-**Status:** blocked
-**Priority:** high
-**Risk Level:** low
-**Estimated Iterations:** 2
-
-**Blocker:** Requires code to be pushed to GitHub repository with Actions enabled. Cannot test CI/CD pipeline without an active GitHub repository and the ability to create PRs and trigger workflow runs.
-
-**Description:**
-End-to-end test of CI/CD pipeline by creating a test PR that goes through all stages.
-
-**Acceptance Criteria:**
-
-- [ ] Create test branch with small change
-- [ ] Open PR to develop
-- [ ] Verify code-quality job runs and passes
-- [ ] Verify test job runs with service containers
-- [ ] Verify build job runs and passes
-- [ ] Merge PR to develop
-- [ ] Verify Docker image builds with correct tags
-- [ ] Verify staging deployment job runs (if in dev first)
-- [ ] All jobs complete successfully
-- [ ] No manual intervention required
-
-**Validation:**
-This is an integration test task. Validation:
-
-- [ ] GitHub Actions shows all green checks
-- [ ] Docker registry contains new image
-- [ ] Deployment successful (if staging exists)
-
----
-
-## Task 34: Test Rollback Procedure in Staging
-
-**Category:** Testing
-**Package:** root
-**Status:** blocked
-**Priority:** high
-**Risk Level:** medium
-**Estimated Iterations:** 1
-
-**Blocker:** Requires deployed staging infrastructure on DigitalOcean with running API droplets. Cannot test rollback procedure without actual infrastructure provisioned and at least two deployed versions to test rollback between.
-
-**Description:**
-Test rollback procedure by deploying a version, then rolling back to previous version.
-
-**Acceptance Criteria:**
-
-- [ ] Deploy current version to staging
-- [ ] Note the Git SHA
-- [ ] Deploy a new version to staging
-- [ ] Execute rollback script with previous SHA
-- [ ] Verify health endpoint returns 200
-- [ ] Verify API is serving previous version
-- [ ] Rollback completes in < 2 minutes
-- [ ] Zero downtime during rollback
-
-**Validation:**
-Manual testing task. Document results in activity.md
-
-- [ ] Rollback script works as expected
-- [ ] Health checks pass after rollback
-- [ ] No downtime observed
-
----
-
-## Task 35: Performance Test - Build Time Optimization
-
-**Category:** Performance
-**Package:** root
-**Status:** blocked
-**Priority:** low
-**Risk Level:** low
-**Estimated Iterations:** 1
-
-**Blocker:** Requires active GitHub repository with Actions and multiple workflow runs to measure baseline performance and optimization impact. Cannot measure build times without actual CI/CD pipeline execution history.
-
-**Description:**
-Measure and optimize CI/CD pipeline build times to meet <10 minute target.
-
-**Acceptance Criteria:**
-
-- [ ] Baseline build time measured
-- [ ] Turborepo remote caching configured (if not already)
-- [ ] pnpm caching optimized in GitHub Actions
-- [ ] Docker layer caching configured
-- [ ] Build time < 10 minutes for typical PR
-- [ ] Build time < 5 minutes for unchanged packages
-- [ ] Performance metrics documented
-
-**Validation Commands:**
-
-```bash
-# Check workflow run times in GitHub Actions
-# Target: < 10 minutes total for PR workflow
-```
-
----
-
-## Task 36: Security Audit - Complete Infrastructure Review
-
-**Category:** Security
-**Package:** root
-**Status:** blocked
-**Priority:** medium
-**Risk Level:** low
-**Estimated Iterations:** 1
-
-**Blocker:** Requires deployed infrastructure on DigitalOcean with running services to conduct comprehensive security audit. Docker image vulnerability scans require built images pushed to registry. SSH and firewall audits require actual provisioned droplets.
-
-**Description:**
-Conduct security audit of complete infrastructure configuration and fix any issues.
-
-**Acceptance Criteria:**
-
-- [ ] Secrets scan completed (gitleaks, trufflehog)
-- [ ] Terraform security scan (tfsec or checkov)
-- [ ] Docker image vulnerability scan (Trivy)
-- [ ] Firewall rules reviewed
-- [ ] SSH configuration reviewed (key-only, no root)
-- [ ] Database access restricted to VPC only
-- [ ] HTTPS enforced (HTTP redirects to HTTPS)
-- [ ] All findings documented and resolved
-
-**Validation Commands:**
-
-```bash
-# Run security scanners
-gitleaks detect --source . --verbose || echo "No secrets found"
-
-cd infrastructure/terraform
-tfsec . || echo "tfsec not installed"
-checkov -d . || echo "checkov not installed"
-
-docker run --rm aquasec/trivy image api:latest
-```
-
----
-
-## Completion Criteria
-
-When ALL tasks show Status: "passing", output:
-**<promise>DEVOPS_COMPLETE</promise>**
-
----
-
-## Blocked Tasks
-
-If any task is blocked, document:
-
-- What's blocking it
-- What was attempted
-- Potential solutions
-- Updated status to "blocked"
-
----
-
-## Notes
-
-- Tasks are ordered by dependency and priority
-- High-risk tasks should be tackled first
-- Each task should result in 1-3 Git commits
-- Run validation commands after each task before marking as "passing"
-- Update this file after each iteration with progress notes
-
-## Manual Tasks Remaining
-
-Tasks 26, 33, 34, 35, 36 require manual configuration or deployed infrastructure. (Task 25: Setup Secrets — completed.)
-
-**Complete documentation available in:** `infrastructure/docs/MANUAL_TASKS.md`
-
-This document provides step-by-step instructions for:
-
-- Task 26: Setting up branch protection rules
-- Task 33: Testing the complete CI/CD pipeline
-- Task 34: Testing rollback procedures
-- Task 35: Performance testing and optimization
-- Task 36: Security audit procedures
-
-All infrastructure code is complete and validated. Manual tasks can be completed by following the comprehensive guide.
+## Quick Status Dashboard
+
+| #   | Task                              | Phase         | Status      |
+| --- | --------------------------------- | ------------- | ----------- |
+| 1   | Dependencies + Redis + Config     | Foundation    | not started |
+| 2   | Database Schemas (Drizzle)        | Foundation    | not started |
+| 3   | Sync Repositories                 | Repositories  | not started |
+| 4   | SyncModule Skeleton + Guards      | Scaffold      | not started |
+| 5   | Agent Registry Service            | Core Services | not started |
+| 6   | ERP Code Mapping Service          | Core Services | not started |
+| 7   | Circuit Breaker Service           | Core Services | not started |
+| 8   | Agent Communication Service       | Core Services | not started |
+| 9   | Sync Ingest Service + Controller  | Direct Ingest | not started |
+| 10  | Sync Job Service                  | Outbound Sync | not started |
+| 11  | Order Sync Processor + Callback   | Outbound Sync | not started |
+| 12  | Dead Letter Queue Service         | Outbound Sync | not started |
+| 13  | Reconciliation Service            | Background    | not started |
+| 14  | Scheduler + Cleanup + Alerts      | Background    | not started |
+| 15  | Sync Metrics Service              | Background    | not started |
+| 16  | Enhanced Health Checks            | Background    | not started |
+| 17  | Secrets Management                | Hardening     | not started |
+| 18  | Docker Image Tagging + Rollback   | Hardening     | not started |
+| 19  | GitHub Actions CI/CD              | Hardening     | not started |
+| 20  | Zero-Downtime Deployment          | Hardening     | not started |
+| 21  | Verify Correlation ID Propagation | Hardening     | not started |
+| 22  | Integration Tests                 | Hardening     | not started |
