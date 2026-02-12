@@ -9,7 +9,6 @@ import { ReconciliationEventsRepository } from '../../../../database/adapters';
 import { AgentRegistryService } from '../agent-registry.service';
 import { AgentCommunicationService } from '../agent-communication.service';
 import { DATABASE_CONNECTION } from '../../../../database/database.module';
-import type { DatabaseConnection } from '@repo/shared';
 
 describe('ReconciliationService', () => {
   let service: ReconciliationService;

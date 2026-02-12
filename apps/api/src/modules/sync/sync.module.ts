@@ -23,9 +23,14 @@ import { SyncIngestService } from './services/sync-ingest.service';
 import { SyncJobService } from './services/sync-job.service';
 import { DeadLetterQueueService } from './services/dead-letter-queue.service';
 import { ReconciliationService } from './services/reconciliation.service';
+import { SyncCleanupService } from './services/sync-cleanup.service';
+import { AlertService } from './services/alert.service';
 
 // Processors
 import { OrderSyncProcessor } from './processors/order-sync.processor';
+
+// Schedulers
+import { SyncSchedulerService } from './schedulers/sync-scheduler.service';
 
 /**
  * SyncModule
@@ -81,10 +86,12 @@ import { OrderSyncProcessor } from './processors/order-sync.processor';
     SyncJobService,
     DeadLetterQueueService,
     ReconciliationService,
+    SyncCleanupService,
+    AlertService,
     // Processors
     OrderSyncProcessor,
-    // Additional services will be added in Tasks 14-15
-    // Schedulers will be added in Task 14
+    // Schedulers
+    SyncSchedulerService,
   ],
   exports: [
     // Key services exported for use by other modules
@@ -96,6 +103,8 @@ import { OrderSyncProcessor } from './processors/order-sync.processor';
     SyncJobService,
     DeadLetterQueueService,
     ReconciliationService,
+    SyncCleanupService,
+    AlertService,
   ],
 })
 export class SyncModule {}
