@@ -19,6 +19,7 @@ import { AgentRegistryService } from './services/agent-registry.service';
 import { ErpMappingService } from './services/erp-mapping.service';
 import { CircuitBreakerService } from './services/circuit-breaker.service';
 import { AgentCommunicationService } from './services/agent-communication.service';
+import { SyncIngestService } from './services/sync-ingest.service';
 
 /**
  * SyncModule
@@ -70,7 +71,8 @@ import { AgentCommunicationService } from './services/agent-communication.servic
     ErpMappingService,
     CircuitBreakerService,
     AgentCommunicationService,
-    // Additional services will be added in Tasks 9-15
+    SyncIngestService,
+    // Additional services will be added in Tasks 10-15
     // Processors will be added in Task 11
     // Schedulers will be added in Task 14
   ],
@@ -80,6 +82,7 @@ import { AgentCommunicationService } from './services/agent-communication.servic
     ErpMappingService,
     CircuitBreakerService,
     AgentCommunicationService,
+    SyncIngestService,
     // SyncJobService (Task 10)
   ],
 })

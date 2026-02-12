@@ -89,7 +89,9 @@ Install NEW packages only (BullMQ, schedule, opossum, bcrypt — helmet and thro
 
 ```bash
 pnpm install
+pnpm turbo lint --filter=@apps/api --fix
 pnpm turbo build --filter=@apps/api
+pnpm turbo type-check
 docker compose config
 ```
 
@@ -186,8 +188,10 @@ Schema files to create (in `packages/shared/src/database/schema/`):
 **Validation Commands:**
 
 ```bash
+pnpm turbo lint --filter=@apps/api --fix
 pnpm turbo build --filter=@repo/shared
 pnpm turbo build --filter=@apps/api
+pnpm turbo type-check
 pnpm db:generate
 pnpm db:migrate
 ```
@@ -248,8 +252,10 @@ NestJS adapters in `apps/api/`:
 **Validation Commands:**
 
 ```bash
+pnpm turbo lint --filter=@apps/api --fix
 pnpm turbo build --filter=@repo/shared
 pnpm turbo build --filter=@apps/api
+pnpm turbo type-check
 ```
 
 ---
@@ -320,7 +326,9 @@ Create `src/modules/sync/` directory structure (matching existing `src/modules/h
 **Validation Commands:**
 
 ```bash
+pnpm turbo lint --filter=@apps/api --fix
 pnpm turbo build --filter=@apps/api
+pnpm turbo type-check
 ```
 
 ---
@@ -407,8 +415,10 @@ Full agent lifecycle — registration, heartbeat, health monitoring, status tran
 **Validation Commands:**
 
 ```bash
-pnpm turbo test --filter=@apps/api -- --testPathPattern=agent-registry
+pnpm turbo lint --filter=@apps/api --fix
 pnpm turbo build --filter=@apps/api
+pnpm turbo test --filter=@apps/api -- --testPathPattern=agent-registry
+pnpm turbo type-check
 ```
 
 ---
@@ -473,8 +483,10 @@ ERP code mapping resolution with in-memory LRU cache. Required before item inges
 **Validation Commands:**
 
 ```bash
-pnpm turbo test --filter=@apps/api -- --testPathPattern=erp-mapping
+pnpm turbo lint --filter=@apps/api --fix
 pnpm turbo build --filter=@apps/api
+pnpm turbo test --filter=@apps/api -- --testPathPattern=erp-mapping
+pnpm turbo type-check
 ```
 
 ---
@@ -525,8 +537,10 @@ Per-vendor circuit breaker using `opossum`. Wraps all outbound HTTP calls to age
 **Validation Commands:**
 
 ```bash
-pnpm turbo test --filter=@apps/api -- --testPathPattern=circuit-breaker
+pnpm turbo lint --filter=@apps/api --fix
 pnpm turbo build --filter=@apps/api
+pnpm turbo test --filter=@apps/api -- --testPathPattern=circuit-breaker
+pnpm turbo type-check
 ```
 
 ---
@@ -1130,8 +1144,10 @@ Add Redis, BullMQ, database, and agent health indicators to the existing `/healt
 **Validation Commands:**
 
 ```bash
-pnpm turbo test --filter=@apps/api -- --testPathPattern=health
+pnpm turbo lint --filter=@apps/api --fix
 pnpm turbo build --filter=@apps/api
+pnpm turbo test --filter=@apps/api -- --testPathPattern=health
+pnpm turbo type-check
 ```
 
 ---
@@ -1163,6 +1179,9 @@ Ensure no secrets in code, complete `.env.example`, add gitignore rules.
 **Validation Commands:**
 
 ```bash
+pnpm turbo lint --filter=@apps/api --fix
+pnpm turbo build --filter=@apps/api
+pnpm turbo type-check
 bash scripts/check-secrets.sh
 ```
 
@@ -1188,6 +1207,9 @@ Tag Docker images with Git SHA, create rollback script.
 **Validation Commands:**
 
 ```bash
+pnpm turbo lint --filter=@apps/api --fix
+pnpm turbo build --filter=@apps/api
+pnpm turbo type-check
 bash scripts/build-and-tag.sh
 docker images | grep restomarket-api
 ```
@@ -1214,6 +1236,9 @@ CI/CD pipeline: lint → test → build → Docker → deploy.
 **Validation Commands:**
 
 ```bash
+pnpm turbo lint --filter=@apps/api --fix
+pnpm turbo build --filter=@apps/api
+pnpm turbo type-check
 cat .github/workflows/ci-cd.yml | python3 -c "import sys,yaml; yaml.safe_load(sys.stdin)"
 ```
 
@@ -1242,6 +1267,9 @@ Blue-green deployment with health verification and automatic rollback.
 **Validation Commands:**
 
 ```bash
+pnpm turbo lint --filter=@apps/api --fix
+pnpm turbo build --filter=@apps/api
+pnpm turbo type-check
 bash scripts/deploy-blue-green.sh --dry-run
 ```
 
@@ -1274,7 +1302,9 @@ bash scripts/deploy-blue-green.sh --dry-run
 **Validation Commands:**
 
 ```bash
+pnpm turbo lint --filter=@apps/api --fix
 pnpm turbo build --filter=@apps/api
+pnpm turbo type-check
 ```
 
 ---
@@ -1312,7 +1342,11 @@ End-to-end tests for all sync flows.
 **Validation Commands:**
 
 ```bash
+pnpm turbo lint --filter=@apps/api --fix
+pnpm turbo build --filter=@apps/api
+pnpm turbo test --filter=@apps/api
 pnpm turbo test:e2e --filter=@apps/api
+pnpm turbo type-check
 ```
 
 ---

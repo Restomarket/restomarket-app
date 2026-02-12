@@ -7,3 +7,7 @@ export * from './erp-code-mappings.schema.js';
 export * from './dead-letter-queue.schema.js';
 export * from './reconciliation-events.schema.js';
 export * from './sync-relations.js';
+export * from './items.schema.js';
+export * from './warehouses.schema.js';
+export * from './stock.schema.js';
+export * from './items-relations.js';

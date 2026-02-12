@@ -112,12 +112,12 @@ describe('AgentRegistryService', () => {
 
       // Verify that the repository was called with a hashed token
       // (bcrypt hashes start with $2b$ and are 60 chars long)
-      const upsertCall = repository.upsert.mock.calls[0][0];
-      expect(upsertCall.authTokenHash).toBeDefined();
-      expect(upsertCall.authTokenHash).toMatch(/^\$2b\$/);
-      expect(upsertCall.authTokenHash.length).toBeGreaterThan(50);
+      const upsertCall = repository.upsert.mock.calls[0]?.[0];
+      expect(upsertCall?.authTokenHash).toBeDefined();
+      expect(upsertCall?.authTokenHash).toMatch(/^\$2b\$/);
+      expect(upsertCall?.authTokenHash.length).toBeGreaterThan(50);
       // The hash should NOT be the plaintext token
-      expect(upsertCall.authTokenHash).not.toBe('plaintext-token');
+      expect(upsertCall?.authTokenHash).not.toBe('plaintext-token');
     });
 
     it('should return null if upsert fails', async () => {

@@ -35,6 +35,11 @@ import {
   deadLetterQueueRelations,
   reconciliationEvents,
   reconciliationEventsRelations,
+  items,
+  itemsRelations,
+  warehouses,
+  stock,
+  stockRelations,
 } from '@repo/shared/database/schema';
 
 // Explicit schema object avoids CJS/ESM interop issues where `import *` adds
@@ -72,6 +77,11 @@ const schema = {
   deadLetterQueueRelations,
   reconciliationEvents,
   reconciliationEventsRelations,
+  items,
+  itemsRelations,
+  warehouses,
+  stock,
+  stockRelations,
 };
 import type { DatabaseConnection as SharedDatabaseConnection } from '@repo/shared';
 import {
