@@ -6,12 +6,17 @@ import { RedisHealthService } from '../redis.health';
 // Mock ioredis with default export
 const mockPing = jest.fn().mockResolvedValue('PONG');
 const mockQuit = jest.fn().mockResolvedValue('OK');
+const mockConnect = jest.fn().mockResolvedValue(undefined);
+const mockDisconnect = jest.fn();
 const mockOn = jest.fn();
 
 jest.mock('ioredis', () => {
   return class MockRedis {
+    status = 'ready';
     ping = mockPing;
     quit = mockQuit;
+    connect = mockConnect;
+    disconnect = mockDisconnect;
     on = mockOn;
   };
 });
@@ -32,6 +37,7 @@ describe('RedisHealthService', () => {
       setContext: jest.fn(),
       warn: jest.fn(),
       error: jest.fn(),
+      debug: jest.fn(),
     };
 
     const module: TestingModule = await Test.createTestingModule({

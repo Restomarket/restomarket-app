@@ -51,6 +51,11 @@ export class RedisHealthService {
     const startTime = Date.now();
 
     try {
+      // Ensure connection is established (lazyConnect: true requires explicit connect)
+      if (this.redis.status === 'wait') {
+        await this.redis.connect();
+      }
+
       await this.redis.ping();
       const responseTime = Date.now() - startTime;
 
@@ -72,7 +77,18 @@ export class RedisHealthService {
 
   async onModuleDestroy() {
     if (this.redis) {
-      await this.redis.quit();
+      try {
+        // Only quit if the connection is actually established
+        if (this.redis.status === 'ready' || this.redis.status === 'connect') {
+          await this.redis.quit();
+        } else if (this.redis.status !== 'end') {
+          // Disconnect without sending QUIT command for connections that never fully connected
+          this.redis.disconnect();
+        }
+      } catch (error) {
+        // Silently handle quit errors during shutdown
+        this.logger.debug({ error }, 'Error during Redis cleanup');
+      }
     }
   }
 }

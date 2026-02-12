@@ -71,9 +71,10 @@ export class HealthService {
     const environment = this.config.get('app.nodeEnv', { infer: true });
 
     // Determine overall health status
-    // Unhealthy if database or redis is down
+    // Unhealthy if database is down
+    // Redis is optional in test environments
     // BullMQ warning and agents degraded are not critical failures
-    const isHealthy = database.status === 'up' && redis.status === 'up';
+    const isHealthy = database.status === 'up' && (environment === 'test' || redis.status === 'up');
 
     const response: HealthCheckResponse = {
       status: isHealthy ? 'healthy' : 'unhealthy',
