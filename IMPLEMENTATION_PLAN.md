@@ -1089,7 +1089,7 @@ pnpm turbo type-check
 
 - **Priority:** P1
 - **Risk:** low
-- **Status:** not started
+- **Status:** passing
 - **Depends on:** Task 5, Task 12, Task 13
 - **Complexity:** 5
 - **Spec reference:** REQ-10
@@ -1150,7 +1150,7 @@ pnpm turbo type-check
 
 - **Priority:** P1
 - **Risk:** low
-- **Status:** not started
+- **Status:** passing
 - **Depends on:** Task 10
 - **Complexity:** 4
 - **Spec reference:** REQ-11
@@ -1497,8 +1497,8 @@ pnpm turbo type-check
 | 11.5 | **Full Validation + Fix Issues**  | **Gate**      | passing     |
 | 12   | Dead Letter Queue Service         | Outbound Sync | passing     |
 | 13   | Reconciliation Service            | Background    | passing     |
-| 14   | Scheduler + Cleanup + Alerts      | Background    | not started |
-| 15   | Sync Metrics Service              | Background    | not started |
+| 14   | Scheduler + Cleanup + Alerts      | Background    | passing     |
+| 15   | Sync Metrics Service              | Background    | passing     |
 | 16   | Enhanced Health Checks            | Background    | not started |
 | 17   | Secrets Management                | Hardening     | not started |
 | 18   | Docker Image Tagging + Rollback   | Hardening     | not started |

@@ -25,6 +25,7 @@ import { DeadLetterQueueService } from './services/dead-letter-queue.service';
 import { ReconciliationService } from './services/reconciliation.service';
 import { SyncCleanupService } from './services/sync-cleanup.service';
 import { AlertService } from './services/alert.service';
+import { SyncMetricsService } from './services/sync-metrics.service';
 
 // Processors
 import { OrderSyncProcessor } from './processors/order-sync.processor';
@@ -88,6 +89,7 @@ import { SyncSchedulerService } from './schedulers/sync-scheduler.service';
     ReconciliationService,
     SyncCleanupService,
     AlertService,
+    SyncMetricsService,
     // Processors
     OrderSyncProcessor,
     // Schedulers
@@ -105,6 +107,7 @@ import { SyncSchedulerService } from './schedulers/sync-scheduler.service';
     ReconciliationService,
     SyncCleanupService,
     AlertService,
+    SyncMetricsService,
   ],
 })
 export class SyncModule {}

@@ -21,6 +21,7 @@ import {
 import { ApiKeyGuard } from '@common/guards';
 import { DeadLetterQueueService } from '../services/dead-letter-queue.service';
 import { ReconciliationService } from '../services/reconciliation.service';
+import { SyncMetricsService } from '../services/sync-metrics.service';
 import { ReconciliationEventsRepository } from '../../../database/adapters';
 
 /**
@@ -56,6 +57,7 @@ export class SyncAdminController {
     private readonly dlqService: DeadLetterQueueService,
     private readonly reconciliationService: ReconciliationService,
     private readonly reconciliationRepo: ReconciliationEventsRepository,
+    private readonly metricsService: SyncMetricsService,
   ) {}
 
   /**
@@ -432,5 +434,161 @@ export class SyncAdminController {
     return result;
   }
 
-  // Additional endpoints will be added in Tasks 14-15
+  /**
+   * Get sync job metrics for a vendor
+   *
+   * GET /api/admin/metrics/:vendorId
+   */
+  @Get('metrics/:vendorId')
+  @ApiOperation({
+    summary: 'Get sync job metrics',
+    description:
+      'Retrieves aggregated sync job metrics for a vendor including latency, success rate, and retry rate.',
+  })
+  @ApiParam({
+    name: 'vendorId',
+    type: String,
+    description: 'Vendor ID',
+    example: 'vendor-123',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Sync job metrics',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          total: 1000,
+          pending: 5,
+          processing: 3,
+          completed: 980,
+          failed: 12,
+          successRate: '98.0',
+          avgLatencyMs: 1500,
+          p95LatencyMs: 2250,
+          retryRate: '5.5',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - invalid API key',
+  })
+  async getSyncMetrics(@Param('vendorId') vendorId: string) {
+    const metrics = await this.metricsService.getSyncMetrics(vendorId);
+    return {
+      success: true,
+      data: metrics,
+    };
+  }
+
+  /**
+   * Get reconciliation metrics for a vendor
+   *
+   * GET /api/admin/metrics/reconciliation/:vendorId
+   */
+  @Get('metrics/reconciliation/:vendorId')
+  @ApiOperation({
+    summary: 'Get reconciliation metrics',
+    description:
+      'Retrieves aggregated reconciliation metrics including drift frequency and event counts.',
+  })
+  @ApiParam({
+    name: 'vendorId',
+    type: String,
+    description: 'Vendor ID',
+    example: 'vendor-123',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Reconciliation metrics',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          eventCount: 50,
+          driftDetected: 5,
+          driftResolved: 4,
+          fullChecksums: 20,
+          incrementalSyncs: 30,
+          avgDurationMs: 3500,
+          lastRun: '2025-01-15T10:00:00Z',
+          driftFrequency: '10.0',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 401,
+    description: 'Unauthorized - invalid API key',
+  })
+  async getReconciliationMetrics(@Param('vendorId') vendorId: string) {
+    const metrics = await this.metricsService.getReconciliationMetrics(vendorId);
+    return {
+      success: true,
+      data: metrics,
+    };
+  }
+
+  /**
+   * Get sync job details by ID
+   *
+   * GET /api/admin/sync-status/:jobId
+   */
+  @Get('sync-status/:jobId')
+  @ApiOperation({
+    summary: 'Get sync job status',
+    description: 'Retrieves full details of a single sync job including payload and error details.',
+  })
+  @ApiParam({
+    name: 'jobId',
+    type: String,
+    description: 'Sync job ID',
+    example: 'job-123',
+  })
+  @ApiResponse({
+    status: 200,
+    description: 'Sync job details',
+    schema: {
+      example: {
+        success: true,
+        data: {
+          id: 'job-123',
+          postgresOrderId: 'order-456',
+          vendorId: 'vendor-123',
+          operation: 'create_order',
+          status: 'completed',
+          payload: { orderId: 'order-456', orderData: {} },
+          retryCount: 1,
+          maxRetries: 5,
+          nextRetryAt: null,
+          errorMessage: null,
+          errorStack: null,
+          erpReference: 'ERP-789',
+          createdAt: '2025-01-15T10:00:00Z',
+          startedAt: '2025-01-15T10:00:05Z',
+          completedAt: '2025-01-15T10:00:10Z',
+          expiresAt: '2025-01-16T10:00:00Z',
+        },
+      },
+    },
+  })
+  @ApiResponse({
+    status: 404,
+    description: 'Sync job not found',
+  })
+  async getSyncJobDetails(@Param('jobId') jobId: string) {
+    const job = await this.metricsService.getJobDetails(jobId);
+    if (!job) {
+      return {
+        success: false,
+        message: 'Sync job not found',
+      };
+    }
+    return {
+      success: true,
+      data: job,
+    };
+  }
 }
