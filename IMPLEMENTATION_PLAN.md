@@ -1368,7 +1368,7 @@ pnpm turbo type-check
 | 2    | Sync Database Schemas (Drizzle)    | Foundation    | P0       | passing         | Sync tables only                    |
 | 2.1  | Orders & Order Items Schemas       | Gap Closure   | P0       | passing         | orders + order_items tables created |
 | 2.2  | Items Schema — Missing Fields      | Gap Closure   | P0       | passing         | 7 ERP fields added                  |
-| 2.3  | Warehouses Schema — Missing Fields | Gap Closure   | P1       | not started     |                                     |
+| 2.3  | Warehouses Schema — Missing Fields | Gap Closure   | P1       | passing         | isDefault, isMain, type added       |
 | 2.4  | Stock Schema — Missing Fields      | Gap Closure   | P1       | not started     |                                     |
 | 2.5  | Business Entity Repositories       | Gap Closure   | P0       | **not started** | **BLOCKING** for Task 2.6, 2.7, 11  |
 | 2.6  | Orders Module                      | Gap Closure   | P0       | **not started** | **BLOCKING** for Task 11            |

@@ -1,4 +1,13 @@
-import { pgTable, uuid, varchar, text, timestamp, boolean, index } from 'drizzle-orm/pg-core';
+import {
+  pgTable,
+  uuid,
+  varchar,
+  text,
+  timestamp,
+  boolean,
+  integer,
+  index,
+} from 'drizzle-orm/pg-core';
 
 export const warehouses = pgTable(
   'warehouses',
@@ -12,6 +21,9 @@ export const warehouses = pgTable(
     city: varchar('city', { length: 100 }),
     postalCode: varchar('postal_code', { length: 20 }),
     country: varchar('country', { length: 2 }).default('FR'),
+    isDefault: boolean('is_default').default(false).notNull(),
+    isMain: boolean('is_main').default(false).notNull(),
+    type: integer('type').default(0).notNull(), // 0=Storage, 1=Transit
     isActive: boolean('is_active').default(true).notNull(),
     contentHash: varchar('content_hash', { length: 64 }).notNull(),
     lastSyncedAt: timestamp('last_synced_at', { withTimezone: true, mode: 'date' }).notNull(),
