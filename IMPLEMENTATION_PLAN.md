@@ -608,7 +608,7 @@ pnpm turbo type-check
 
 - **Priority:** P0
 - **Risk:** high (core architectural change)
-- **Status:** not started
+- **Status:** passing
 - **Depends on:** Task 6, Task 3
 - **Estimated effort:** 4 hours
 - **Spec reference:** REQ-5
@@ -1379,7 +1379,7 @@ pnpm turbo type-check
 | 6   | ERP Code Mapping Service          | Core Services | passing     |
 | 7   | Circuit Breaker Service           | Core Services | passing     |
 | 8   | Agent Communication Service       | Core Services | passing     |
-| 9   | Sync Ingest Service + Controller  | Direct Ingest | not started |
+| 9   | Sync Ingest Service + Controller  | Direct Ingest | passing     |
 | 10  | Sync Job Service                  | Outbound Sync | not started |
 | 11  | Order Sync Processor + Callback   | Outbound Sync | not started |
 | 12  | Dead Letter Queue Service         | Outbound Sync | not started |

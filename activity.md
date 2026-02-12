@@ -586,3 +586,111 @@ Module and structure:
 - ✅ `pnpm turbo lint --filter=@apps/api` — PASSED (6 warnings about turbo env vars, expected)
 
 **Status:** Task 8 PASSING — ready for Task 9
+
+## 2026-02-12 — Task 9: Sync Ingest Service + Controller (COMPLETED)
+
+**What was done:**
+
+- Created 3 new database schemas for sync entities:
+  1. `items.schema.ts` — Product catalog (20 columns, 6 indexes)
+  2. `warehouses.schema.ts` — Warehouse locations (14 columns, 4 indexes)
+  3. `stock.schema.ts` — Inventory levels (11 columns, 5 indexes)
+  - All schemas include `content_hash` and `last_synced_at` for deduplication
+  - Composite unique constraints on vendor+sku, vendor+erpWarehouseId, vendor+warehouse+item
+- Created `items-relations.ts` with Drizzle relations (items → stock, stock → warehouse)
+- Updated schema barrel and database module to register new schemas
+- Generated migration `0009_loud_clint_barton.sql` for 3 new tables
+- Applied migration successfully to PostgreSQL
+- Implemented `SyncIngestService` with direct pipeline (THE CORE ARCHITECTURAL WIN):
+  - `handleItemChanges(vendorId, items, isBatch)`:
+    - Enforces batch limits (500 incremental, 5000 batch)
+    - Content-hash deduplication (skip if hash matches existing)
+    - Timestamp staleness detection (reject old data)
+    - ERP code mapping resolution via ErpMappingService
+    - Unit + VAT mappings REQUIRED (fail item if unmapped)
+    - Family + Subfamily mappings OPTIONAL (null if unmapped)
+    - Batch upsert via Drizzle `onConflictDoUpdate` (vendor_id, sku)
+    - Per-item status tracking (processed/skipped/failed with reasons)
+    - Chunked processing for batch mode (50 items per chunk)
+  - `handleStockChanges(vendorId, stock, isBatch)`:
+    - Resolves item ID from SKU and warehouse ID from erpWarehouseId
+    - Content-hash deduplication
+    - Timestamp staleness detection
+    - Batch upsert via ON CONFLICT (vendor_id, warehouse_id, item_id)
+  - `handleWarehouseChanges(vendorId, warehouses, isBatch)`:
+    - Content-hash deduplication
+    - Timestamp staleness detection
+    - Batch upsert via ON CONFLICT (vendor_id, erp_warehouse_id)
+- Created comprehensive DTOs with class-validator:
+  - `ItemSyncIngestDto` (max 500 items), `ItemSyncBatchIngestDto` (max 5000)
+  - `StockSyncIngestDto` (max 500 stock), `StockSyncBatchIngestDto` (max 5000)
+  - `WarehouseSyncIngestDto` (max 500), `WarehouseSyncBatchIngestDto` (max 5000)
+  - All with nested validation via `@ValidateNested()` and `@Type()` transformers
+- Populated `AgentIngestController` with 6 endpoints:
+  - `POST /api/sync/items` — incremental item sync (30 req/min)
+  - `POST /api/sync/items/batch` — batch item sync (5 req/min)
+  - `POST /api/sync/stock` — incremental stock sync (30 req/min)
+  - `POST /api/sync/stock/batch` — batch stock sync (5 req/min)
+  - `POST /api/sync/warehouses` — incremental warehouse sync (30 req/min)
+  - `POST /api/sync/warehouses/batch` — batch warehouse sync (5 req/min)
+  - All protected with `@UseGuards(AgentAuthGuard)` + Bearer token
+  - All with `@Throttle()` rate limiting per endpoint
+  - All with comprehensive Swagger documentation (`@ApiOperation`, `@ApiResponse`)
+- Registered `SyncIngestService` in SyncModule providers and exports
+- Created DTO barrel export at `src/modules/sync/dto/index.ts`
+- Unit tests: 7/7 passing (batch limits, content-hash dedup, unmapped unit codes, item-not-found, warehouse-not-found)
+
+**Files created:**
+
+Schemas (packages/shared):
+
+- `packages/shared/src/database/schema/items.schema.ts`
+- `packages/shared/src/database/schema/warehouses.schema.ts`
+- `packages/shared/src/database/schema/stock.schema.ts`
+- `packages/shared/src/database/schema/items-relations.ts`
+- `packages/shared/drizzle/migrations/0009_loud_clint_barton.sql`
+
+DTOs (apps/api):
+
+- `apps/api/src/modules/sync/dto/item-sync-ingest.dto.ts`
+- `apps/api/src/modules/sync/dto/stock-sync-ingest.dto.ts`
+- `apps/api/src/modules/sync/dto/warehouse-sync-ingest.dto.ts`
+- `apps/api/src/modules/sync/dto/index.ts`
+
+Service and tests:
+
+- `apps/api/src/modules/sync/services/sync-ingest.service.ts`
+- `apps/api/src/modules/sync/services/__tests__/sync-ingest.service.spec.ts`
+
+**Files modified:**
+
+- `packages/shared/src/database/schema/index.ts` — added 4 new exports
+- `apps/api/src/database/database.module.ts` — registered 4 new schema objects
+- `apps/api/src/modules/sync/controllers/agent-ingest.controller.ts` — populated with 6 endpoints
+- `apps/api/src/modules/sync/sync.module.ts` — added SyncIngestService provider + export
+- `apps/api/src/modules/sync/services/__tests__/agent-registry.service.spec.ts` — fixed TypeScript strict null check
+
+**Key decisions:**
+
+- Direct pipeline implementation: Agent → NestJS → PostgreSQL (one hop, no middleware, full control)
+- Content-hash deduplication at service level (not DB constraint) allows flexible hash algorithms
+- Timestamp comparison uses `getTime()` for numeric comparison (avoids timezone issues)
+- Non-null assertions (`!`) used after length checks (TypeScript strict mode requirement)
+- Batch processing with chunking (50 items per chunk) prevents large transaction timeouts
+- Per-item status tracking provides granular feedback to agents (which items succeeded/failed/skipped)
+- ERP code mapping resolution integrated directly in item pipeline (unit + VAT required, family optional)
+- Stock sync resolves item+warehouse IDs from SKU+erpWarehouseId (validates foreign keys exist)
+- All upserts use Drizzle `onConflictDoUpdate` with `sql\`excluded.\*\`` pattern for type safety
+- Rate limiting differentiated by endpoint type (30 req/min incremental, 5 req/min batch)
+
+**Validation results:**
+
+- ✅ `pnpm turbo build --filter=@repo/shared` — PASSED
+- ✅ `pnpm turbo build --filter=@apps/api` — PASSED
+- ✅ `pnpm db:generate` — Migration generated (19 tables recognized)
+- ✅ `pnpm db:migrate` — Migration applied successfully
+- ✅ `pnpm turbo test --filter=@apps/api -- --testPathPattern=sync-ingest` — PASSED (7/7 tests)
+- ✅ `pnpm turbo type-check` — PASSED (all packages)
+- ✅ `pnpm turbo lint --filter=@apps/api` — PASSED (6 warnings about turbo env vars, expected)
+
+**Status:** Task 9 PASSING — ready for Task 10
