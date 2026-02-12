@@ -327,3 +327,66 @@ Module and structure:
 - ✅ `pnpm turbo lint --filter=@apps/api` — PASSED (6 warnings about turbo env vars, expected)
 
 **Status:** Task 4 PASSING — ready for Task 5
+
+## 2026-02-12 — Task 5: Agent Registry Service (COMPLETED)
+
+**What was done:**
+
+- Created `AgentRegistryService` with full agent lifecycle management:
+  - `register()` — Registers agents with bcrypt-hashed token storage (10 rounds)
+  - `heartbeat()` — Updates agent heartbeat and sets status to 'online'
+  - `deregister()` — Sets agent status to 'offline' (soft delete for audit)
+  - `getAgent()` — Retrieves single agent without sensitive hash
+  - `getAllAgents()` — Retrieves all agents without sensitive hashes
+  - `checkHealth()` — Monitors heartbeat staleness and updates status (online → degraded @ 60s, degraded → offline @ 300s)
+  - `getAgentStats()` — Returns agent count by status
+- Created DTOs with validation:
+  - `RegisterAgentDto` — Validates vendorId, agentUrl, erpType, authToken (min 16 chars), optional version
+  - `AgentHeartbeatDto` — Validates vendorId and optional version
+- Populated `AgentRegistryController` with 5 endpoints:
+  - `POST /api/agents/register` — Agent self-registration with 10 req/min rate limit
+  - `POST /api/agents/heartbeat` — Agent heartbeat with AgentAuthGuard
+  - `DELETE /api/agents/:vendorId` — Admin deregistration with ApiKeyGuard
+  - `GET /api/agents` — Admin list all agents with stats
+  - `GET /api/agents/:vendorId` — Admin get agent details
+- All endpoints have Swagger decorators (`@ApiOperation`, `@ApiResponse`, `@ApiTags`, `@ApiBearerAuth`, `@ApiSecurity`)
+- Updated `SyncModule` to register `AgentRegistryService` and export it
+- Created comprehensive unit tests (18 test cases):
+  - Registration: success, bcrypt hashing, null on failure, error handling
+  - Heartbeat: success, not found, without version parameter
+  - Deregister: success, not found
+  - GetAgent: success with hash removal, not found
+  - GetAllAgents: success with hash removal, empty array
+  - CheckHealth: degraded detection, offline detection, healthy state, multiple changes
+  - GetAgentStats: statistics retrieval
+
+**Files created:**
+
+- `apps/api/src/modules/sync/dto/agent-register.dto.ts`
+- `apps/api/src/modules/sync/dto/agent-heartbeat.dto.ts`
+- `apps/api/src/modules/sync/services/agent-registry.service.ts`
+- `apps/api/src/modules/sync/services/__tests__/agent-registry.service.spec.ts`
+
+**Files modified:**
+
+- `apps/api/src/modules/sync/controllers/agent-registry.controller.ts` — Populated with 5 endpoints
+- `apps/api/src/modules/sync/sync.module.ts` — Added AgentRegistryService to providers and exports
+
+**Key decisions:**
+
+- DTOs use `!` operator for required properties (class-validator handles initialization)
+- Service always removes `authTokenHash` from returned agents (security best practice)
+- Deregister uses soft delete (status → 'offline') rather than hard delete for audit trail
+- Health check uses 60s threshold for degraded, 300s for offline (per spec)
+- Test uses bcrypt hash structure verification instead of spying (bcrypt.hash is read-only)
+- Rate limiting on registration endpoint: 10 per minute per IP (prevents abuse)
+- All admin endpoints require X-API-Key header (ApiKeyGuard)
+- Heartbeat endpoint requires Bearer token (AgentAuthGuard validates against stored hash)
+
+**Validation results:**
+
+- ✅ `pnpm turbo build --filter=@apps/api` — PASSED
+- ✅ `pnpm turbo test --filter=@apps/api -- --testPathPattern=agent-registry` — PASSED (18/18 tests)
+- ✅ `pnpm turbo lint --filter=@apps/api` — PASSED (7 warnings: 6 turbo env vars expected, 1 pre-existing)
+
+**Status:** Task 5 PASSING — ready for Task 6

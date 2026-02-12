@@ -13,6 +13,9 @@ import { ErpMappingController } from './controllers/erp-mapping.controller';
 import { AgentAuthGuard } from '@common/guards/agent-auth.guard';
 import { ApiKeyGuard } from '@common/guards/api-key.guard';
 
+// Services
+import { AgentRegistryService } from './services/agent-registry.service';
+
 /**
  * SyncModule
  *
@@ -54,13 +57,15 @@ import { ApiKeyGuard } from '@common/guards/api-key.guard';
     // Guards
     AgentAuthGuard,
     ApiKeyGuard,
-    // Services will be added in Tasks 5-15
+    // Services
+    AgentRegistryService,
+    // Additional services will be added in Tasks 6-15
     // Processors will be added in Task 11
     // Schedulers will be added in Task 14
   ],
   exports: [
-    // Key services will be exported as they're created
-    // AgentRegistryService (Task 5)
+    // Key services exported for use by other modules
+    AgentRegistryService,
     // SyncJobService (Task 10)
     // ErpMappingService (Task 6)
   ],
