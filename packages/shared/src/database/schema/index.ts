@@ -11,3 +11,6 @@ export * from './items.schema.js';
 export * from './warehouses.schema.js';
 export * from './stock.schema.js';
 export * from './items-relations.js';
+export * from './orders.schema.js';
+export * from './order-items.schema.js';
+export * from './order-relations.js';

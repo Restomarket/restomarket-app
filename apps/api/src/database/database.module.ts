@@ -40,6 +40,10 @@ import {
   warehouses,
   stock,
   stockRelations,
+  orders,
+  orderItems,
+  ordersRelations,
+  orderItemsRelations,
 } from '@repo/shared/database/schema';
 
 // Explicit schema object avoids CJS/ESM interop issues where `import *` adds
@@ -82,6 +86,10 @@ const schema = {
   warehouses,
   stock,
   stockRelations,
+  orders,
+  orderItems,
+  ordersRelations,
+  orderItemsRelations,
 };
 import type { DatabaseConnection as SharedDatabaseConnection } from '@repo/shared';
 import { DATABASE_CONNECTION, POSTGRES_CLIENT } from './database.constants';

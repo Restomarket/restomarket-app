@@ -1306,3 +1306,68 @@ Unit tests:
 - ✅ `pnpm turbo type-check` — PASSED (all 5 packages)
 
 **Status:** Task 17 PASSING — ready for Task 18
+
+## 2026-02-13 — Task 2.1: Orders & Order Items Schemas (COMPLETED)
+
+**What was done:**
+
+- Created `packages/shared/src/database/schema/orders.schema.ts` — Orders table with 45 columns:
+  - Document identity: orderNumber, documentDate, documentType, validationState
+  - Customer info: vendorId, customerId, customerEmail, customerPhone, erpCustomerCode
+  - Addresses: billingAddress, shippingAddress (JSONB)
+  - Logistics: warehouseId (FK→warehouses), deliveryDate, deliveryState
+  - Financial totals: amountVatExcluded, discountRate, discountAmount, vatAmount, amountVatIncluded, costPrice, shippingAmounts
+  - Payment: paymentMethod, paymentStatus, paymentProvider, paymentTransactionId, paymentAmount
+  - ERP sync: erpReference, erpStatus, erpDocumentId, erpSerialId, erpVatId, erpTerritorialityId, erpSettlementModeId, erpSyncedAt, erpSyncError, contentHash
+  - Job tracking: reservationJobId
+  - Notes: customerNotes, internalNotes
+  - Audit: createdBy, updatedBy, createdAt, updatedAt
+  - 8 indexes: vendorId, customerId, validationState, deliveryState, erpDocumentId, documentDate, paymentStatus, orderNumber
+- Created `packages/shared/src/database/schema/order-items.schema.ts` — Order items table with 41 columns:
+  - Line identity: orderId (FK→orders cascade), lineOrder, sku, itemId (FK→items), description
+  - Quantity tracking: quantity, orderedQuantity, deliveredQuantity, remainingQuantityToDeliver, returnedQuantity, invoicedQuantity, remainingQuantityToInvoice
+  - Unit & warehouse: unitCode, warehouseId (FK→warehouses), manageStock
+  - Pricing: purchasePrice, costPrice, unitPrice, netPriceVatExcluded, netPriceVatIncluded, netAmountVatExcluded, netAmountVatIncluded
+  - Discounts & VAT: discountRate, discountAmount, vatRate, vatAmount, erpVatId
+  - Delivery: deliveryDate, deliveryState
+  - Reservation (inline): reservationStatus, reservedAt, reservationExpiresAt
+  - Physical: weight, volume
+  - ERP sync: erpLineId, erpSyncedAt, stockMovementId
+  - 5 indexes: orderId, itemId, deliveryState, reservationStatus, reservationExpiresAt
+- Created `packages/shared/src/database/schema/order-relations.ts`:
+  - ordersRelations: warehouse (one), orderItems (many)
+  - orderItemsRelations: order (one), item (one), warehouse (one)
+- Updated `packages/shared/src/database/schema/sync-relations.ts`:
+  - Added import for `orders`
+  - Uncommented/activated FK relation: syncJobs.postgresOrderId → orders.id
+- Updated `packages/shared/src/database/schema/index.ts` — added 3 new exports
+- Updated `apps/api/src/database/database.module.ts` — registered orders, orderItems, ordersRelations, orderItemsRelations
+
+**Migration issue resolved:**
+
+- `__drizzle_migrations__` tracking table was empty (10 tables already existed but untracked)
+- Manually inserted 10 historical migration records into tracking table
+- Then applied new migration `0010_little_boomer.sql` successfully
+
+**Files created:**
+
+- `packages/shared/src/database/schema/orders.schema.ts`
+- `packages/shared/src/database/schema/order-items.schema.ts`
+- `packages/shared/src/database/schema/order-relations.ts`
+- `packages/shared/drizzle/migrations/0010_little_boomer.sql`
+
+**Files modified:**
+
+- `packages/shared/src/database/schema/sync-relations.ts`
+- `packages/shared/src/database/schema/index.ts`
+- `apps/api/src/database/database.module.ts`
+
+**Validation results:**
+
+- ✅ `pnpm turbo build --filter=@repo/shared` — PASSED
+- ✅ `pnpm turbo build --filter=@apps/api` — PASSED
+- ✅ `pnpm db:migrate` — Migration applied successfully (orders + order_items tables created)
+- ✅ `pnpm turbo type-check` — PASSED (5 packages)
+- ✅ Lint — PASSED (3 pre-existing warnings, 0 errors)
+
+**Status:** Task 2.1 PASSING — ready for Task 2.2

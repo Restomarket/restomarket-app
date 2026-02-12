@@ -4,24 +4,22 @@ import { deadLetterQueue } from './dead-letter-queue.schema.js';
 import { agentRegistry } from './agent-registry.schema.js';
 import { erpCodeMappings } from './erp-code-mappings.schema.js';
 import { reconciliationEvents } from './reconciliation-events.schema.js';
+import { orders } from './orders.schema.js';
 
 /**
  * Sync Schema Relations
  *
  * Defines Drizzle ORM relations between sync tables.
  * Separated from schema files to avoid circular dependencies.
- *
- * Note: Relations to `orders` table are commented out because the orders table
- * does not exist yet. Uncomment when orders module is implemented.
  */
 
 // Sync Jobs Relations
-export const syncJobsRelations = relations(syncJobs, ({ many }) => ({
-  // Relation to orders table (uncomment when orders table exists)
-  // order: one(orders, {
-  //   fields: [syncJobs.postgresOrderId],
-  //   references: [orders.id],
-  // }),
+export const syncJobsRelations = relations(syncJobs, ({ one, many }) => ({
+  // Relation to orders table
+  order: one(orders, {
+    fields: [syncJobs.postgresOrderId],
+    references: [orders.id],
+  }),
 
   // One sync job can have one DLQ entry if it fails permanently
   deadLetterQueueEntries: many(deadLetterQueue),
