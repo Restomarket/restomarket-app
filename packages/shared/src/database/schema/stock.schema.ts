@@ -14,6 +14,14 @@ export const stock = pgTable(
     availableQuantity: numeric('available_quantity', { precision: 10, scale: 2 })
       .notNull()
       .default('0'),
+    // ERP-specific stock tracking fields
+    orderedQuantity: numeric('ordered_quantity', { precision: 10, scale: 2 })
+      .notNull()
+      .default('0'),
+    pump: numeric('pump', { precision: 10, scale: 4 }).notNull().default('0'), // Weighted avg unit cost
+    stockValue: numeric('stock_value', { precision: 12, scale: 2 }).notNull().default('0'), // quantity × pump
+    minStock: numeric('min_stock', { precision: 10, scale: 2 }).notNull().default('0'),
+    maxStock: numeric('max_stock', { precision: 10, scale: 2 }),
     contentHash: varchar('content_hash', { length: 64 }).notNull(),
     lastSyncedAt: timestamp('last_synced_at', { withTimezone: true, mode: 'date' }).notNull(),
     createdAt: timestamp('created_at', { withTimezone: true, mode: 'date' }).notNull().defaultNow(),
