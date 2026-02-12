@@ -734,7 +734,7 @@ pnpm turbo type-check
 
 - **Priority:** P0
 - **Risk:** high
-- **Status:** not started
+- **Status:** passing
 - **Depends on:** Task 3
 - **Estimated effort:** 1.5 hours
 - **Spec reference:** REQ-6
@@ -1380,7 +1380,7 @@ pnpm turbo type-check
 | 7   | Circuit Breaker Service           | Core Services | passing     |
 | 8   | Agent Communication Service       | Core Services | passing     |
 | 9   | Sync Ingest Service + Controller  | Direct Ingest | passing     |
-| 10  | Sync Job Service                  | Outbound Sync | not started |
+| 10  | Sync Job Service                  | Outbound Sync | passing     |
 | 11  | Order Sync Processor + Callback   | Outbound Sync | not started |
 | 12  | Dead Letter Queue Service         | Outbound Sync | not started |
 | 13  | Reconciliation Service            | Background    | not started |

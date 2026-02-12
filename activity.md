@@ -694,3 +694,66 @@ Service and tests:
 - ✅ `pnpm turbo lint --filter=@apps/api` — PASSED (6 warnings about turbo env vars, expected)
 
 **Status:** Task 9 PASSING — ready for Task 10
+
+## 2026-02-12 — Task 10: Sync Job Service (COMPLETED)
+
+**What was done:**
+
+- Created `SyncJobService` for managing sync job lifecycle in PostgreSQL + BullMQ queue management
+- Implemented 7 core methods:
+  1. `createOrderJob()` — Creates sync_jobs row + enqueues BullMQ job with exponential backoff config
+     - Implements idempotency: skips if pending/processing job exists for same orderId
+     - Returns existing job ID if duplicate detected
+     - Sets 24h TTL (expiresAt) on all new jobs
+  2. `markProcessing()` — Updates status to 'processing', sets startedAt timestamp
+  3. `markCompleted()` — Updates status to 'completed', sets completedAt timestamp, stores erpReference
+  4. `markFailed()` — Updates status to 'failed', stores errorMessage + errorStack, tracks retry count
+  5. `getJob()` — Retrieves full job record by ID
+  6. `getPendingJobs()` — Returns pending jobs (optionally filtered by vendor), paginated
+  7. `getRecentJobs()` — Returns recent jobs ordered by createdAt, paginated
+- BullMQ job configuration per spec:
+  - 5 attempts with exponential backoff: 1m → 2m → 4m → 8m → 16m
+  - 24h retention for completed jobs (`removeOnComplete: { age: 86_400 }`)
+  - `removeOnFail: false` — keeps failed jobs for DLQ
+- Correlation ID propagation: included in BullMQ payload for distributed tracing
+- Idempotency protection: checks for existing pending/processing jobs before creating duplicates
+- Comprehensive error handling: all methods return null on failure, log context
+- Registered `SyncJobService` in `SyncModule` providers and exports
+- Created comprehensive unit tests (19 test cases):
+  - createOrderJob: success, idempotency (pending), idempotency (processing), create after completed, DB failure, correlationId
+  - markProcessing: success, not found
+  - markCompleted: success with ERP reference, not found
+  - markFailed: Error object, string error message, not found
+  - getJob: success, not found
+  - getPendingJobs: without vendor filter, with vendor filter
+  - getRecentJobs: with pagination, default values
+
+**Files created:**
+
+- `apps/api/src/modules/sync/services/sync-job.service.ts`
+- `apps/api/src/modules/sync/services/__tests__/sync-job.service.spec.ts`
+
+**Files modified:**
+
+- `apps/api/src/modules/sync/sync.module.ts` — Added SyncJobService to providers and exports
+
+**Key decisions:**
+
+- Idempotency check uses `findByOrderId()` to prevent duplicate jobs for same order
+- Only pending/processing jobs block creation — completed/failed jobs allow new attempts
+- BullMQ job payload includes: syncJobId, vendorId, orderId, orderData, correlationId
+- All status transitions logged with context (jobId, vendorId, status)
+- Error handling: accepts both Error objects and string messages for flexibility
+- Retry tracking: markFailed() accepts retryCount + nextRetryAt for BullMQ coordination
+- Used `@InjectQueue('order-sync')` for type-safe BullMQ queue injection
+- Test mocks use `jest.Mocked<T>` for type safety
+- Fixed TypeScript errors: removed non-existent `updatedAt` field from test fixtures (schema only has createdAt)
+
+**Validation results:**
+
+- ✅ `pnpm --filter @apps/api lint --fix` — PASSED (6 warnings about turbo env vars, expected)
+- ✅ `pnpm turbo build --filter=@apps/api` — PASSED
+- ✅ `pnpm turbo test --filter=@apps/api -- --testPathPattern=sync-job` — PASSED (19/19 tests)
+- ✅ `pnpm turbo type-check` — PASSED (all packages)
+
+**Status:** Task 10 PASSING — ready for Task 11

@@ -20,6 +20,7 @@ import { ErpMappingService } from './services/erp-mapping.service';
 import { CircuitBreakerService } from './services/circuit-breaker.service';
 import { AgentCommunicationService } from './services/agent-communication.service';
 import { SyncIngestService } from './services/sync-ingest.service';
+import { SyncJobService } from './services/sync-job.service';
 
 /**
  * SyncModule
@@ -72,7 +73,8 @@ import { SyncIngestService } from './services/sync-ingest.service';
     CircuitBreakerService,
     AgentCommunicationService,
     SyncIngestService,
-    // Additional services will be added in Tasks 10-15
+    SyncJobService,
+    // Additional services will be added in Tasks 11-15
     // Processors will be added in Task 11
     // Schedulers will be added in Task 14
   ],
@@ -83,7 +85,7 @@ import { SyncIngestService } from './services/sync-ingest.service';
     CircuitBreakerService,
     AgentCommunicationService,
     SyncIngestService,
-    // SyncJobService (Task 10)
+    SyncJobService,
   ],
 })
 export class SyncModule {}
