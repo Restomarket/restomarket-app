@@ -50,7 +50,9 @@ echo "Ralph Loop: $START_ITERATION -> $MAX_ITERATIONS"
 # We grep for the status column value in the table rows (lines starting with |)
 count_tasks() {
     local pattern="$1"
-    grep -cE "^\|.*\| ${pattern} \|" "$PLAN_FILE" 2>/dev/null || echo "0"
+    local count
+    count=$(grep -cE "^\|.*\| ${pattern} \|" "$PLAN_FILE" 2>/dev/null) || count=0
+    echo "$count"
 }
 
 PREVIOUS_COMPLETED=0

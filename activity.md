@@ -119,3 +119,61 @@ All 6 Ralph Wiggum loop documents audited against actual codebase and corrected:
 - Made AGENT_SECRET and API_SECRET optional in dev, required in prod (validation enforces min length when present)
 
 **Status:** Task 1 PASSING — ready for Task 2
+
+## 2026-02-12 — Task 2: Database Schemas (COMPLETED)
+
+**What was done:**
+
+- Created 5 new Drizzle schema files in `packages/shared/src/database/schema/`:
+  1. `sync-jobs.schema.ts` — Job lifecycle tracking (16 columns, 5 indexes)
+  2. `agent-registry.schema.ts` — Agent registration and health (10 columns, 3 indexes)
+  3. `erp-code-mappings.schema.ts` — ERP→Resto code translation (9 columns, 2 indexes + unique constraint)
+  4. `dead-letter-queue.schema.ts` — Failed job persistence (13 columns, 4 indexes)
+  5. `reconciliation-events.schema.ts` — Audit log for drift detection (7 columns, 3 indexes)
+- Created `sync-relations.ts` with Drizzle relations:
+  - syncJobs → deadLetterQueue (one-to-many)
+  - deadLetterQueue → syncJobs (many-to-one)
+  - Empty relations for agent_registry, erp_code_mappings, reconciliation_events (for future expansion)
+- Updated `packages/shared/src/database/schema/index.ts` to export all 6 new files
+- Updated `apps/api/src/database/database.module.ts`:
+  - Added 10 new imports (5 tables + 5 relations)
+  - Registered all in explicit schema object (avoiding CJS/ESM interop issues)
+- Generated migration `0008_nervous_iron_fist.sql` with all 5 new tables
+- Applied migration successfully to PostgreSQL
+
+**Files created:**
+
+- `packages/shared/src/database/schema/sync-jobs.schema.ts`
+- `packages/shared/src/database/schema/agent-registry.schema.ts`
+- `packages/shared/src/database/schema/erp-code-mappings.schema.ts`
+- `packages/shared/src/database/schema/dead-letter-queue.schema.ts`
+- `packages/shared/src/database/schema/reconciliation-events.schema.ts`
+- `packages/shared/src/database/schema/sync-relations.ts`
+- `packages/shared/drizzle/migrations/0008_nervous_iron_fist.sql`
+
+**Files modified:**
+
+- `packages/shared/src/database/schema/index.ts`
+- `apps/api/src/database/database.module.ts`
+
+**Key decisions:**
+
+- Used UUID primary keys with `defaultRandom()` for all sync tables (consistent with auth pattern)
+- All SQL column names use snake_case, TypeScript keys use camelCase
+- Relations separated into sync-relations.ts to avoid circular dependencies
+- Foreign keys are soft (no ON DELETE CASCADE) — business logic handles cleanup
+- All timestamps use `{ withTimezone: true, mode: 'date' }` for timezone support
+- Indexes designed for common query patterns:
+  - Composite indexes for vendor+status, vendor+timestamp
+  - Individual indexes for status, heartbeat staleness, expiry cleanup
+  - Unique constraint on (vendor_id, mapping_type, erp_code) for mappings
+
+**Validation results:**
+
+- ✅ `pnpm turbo build --filter=@repo/shared` — PASSED
+- ✅ `pnpm turbo build --filter=@apps/api` — PASSED
+- ✅ `pnpm db:generate` — Migration generated (16 tables recognized)
+- ✅ `pnpm db:migrate` — Migration applied successfully
+- ✅ `pnpm turbo lint --filter=@apps/api` — PASSED (6 warnings about turbo env vars, expected)
+
+**Status:** Task 2 PASSING — ready for Task 3

@@ -25,6 +25,16 @@ import {
   teamsRelations,
   teamMembersRelations,
   organizationRolesRelations,
+  syncJobs,
+  syncJobsRelations,
+  agentRegistry,
+  agentRegistryRelations,
+  erpCodeMappings,
+  erpCodeMappingsRelations,
+  deadLetterQueue,
+  deadLetterQueueRelations,
+  reconciliationEvents,
+  reconciliationEventsRelations,
 } from '@repo/shared/database/schema';
 
 // Explicit schema object avoids CJS/ESM interop issues where `import *` adds
@@ -52,6 +62,16 @@ const schema = {
   teamsRelations,
   teamMembersRelations,
   organizationRolesRelations,
+  syncJobs,
+  syncJobsRelations,
+  agentRegistry,
+  agentRegistryRelations,
+  erpCodeMappings,
+  erpCodeMappingsRelations,
+  deadLetterQueue,
+  deadLetterQueueRelations,
+  reconciliationEvents,
+  reconciliationEventsRelations,
 };
 import type { DatabaseConnection as SharedDatabaseConnection } from '@repo/shared';
 

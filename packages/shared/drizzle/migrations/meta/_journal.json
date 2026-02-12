@@ -57,6 +57,13 @@
       "when": 1770843033139,
       "tag": "0007_right_gateway",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1770899608472,
+      "tag": "0008_nervous_iron_fist",
+      "breakpoints": true
     }
   ]
 }

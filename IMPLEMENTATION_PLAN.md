@@ -99,7 +99,7 @@ docker compose config
 
 - **Priority:** P0
 - **Risk:** medium (schema design is architectural)
-- **Status:** not started
+- **Status:** passing
 - **Depends on:** Task 1
 - **Estimated effort:** 1.5 hours
 - **Spec reference:** REQ-2
@@ -1322,7 +1322,7 @@ pnpm turbo test:e2e --filter=@apps/api
 | #   | Task                              | Phase         | Status      |
 | --- | --------------------------------- | ------------- | ----------- |
 | 1   | Dependencies + Redis + Config     | Foundation    | passing     |
-| 2   | Database Schemas (Drizzle)        | Foundation    | not started |
+| 2   | Database Schemas (Drizzle)        | Foundation    | passing     |
 | 3   | Sync Repositories                 | Repositories  | not started |
 | 4   | SyncModule Skeleton + Guards      | Scaffold      | not started |
 | 5   | Agent Registry Service            | Core Services | not started |
