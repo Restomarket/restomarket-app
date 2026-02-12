@@ -28,6 +28,7 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TimeoutInterceptor } from './common/interceptors/timeout.interceptor';
 import { AuthModule } from './auth';
 import { SyncModule } from './modules/sync/sync.module';
+import { OrdersModule } from './modules/orders/orders.module';
 
 @Module({
   imports: [
@@ -85,6 +86,7 @@ import { SyncModule } from './modules/sync/sync.module';
     // Feature modules
     HealthModule,
     UsersModule,
+    OrdersModule,
     SyncModule,
   ],
   providers: [

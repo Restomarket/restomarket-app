@@ -23,12 +23,13 @@
 
 - **Tasks 1, 2, 3-10, 12-17:** passing (17 tasks — sync infrastructure complete)
 - **Tasks 18-21:** passing (4 tasks — DevOps implemented in `infrastructure/scripts/` + `.github/workflows/`)
-- **Task 11:** **BLOCKED** — orders schema, orders module, and business repos do not exist
-- **Tasks 2.1-2.7:** not started (7 gap-closure tasks)
+- **Tasks 2.1-2.6:** passing (6 gap-closure tasks — orders schema, field updates, business repos, orders module)
+- **Task 11:** **UNBLOCKED** — all dependencies resolved (Task 2.1, 2.5, 2.6 complete)
+- **Task 2.7:** not started (tech debt — refactor SyncIngestService to use repositories)
 - **Task 6.1:** not started (ERP mapping seed from Convex)
 - **Task 22:** not started (integration/E2E tests)
 
-**Actual completion:** 21/31 tasks (68%)
+**Actual completion:** 27/31 tasks (87%)
 
 ---
 
@@ -517,7 +518,7 @@ pnpm turbo type-check
 
 - **Priority:** P0 (BLOCKING — blocks Task 11)
 - **Risk:** medium
-- **Status:** not started
+- **Status:** passing
 - **Depends on:** Task 2.1, Task 2.5
 - **Complexity:** 7
 - **Spec reference:** REQ-6
@@ -1362,39 +1363,39 @@ pnpm turbo type-check
 
 ## Quick Status Dashboard
 
-| #    | Task                               | Phase         | Priority | Status          | Notes                               |
-| ---- | ---------------------------------- | ------------- | -------- | --------------- | ----------------------------------- |
-| 1    | Dependencies + Redis + Config      | Foundation    | P0       | passing         |                                     |
-| 2    | Sync Database Schemas (Drizzle)    | Foundation    | P0       | passing         | Sync tables only                    |
-| 2.1  | Orders & Order Items Schemas       | Gap Closure   | P0       | passing         | orders + order_items tables created |
-| 2.2  | Items Schema — Missing Fields      | Gap Closure   | P0       | passing         | 7 ERP fields added                  |
-| 2.3  | Warehouses Schema — Missing Fields | Gap Closure   | P1       | passing         | isDefault, isMain, type added       |
-| 2.4  | Stock Schema — Missing Fields      | Gap Closure   | P1       | passing         | 5 cost/inventory fields added       |
-| 2.5  | Business Entity Repositories       | Gap Closure   | P0       | passing         | 5 base repos + 5 adapters           |
-| 2.6  | Orders Module                      | Gap Closure   | P0       | **not started** | **BLOCKING** for Task 11            |
-| 2.7  | Refactor SyncIngest → Repositories | Gap Closure   | P1       | not started     | Tech debt cleanup                   |
-| 3    | Sync Repositories                  | Repositories  | P0       | passing         |                                     |
-| 4    | SyncModule Skeleton + Guards       | Scaffold      | P0       | passing         |                                     |
-| 5    | Agent Registry Service             | Core Services | P0       | passing         |                                     |
-| 6    | ERP Code Mapping Service           | Core Services | P0       | passing         |                                     |
-| 6.1  | Seed ERP Mappings from Convex      | Core Services | P0       | **not started** | **BLOCKING** Task 9 validation      |
-| 7    | Circuit Breaker Service            | Core Services | P0       | passing         |                                     |
-| 8    | Agent Communication Service        | Core Services | P0       | passing         |                                     |
-| 9    | Sync Ingest Service + Controller   | Direct Ingest | P0       | passing         | Uses raw Drizzle (see Task 2.7)     |
-| 10   | Sync Job Service                   | Outbound Sync | P0       | passing         |                                     |
-| 11   | Order Sync Processor + Callback    | Outbound Sync | P0       | **BLOCKED**     | Depends on 2.1, 2.5, 2.6            |
-| 11.5 | Full Validation + Fix Issues       | Gate          | P0       | passing         |                                     |
-| 12   | Dead Letter Queue Service          | Outbound Sync | P0       | passing         |                                     |
-| 13   | Reconciliation Service             | Background    | P1       | passing         |                                     |
-| 14   | Scheduler + Cleanup + Alerts       | Background    | P1       | passing         |                                     |
-| 15   | Sync Metrics Service               | Background    | P1       | passing         |                                     |
-| 16   | Enhanced Health Checks             | Background    | P1       | passing         |                                     |
-| 17   | Secrets Management                 | Hardening     | P0       | passing         |                                     |
-| 18   | Docker Image Tagging + Rollback    | Hardening     | P1       | passing         | In `infrastructure/scripts/`        |
-| 19   | GitHub Actions CI/CD               | Hardening     | P1       | passing         | ci-cd.yml + cleanup-images.yml      |
-| 20   | Zero-Downtime Deployment           | Hardening     | P1       | passing         | `infrastructure/scripts/deploy.sh`  |
-| 21   | Verify Correlation ID Propagation  | Hardening     | P1       | passing         | Verified in agent-comm + sync-job   |
-| 22   | Integration Tests                  | Hardening     | P1       | not started     |                                     |
+| #    | Task                               | Phase         | Priority | Status          | Notes                                |
+| ---- | ---------------------------------- | ------------- | -------- | --------------- | ------------------------------------ |
+| 1    | Dependencies + Redis + Config      | Foundation    | P0       | passing         |                                      |
+| 2    | Sync Database Schemas (Drizzle)    | Foundation    | P0       | passing         | Sync tables only                     |
+| 2.1  | Orders & Order Items Schemas       | Gap Closure   | P0       | passing         | orders + order_items tables created  |
+| 2.2  | Items Schema — Missing Fields      | Gap Closure   | P0       | passing         | 7 ERP fields added                   |
+| 2.3  | Warehouses Schema — Missing Fields | Gap Closure   | P1       | passing         | isDefault, isMain, type added        |
+| 2.4  | Stock Schema — Missing Fields      | Gap Closure   | P1       | passing         | 5 cost/inventory fields added        |
+| 2.5  | Business Entity Repositories       | Gap Closure   | P0       | passing         | 5 base repos + 5 adapters            |
+| 2.6  | Orders Module                      | Gap Closure   | P0       | passing         | OrdersService + SyncJobService wired |
+| 2.7  | Refactor SyncIngest → Repositories | Gap Closure   | P1       | not started     | Tech debt cleanup                    |
+| 3    | Sync Repositories                  | Repositories  | P0       | passing         |                                      |
+| 4    | SyncModule Skeleton + Guards       | Scaffold      | P0       | passing         |                                      |
+| 5    | Agent Registry Service             | Core Services | P0       | passing         |                                      |
+| 6    | ERP Code Mapping Service           | Core Services | P0       | passing         |                                      |
+| 6.1  | Seed ERP Mappings from Convex      | Core Services | P0       | **not started** | **BLOCKING** Task 9 validation       |
+| 7    | Circuit Breaker Service            | Core Services | P0       | passing         |                                      |
+| 8    | Agent Communication Service        | Core Services | P0       | passing         |                                      |
+| 9    | Sync Ingest Service + Controller   | Direct Ingest | P0       | passing         | Uses raw Drizzle (see Task 2.7)      |
+| 10   | Sync Job Service                   | Outbound Sync | P0       | passing         |                                      |
+| 11   | Order Sync Processor + Callback    | Outbound Sync | P0       | **UNBLOCKED**   | Ready to implement                   |
+| 11.5 | Full Validation + Fix Issues       | Gate          | P0       | passing         |                                      |
+| 12   | Dead Letter Queue Service          | Outbound Sync | P0       | passing         |                                      |
+| 13   | Reconciliation Service             | Background    | P1       | passing         |                                      |
+| 14   | Scheduler + Cleanup + Alerts       | Background    | P1       | passing         |                                      |
+| 15   | Sync Metrics Service               | Background    | P1       | passing         |                                      |
+| 16   | Enhanced Health Checks             | Background    | P1       | passing         |                                      |
+| 17   | Secrets Management                 | Hardening     | P0       | passing         |                                      |
+| 18   | Docker Image Tagging + Rollback    | Hardening     | P1       | passing         | In `infrastructure/scripts/`         |
+| 19   | GitHub Actions CI/CD               | Hardening     | P1       | passing         | ci-cd.yml + cleanup-images.yml       |
+| 20   | Zero-Downtime Deployment           | Hardening     | P1       | passing         | `infrastructure/scripts/deploy.sh`   |
+| 21   | Verify Correlation ID Propagation  | Hardening     | P1       | passing         | Verified in agent-comm + sync-job    |
+| 22   | Integration Tests                  | Hardening     | P1       | not started     |                                      |
 
 ---
 
