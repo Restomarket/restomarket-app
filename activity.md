@@ -248,3 +248,82 @@ NestJS adapters (apps/api):
 - ✅ `pnpm turbo type-check` — PASSED (all packages)
 
 **Status:** Task 3 PASSING — ready for Task 4
+
+## 2026-02-12 — Task 4: SyncModule Skeleton + Guards (COMPLETED)
+
+**What was done:**
+
+- Created 2 authentication guards in `apps/api/src/common/guards/`:
+  1. `AgentAuthGuard` — Bearer token authentication for ERP agents
+     - Validates token against bcrypt hash stored in agent_registry
+     - Extracts vendorId from body or params
+     - Uses `AgentRegistryRepository.findByVendorId()`
+  2. `ApiKeyGuard` — X-API-Key authentication for admin endpoints
+     - Constant-time comparison via `crypto.timingSafeEqual`
+     - Validates against `API_SECRET` from ConfigService
+- Created 5 placeholder controllers in `apps/api/src/modules/sync/controllers/`:
+  1. `AgentIngestController` — Direct ingest endpoints (Task 9)
+  2. `AgentRegistryController` — Agent registration/lifecycle (Task 5)
+  3. `AgentCallbackController` — Agent async callbacks (Task 11)
+  4. `SyncAdminController` — Admin management endpoints (Tasks 12-15)
+  5. `ErpMappingController` — ERP code mapping CRUD (Task 6)
+- Created directory structure for SyncModule:
+  - `services/` — Service implementations (Tasks 5-15)
+  - `processors/` — BullMQ processors (Task 11)
+  - `schedulers/` — Cron jobs (Task 14)
+  - `dto/` — Data transfer objects (Tasks 5-15)
+  - `interfaces/` — TypeScript interfaces (Tasks 5-15)
+- Created `SyncModule` with:
+  - BullMQ queue registration (order-sync, reconciliation, image-sync)
+  - DatabaseModule import
+  - All 5 controllers registered
+  - AgentAuthGuard and ApiKeyGuard providers
+  - Export placeholders for future services
+- Registered `SyncModule` in `AppModule` imports
+- Created `apps/api/src/common/guards/index.ts` for guard exports
+
+**Files created:**
+
+Guards:
+
+- `apps/api/src/common/guards/agent-auth.guard.ts`
+- `apps/api/src/common/guards/api-key.guard.ts`
+- `apps/api/src/common/guards/index.ts`
+
+Controllers:
+
+- `apps/api/src/modules/sync/controllers/agent-ingest.controller.ts`
+- `apps/api/src/modules/sync/controllers/agent-registry.controller.ts`
+- `apps/api/src/modules/sync/controllers/agent-callback.controller.ts`
+- `apps/api/src/modules/sync/controllers/sync-admin.controller.ts`
+- `apps/api/src/modules/sync/controllers/erp-mapping.controller.ts`
+
+Module and structure:
+
+- `apps/api/src/modules/sync/sync.module.ts`
+- `apps/api/src/modules/sync/services/.gitkeep`
+- `apps/api/src/modules/sync/processors/.gitkeep`
+- `apps/api/src/modules/sync/schedulers/.gitkeep`
+- `apps/api/src/modules/sync/dto/.gitkeep`
+- `apps/api/src/modules/sync/interfaces/.gitkeep`
+
+**Files modified:**
+
+- `apps/api/src/app.module.ts` — Added SyncModule import and registration
+
+**Key decisions:**
+
+- Guards follow existing pattern: `CanActivate` interface, constructor injection
+- AgentAuthGuard uses bcrypt.compare for secure token validation
+- ApiKeyGuard uses timingSafeEqual to prevent timing attacks
+- Controllers are placeholder stubs with ApiTags and documentation comments
+- Module structure follows existing pattern (UsersModule, HealthModule)
+- BullMQ queues registered at module level (not globally)
+- Guards provided at module level (not global APP_GUARD)
+
+**Validation results:**
+
+- ✅ `pnpm turbo build --filter=@apps/api` — PASSED
+- ✅ `pnpm turbo lint --filter=@apps/api` — PASSED (6 warnings about turbo env vars, expected)
+
+**Status:** Task 4 PASSING — ready for Task 5

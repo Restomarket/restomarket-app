@@ -27,6 +27,7 @@ import { ResponseInterceptor } from './common/interceptors/response.interceptor'
 import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 import { TimeoutInterceptor } from './common/interceptors/timeout.interceptor';
 import { AuthModule } from './auth';
+import { SyncModule } from './modules/sync/sync.module';
 
 @Module({
   imports: [
@@ -84,6 +85,7 @@ import { AuthModule } from './auth';
     // Feature modules
     HealthModule,
     UsersModule,
+    SyncModule,
   ],
   providers: [
     // Global rate limiting guard

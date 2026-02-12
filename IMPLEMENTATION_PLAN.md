@@ -260,7 +260,7 @@ pnpm turbo build --filter=@apps/api
 
 - **Priority:** P0
 - **Risk:** low
-- **Status:** not started
+- **Status:** passing
 - **Depends on:** Task 3
 - **Estimated effort:** 1 hour
 - **Spec reference:** REQ-1, REQ-13
@@ -1324,7 +1324,7 @@ pnpm turbo test:e2e --filter=@apps/api
 | 1   | Dependencies + Redis + Config     | Foundation    | passing     |
 | 2   | Database Schemas (Drizzle)        | Foundation    | passing     |
 | 3   | Sync Repositories                 | Repositories  | passing     |
-| 4   | SyncModule Skeleton + Guards      | Scaffold      | not started |
+| 4   | SyncModule Skeleton + Guards      | Scaffold      | passing     |
 | 5   | Agent Registry Service            | Core Services | not started |
 | 6   | ERP Code Mapping Service          | Core Services | not started |
 | 7   | Circuit Breaker Service           | Core Services | not started |
