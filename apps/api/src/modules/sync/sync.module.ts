@@ -22,6 +22,9 @@ import { AgentCommunicationService } from './services/agent-communication.servic
 import { SyncIngestService } from './services/sync-ingest.service';
 import { SyncJobService } from './services/sync-job.service';
 
+// Processors
+import { OrderSyncProcessor } from './processors/order-sync.processor';
+
 /**
  * SyncModule
  *
@@ -74,8 +77,9 @@ import { SyncJobService } from './services/sync-job.service';
     AgentCommunicationService,
     SyncIngestService,
     SyncJobService,
-    // Additional services will be added in Tasks 11-15
-    // Processors will be added in Task 11
+    // Processors
+    OrderSyncProcessor,
+    // Additional services will be added in Tasks 12-15
     // Schedulers will be added in Task 14
   ],
   exports: [

@@ -337,6 +337,34 @@ describe('SyncJobService', () => {
       });
     });
 
+    it('should update job status to completed without ERP reference', async () => {
+      const mockJob: SyncJob = {
+        id: 'job-456',
+        postgresOrderId: 'order-789',
+        vendorId: 'vendor-2',
+        operation: 'create_order',
+        status: 'completed',
+        payload: {},
+        retryCount: 0,
+        maxRetries: 5,
+        nextRetryAt: null,
+        errorMessage: null,
+        errorStack: null,
+        erpReference: null,
+        createdAt: new Date(),
+        startedAt: new Date(),
+        completedAt: new Date(),
+        expiresAt: new Date(),
+      };
+
+      syncJobsRepository.updateStatus.mockResolvedValue(mockJob);
+
+      const result = await service.markCompleted('job-456');
+
+      expect(result).toEqual(mockJob);
+      expect(syncJobsRepository.updateStatus).toHaveBeenCalledWith('job-456', 'completed', {});
+    });
+
     it('should return null if job not found', async () => {
       syncJobsRepository.updateStatus.mockResolvedValue(null);
 

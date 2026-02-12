@@ -169,13 +169,16 @@ export class SyncJobService {
    */
   async markCompleted(
     jobId: string,
-    erpReference: string,
+    erpReference?: string,
     metadata?: Record<string, unknown>,
   ): Promise<SyncJob | null> {
     try {
-      const job = await this.syncJobsRepository.updateStatus(jobId, 'completed', {
-        erpReference,
-      });
+      const updateData: { erpReference?: string } = {};
+      if (erpReference) {
+        updateData.erpReference = erpReference;
+      }
+
+      const job = await this.syncJobsRepository.updateStatus(jobId, 'completed', updateData);
 
       if (!job) {
         this.logger.warn('Failed to mark job as completed (job not found)', { jobId });

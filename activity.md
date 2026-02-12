@@ -757,3 +757,67 @@ Service and tests:
 - ✅ `pnpm turbo type-check` — PASSED (all packages)
 
 **Status:** Task 10 PASSING — ready for Task 11
+
+## 2026-02-12 — Task 11: Order Sync Processor + Agent Callback Controller (COMPLETED)
+
+**What was done:**
+
+- Created `OrderSyncProcessor` for BullMQ processing:
+  - `@Processor('order-sync')` with concurrency 5
+  - `process()` method sends order to ERP agent via AgentCommunicationService
+  - Marks job as processing, calls agent, waits for async callback (does NOT mark completed immediately)
+  - `@OnWorkerEvent('failed')` handles retry exhaustion and logs warnings for retryable failures
+  - `@OnWorkerEvent('completed')` logs successful agent call completion
+  - Exports `OrderSyncPayload` interface for typed job data
+- Created `AgentCallbackDto` with validation:
+  - Required: jobId, status ('completed' | 'failed')
+  - Optional: erpReference, error, metadata
+  - Comprehensive Swagger decorators
+- Populated `AgentCallbackController`:
+  - `POST /api/agents/callback` endpoint with AgentAuthGuard
+  - Handles completed status: calls `SyncJobService.markCompleted()` with optional erpReference
+  - Handles failed status: calls `SyncJobService.markFailed()` with error message (defaults to 'Unknown error')
+  - TODO note added for future order update (requires OrdersRepository from future task)
+  - Returns consistent success response format
+- Updated `SyncJobService.markCompleted()`:
+  - Changed `erpReference` parameter from required to optional (string → string?)
+  - Only includes erpReference in updateData if provided
+  - Added test for completed job without ERP reference
+- Updated SyncModule to register OrderSyncProcessor
+- Created comprehensive unit tests (16 test cases total):
+  - OrderSyncProcessor: 9 tests covering process(), onFailed(), onCompleted()
+  - AgentCallbackController: 7 tests covering completed/failed callbacks with/without optional fields
+  - Fixed guard dependency issue by overriding AgentAuthGuard in tests
+
+**Files created:**
+
+- `apps/api/src/modules/sync/dto/agent-callback.dto.ts`
+- `apps/api/src/modules/sync/processors/order-sync.processor.ts`
+- `apps/api/src/modules/sync/processors/__tests__/order-sync.processor.spec.ts`
+- `apps/api/src/modules/sync/controllers/__tests__/agent-callback.controller.spec.ts`
+
+**Files modified:**
+
+- `apps/api/src/modules/sync/dto/index.ts` — added agent-callback export
+- `apps/api/src/modules/sync/controllers/agent-callback.controller.ts` — populated with callback endpoint
+- `apps/api/src/modules/sync/sync.module.ts` — added OrderSyncProcessor to providers
+- `apps/api/src/modules/sync/services/sync-job.service.ts` — made erpReference optional in markCompleted()
+- `apps/api/src/modules/sync/services/__tests__/sync-job.service.spec.ts` — added test for optional erpReference
+
+**Key decisions:**
+
+- Processor does NOT mark job as completed — agent callback handles final status update
+- Correlation ID propagated through BullMQ payload and forwarded to agent
+- On retry exhaustion, processor logs error with TODO for Task 12 DLQ integration
+- AgentAuthGuard overridden in controller tests to avoid dependency injection issues
+- Optional erpReference handled by conditionally including it in updateData object
+- Test pattern: override guards with mock implementation that always returns true
+
+**Validation results:**
+
+- ✅ `pnpm turbo lint --filter=@apps/api -- --fix` — PASSED (6 warnings about turbo env vars, expected)
+- ✅ `pnpm turbo build --filter=@apps/api` — PASSED
+- ✅ `pnpm turbo test --filter=@apps/api -- --testPathPattern='order-sync|agent-callback'` — PASSED (16/16 tests)
+- ✅ `pnpm turbo type-check` — PASSED (all packages)
+
+**Status:** Task 11 PASSING — ready for Task 12
