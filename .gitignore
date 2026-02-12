@@ -15,7 +15,9 @@ coverage/
 *.lcov
 
 # Environment variables
+# Never commit real secrets - use .env.example instead
 .env
+.env.*
 .env.local
 .env.vercel
 .env.development
@@ -25,6 +27,11 @@ coverage/
 .env.production.local
 .env.staging
 .env.staging.local
+
+# Explicitly allow example files
+!.env.example
+!.env.prod.example
+!.env.test.example
 
 # Logs
 logs
