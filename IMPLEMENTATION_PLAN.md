@@ -1216,7 +1216,7 @@ pnpm turbo type-check
 
 - **Priority:** P1
 - **Risk:** low
-- **Status:** not started
+- **Status:** passing
 - **Depends on:** Task 4
 - **Complexity:** 3
 - **Spec reference:** REQ-11
@@ -1499,7 +1499,7 @@ pnpm turbo type-check
 | 13   | Reconciliation Service            | Background    | passing     |
 | 14   | Scheduler + Cleanup + Alerts      | Background    | passing     |
 | 15   | Sync Metrics Service              | Background    | passing     |
-| 16   | Enhanced Health Checks            | Background    | not started |
+| 16   | Enhanced Health Checks            | Background    | passing     |
 | 17   | Secrets Management                | Hardening     | not started |
 | 18   | Docker Image Tagging + Rollback   | Hardening     | not started |
 | 19   | GitHub Actions CI/CD              | Hardening     | not started |

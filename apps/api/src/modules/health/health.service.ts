@@ -1,124 +1,119 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
-import { DATABASE_CONNECTION } from 'src/database/database.module';
-import { sql } from 'drizzle-orm';
-import { PostgresJsDatabase } from 'drizzle-orm/postgres-js';
 import type { Configuration } from '@config/config.types';
+import { DatabaseHealthService } from './indicators/database.health';
+import { RedisHealthService } from './indicators/redis.health';
+import { BullMQHealthService } from './indicators/bullmq.health';
+import { AgentHealthService } from './indicators/agent.health';
 
 export interface HealthCheckResponse {
   status: 'healthy' | 'unhealthy';
   timestamp: string;
   uptime: number;
   environment: string;
-  services: {
-    database: 'connected' | 'disconnected' | 'error';
-    redis?: 'connected' | 'disconnected' | 'error';
-  };
-  database: {
-    status: 'connected' | 'disconnected' | 'error';
-    responseTime: number;
-    message?: string;
-  };
-  redis?: {
-    status: 'connected' | 'disconnected' | 'error';
-    responseTime?: number;
-    message?: string;
-  };
-  memory: {
-    rss: string;
-    heapUsed: string;
-    heapTotal: string;
-    external: string;
-  };
-  cpu: {
-    usage: NodeJS.CpuUsage;
+  info: {
+    database: {
+      status: 'up' | 'down';
+      responseTime?: number;
+      message?: string;
+    };
+    redis: {
+      status: 'up' | 'down';
+      responseTime?: number;
+      message?: string;
+    };
+    bullmq: {
+      status: 'up' | 'down' | 'warning';
+      queues: {
+        [queueName: string]: number;
+      };
+      message?: string;
+    };
+    agents: {
+      status: 'up' | 'down' | 'degraded';
+      online: number;
+      total: number;
+      message?: string;
+    };
+    memory_heap: {
+      status: 'up';
+      heapUsed: string;
+      heapTotal: string;
+    };
+    disk: {
+      status: 'up';
+      rss: string;
+      external: string;
+    };
   };
 }
 
 @Injectable()
 export class HealthService {
   constructor(
-    @Inject(DATABASE_CONNECTION)
-    private readonly db: PostgresJsDatabase<Record<string, never>>,
     private readonly config: ConfigService<Configuration, true>,
+    private readonly databaseHealth: DatabaseHealthService,
+    private readonly redisHealth: RedisHealthService,
+    private readonly bullmqHealth: BullMQHealthService,
+    private readonly agentHealth: AgentHealthService,
   ) {}
 
   async check(): Promise<HealthCheckResponse> {
-    const startTime = Date.now();
-    let dbStatus: 'connected' | 'disconnected' | 'error' = 'disconnected';
-    let dbMessage: string | undefined;
-
-    // Check database connection
-    try {
-      await this.db.execute(sql`SELECT 1`);
-      dbStatus = 'connected';
-    } catch (error) {
-      dbStatus = 'error';
-      dbMessage = error instanceof Error ? error.message : 'Unknown database error';
-    }
-
-    const dbResponseTime = Date.now() - startTime;
-
-    // Check Redis connection (optional - only if Redis is configured)
-    let redisStatus: 'connected' | 'disconnected' | 'error' | undefined;
-    let redisResponseTime: number | undefined;
-    let redisMessage: string | undefined;
-
-    // TODO: Add Redis health check when Redis is configured
-    // Example implementation:
-    // if (this.redis) {
-    //   const redisStartTime = Date.now();
-    //   try {
-    //     await this.redis.ping();
-    //     redisStatus = 'connected';
-    //     redisResponseTime = Date.now() - redisStartTime;
-    //   } catch (error) {
-    //     redisStatus = 'error';
-    //     redisMessage = error instanceof Error ? error.message : 'Unknown Redis error';
-    //   }
-    // }
+    // Run all health checks in parallel
+    const [database, redis, bullmq, agents] = await Promise.all([
+      this.databaseHealth.check(),
+      this.redisHealth.check(),
+      this.bullmqHealth.check(),
+      this.agentHealth.check(),
+    ]);
 
     const memoryUsage = process.memoryUsage();
-    const cpuUsage = process.cpuUsage();
     const environment = this.config.get('app.nodeEnv', { infer: true });
 
     // Determine overall health status
-    const isHealthy =
-      dbStatus === 'connected' && (redisStatus === undefined || redisStatus === 'connected');
+    // Unhealthy if database or redis is down
+    // BullMQ warning and agents degraded are not critical failures
+    const isHealthy = database.status === 'up' && redis.status === 'up';
 
     const response: HealthCheckResponse = {
       status: isHealthy ? 'healthy' : 'unhealthy',
       timestamp: new Date().toISOString(),
       uptime: Math.floor(process.uptime()),
       environment,
-      services: {
-        database: dbStatus,
-        ...(redisStatus && { redis: redisStatus }),
-      },
-      database: {
-        status: dbStatus,
-        responseTime: dbResponseTime,
-        ...(dbMessage && { message: dbMessage }),
-      },
-      memory: {
-        rss: this.formatBytes(memoryUsage.rss),
-        heapUsed: this.formatBytes(memoryUsage.heapUsed),
-        heapTotal: this.formatBytes(memoryUsage.heapTotal),
-        external: this.formatBytes(memoryUsage.external),
-      },
-      cpu: {
-        usage: cpuUsage,
+      info: {
+        database: {
+          status: database.status,
+          ...(database.responseTime !== undefined && { responseTime: database.responseTime }),
+          ...(database.message && { message: database.message }),
+        },
+        redis: {
+          status: redis.status,
+          ...(redis.responseTime !== undefined && { responseTime: redis.responseTime }),
+          ...(redis.message && { message: redis.message }),
+        },
+        bullmq: {
+          status: bullmq.status,
+          queues: bullmq.queues,
+          ...(bullmq.message && { message: bullmq.message }),
+        },
+        agents: {
+          status: agents.status,
+          online: agents.online,
+          total: agents.total,
+          ...(agents.message && { message: agents.message }),
+        },
+        memory_heap: {
+          status: 'up',
+          heapUsed: this.formatBytes(memoryUsage.heapUsed),
+          heapTotal: this.formatBytes(memoryUsage.heapTotal),
+        },
+        disk: {
+          status: 'up',
+          rss: this.formatBytes(memoryUsage.rss),
+          external: this.formatBytes(memoryUsage.external),
+        },
       },
     };
-
-    // Add Redis info if checked
-    if (redisStatus) {
-      response.redis = {
-        status: redisStatus,
-        ...(redisResponseTime && { responseTime: redisResponseTime }),
-        ...(redisMessage && { message: redisMessage }),
-      };
-    }
 
     return response;
   }

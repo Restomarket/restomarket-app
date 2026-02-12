@@ -1166,3 +1166,79 @@ Task 12 was already implemented and all components were in place. Performed comp
 - ✅ `pnpm turbo type-check` — PASSED (all 7 packages)
 
 **Status:** Task 15 PASSING — ready for Task 16
+
+## 2026-02-12 — Task 16: Enhanced Health Checks (COMPLETED)
+
+**What was done:**
+
+- Created 4 custom health indicator services in `apps/api/src/modules/health/indicators/`:
+  1. `DatabaseHealthService` — PostgreSQL connectivity check via `SELECT 1` query
+  2. `RedisHealthService` — Redis connectivity via `PING` command with lazy connection
+  3. `BullMQHealthService` — BullMQ queue monitoring (3 queues: order-sync, reconciliation, image-sync)
+     - Returns warning status when any queue has > 100 waiting jobs
+  4. `AgentHealthService` — Agent health dashboard with online/total counts
+     - Status: up (≥1 online), degraded (all offline/degraded), down (error/no agents)
+- Updated `HealthService` to integrate all 4 health indicators:
+  - Runs all health checks in parallel via `Promise.all()`
+  - Overall health determined by database AND redis status (up/up = healthy, else unhealthy)
+  - BullMQ warning and agent degraded states don't fail overall health
+  - New response format with `info` object containing all subsystem health data
+  - Includes memory_heap and disk metrics from process.memoryUsage()
+- Updated `HealthModule` to register all health indicator services:
+  - Added DatabaseModule import for repository access
+  - Registered 3 BullMQ queues for health checks
+  - Registered all 4 health indicator services as providers
+- Updated `HealthController` Swagger documentation:
+  - Updated response schema to match new `info` structure
+  - Documented all subsystem statuses: database, redis, bullmq, agents, memory_heap, disk
+- Created comprehensive unit tests (19/19 passing):
+  - `redis.health.spec.ts` (3 tests): mocked ioredis, ping success
+  - `bullmq.health.spec.ts` (4 tests): low counts, warning on >100, error handling
+  - `agent.health.spec.ts` (5 tests): no agents, online agents, all offline, error handling
+  - `database.health.spec.ts` (4 tests): connection success, query failure, unknown errors
+  - All tests properly mock dependencies and verify status transitions
+
+**Files created:**
+
+Health indicators:
+
+- `apps/api/src/modules/health/indicators/database.health.ts`
+- `apps/api/src/modules/health/indicators/redis.health.ts`
+- `apps/api/src/modules/health/indicators/bullmq.health.ts`
+- `apps/api/src/modules/health/indicators/agent.health.ts`
+
+Unit tests:
+
+- `apps/api/src/modules/health/indicators/__tests__/database.health.spec.ts`
+- `apps/api/src/modules/health/indicators/__tests__/redis.health.spec.ts`
+- `apps/api/src/modules/health/indicators/__tests__/bullmq.health.spec.ts`
+- `apps/api/src/modules/health/indicators/__tests__/agent.health.spec.ts`
+
+**Files modified:**
+
+- `apps/api/src/modules/health/health.service.ts` — Refactored to use health indicators
+- `apps/api/src/modules/health/health.module.ts` — Registered health indicators and BullMQ queues
+- `apps/api/src/modules/health/health.controller.ts` — Updated Swagger documentation
+
+**Key decisions:**
+
+- Health indicators run in parallel for optimal performance
+- Overall health = database UP && redis UP (critical dependencies)
+- BullMQ warning (>100 jobs) and agent degraded don't fail overall health (non-critical)
+- RedisHealthService uses lazy connection (`lazyConnect: true`) to avoid connection errors during initialization
+- RedisHealthService uses `enableOfflineQueue: false` to prevent queue buildup on disconnect
+- BullMQ health checks all 3 registered queues (order-sync, reconciliation, image-sync)
+- Agent health status logic: up (≥1 online), degraded (all offline/degraded), down (error)
+- Memory metrics split into memory_heap (heapUsed, heapTotal) and disk (rss, external)
+- All health indicators follow consistent pattern: check() returns status + optional responseTime/message
+- Redis test uses class-based mock to properly mock ioredis constructor
+- All error messages logged via PinoLogger with context
+
+**Validation results:**
+
+- ✅ `pnpm turbo lint --filter=@apps/api -- --fix` — PASSED (3 pre-existing warnings in alert.service.spec.ts)
+- ✅ `pnpm turbo build --filter=@apps/api` — PASSED (compiled in 3.493s)
+- ✅ `pnpm turbo test --filter=@apps/api -- --testPathPattern=health` — PASSED (19/19 tests)
+- ✅ `pnpm turbo type-check` — PASSED (all 5 packages)
+
+**Status:** Task 16 PASSING — ready for Task 17
