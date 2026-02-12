@@ -1371,3 +1371,32 @@ Unit tests:
 - ✅ Lint — PASSED (3 pre-existing warnings, 0 errors)
 
 **Status:** Task 2.1 PASSING — ready for Task 2.2
+
+## 2026-02-13 — Task 2.2: Add Missing Critical Fields to Items Schema (COMPLETED)
+
+**What was done:**
+
+- Added 7 ERP-specific fields to `packages/shared/src/database/schema/items.schema.ts`:
+  - `priceExclVat` — NUMERIC(10,2), NOT NULL, default '0'
+  - `priceInclVat` — NUMERIC(10,2), NOT NULL, default '0'
+  - `vatAmount` — NUMERIC(10,2), NOT NULL, default '0'
+  - `erpId` — VARCHAR(100), NOT NULL, default ''
+  - `manageStock` — BOOLEAN, NOT NULL, default TRUE
+  - `allowNegativeStock` — BOOLEAN, NOT NULL, default FALSE
+  - `barcode` — VARCHAR(100), nullable
+- Added 2 new indexes: `items_erp_id_idx`, `items_manage_stock_idx`
+- Generated and applied migration `0011_zippy_forgotten_one.sql`
+
+**Files modified:**
+
+- `packages/shared/src/database/schema/items.schema.ts`
+
+**Validation results:**
+
+- ✅ `pnpm turbo build --filter=@repo/shared` — PASSED
+- ✅ `pnpm turbo build --filter=@apps/api` — PASSED
+- ✅ `pnpm db:migrate` — PASSED (7 columns added to items table)
+- ✅ `pnpm turbo type-check` — PASSED
+- ✅ Lint — PASSED (3 pre-existing warnings, 0 errors)
+
+**Status:** Task 2.2 PASSING — ready for Task 2.3

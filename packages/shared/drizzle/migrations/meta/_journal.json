@@ -78,6 +78,13 @@
       "when": 1770939261303,
       "tag": "0010_little_boomer",
       "breakpoints": true
+    },
+    {
+      "idx": 11,
+      "version": "7",
+      "when": 1770939463882,
+      "tag": "0011_zippy_forgotten_one",
+      "breakpoints": true
     }
   ]
 }

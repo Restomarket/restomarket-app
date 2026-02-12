@@ -26,6 +26,17 @@ export const items = pgTable(
     subfamilyCode: varchar('subfamily_code', { length: 50 }),
     subfamilyLabel: varchar('subfamily_label', { length: 100 }),
     unitPrice: numeric('unit_price', { precision: 10, scale: 2 }),
+    // ERP-specific pricing fields (required for full ERP data parity)
+    priceExclVat: numeric('price_excl_vat', { precision: 10, scale: 2 }).notNull().default('0'),
+    priceInclVat: numeric('price_incl_vat', { precision: 10, scale: 2 }).notNull().default('0'),
+    vatAmount: numeric('vat_amount', { precision: 10, scale: 2 }).notNull().default('0'),
+    // ERP identifier
+    erpId: varchar('erp_id', { length: 100 }).notNull().default(''),
+    // Stock management flags
+    manageStock: boolean('manage_stock').default(true).notNull(),
+    allowNegativeStock: boolean('allow_negative_stock').default(false).notNull(),
+    // Retail barcode
+    barcode: varchar('barcode', { length: 100 }),
     currency: varchar('currency', { length: 3 }).default('EUR'),
     isActive: boolean('is_active').default(true).notNull(),
     contentHash: varchar('content_hash', { length: 64 }).notNull(),
@@ -40,6 +51,8 @@ export const items = pgTable(
     index('items_family_code_idx').on(table.familyCode),
     index('items_is_active_idx').on(table.isActive),
     index('items_content_hash_idx').on(table.contentHash),
+    index('items_erp_id_idx').on(table.erpId),
+    index('items_manage_stock_idx').on(table.manageStock),
   ],
 );
 
