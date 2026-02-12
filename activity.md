@@ -390,3 +390,79 @@ Module and structure:
 - ✅ `pnpm turbo lint --filter=@apps/api` — PASSED (7 warnings: 6 turbo env vars expected, 1 pre-existing)
 
 **Status:** Task 5 PASSING — ready for Task 6
+
+## 2026-02-12 — Task 6: ERP Code Mapping Service (COMPLETED)
+
+**What was done:**
+
+- Created `ErpMappingService` with in-memory LRU cache implementation:
+  - `resolve()` — Resolve ERP codes with 5-minute TTL cache, max 10,000 entries
+  - `createMapping()` — Upsert single mapping and invalidate cache
+  - `updateMapping()` — Update mapping by ID and invalidate cache
+  - `deleteMapping()` — Soft-delete (deactivate) mapping and invalidate cache
+  - `listMappings()` — Paginated list with filtering by vendorId/type
+  - `seed()` — Bulk insert mappings and clear entire cache
+  - `clearCache()` — Manual cache invalidation
+  - `getCacheStats()` — Cache hit/miss metrics for monitoring
+- Cache design:
+  - Key format: `vendorId:type:erpCode`
+  - TTL: 5 minutes (300,000ms)
+  - Max size: 10,000 entries with LRU eviction
+  - Cache invalidation on write operations (create, update, delete, seed)
+  - Hit/miss tracking for performance monitoring
+- Created DTOs with comprehensive validation:
+  - `CreateErpMappingDto` — Validates all required fields (vendorId, mappingType, erpCode, restoCode, restoLabel)
+  - `UpdateErpMappingDto` — Partial update DTO
+  - `SeedErpMappingsDto` — Bulk seed with array validation
+  - All use class-validator decorators with length constraints
+- Populated `ErpMappingController` with 7 endpoints:
+  - `GET /api/admin/mappings` — List with pagination, filtering (vendorId, type, includeInactive)
+  - `POST /api/admin/mappings` — Create single mapping
+  - `PUT /api/admin/mappings/:id` — Update mapping
+  - `DELETE /api/admin/mappings/:id` — Soft-delete mapping
+  - `POST /api/admin/mappings/seed` — Bulk seed mappings
+  - `GET /api/admin/mappings/cache/stats` — Cache statistics
+  - `POST /api/admin/mappings/cache/clear` — Clear cache
+- All endpoints protected with `ApiKeyGuard`
+- All endpoints have comprehensive Swagger decorators
+- Created interface file defining `MappingResult`, `CacheEntry`, `MappingType`, `CacheStats`
+- Created seed script with example mappings for common ERP systems (EBP, Sage)
+- Registered `ErpMappingService` in `SyncModule` providers and exports
+- Created comprehensive unit tests (16 test cases):
+  - Cache hit, cache miss, cache expiry (time-based)
+  - LRU eviction on max size exceeded
+  - Mapping CRUD operations (create, update, delete, list)
+  - Bulk seed with cache invalidation
+  - Cache statistics tracking (hit rate, miss rate)
+  - Not-found scenarios
+
+**Files created:**
+
+- `apps/api/src/modules/sync/interfaces/erp-mapping.interface.ts`
+- `apps/api/src/modules/sync/dto/erp-mapping.dto.ts`
+- `apps/api/src/modules/sync/services/erp-mapping.service.ts`
+- `apps/api/src/database/seeds/erp-mappings.seed.ts`
+- `apps/api/src/modules/sync/services/__tests__/erp-mapping.service.spec.ts`
+
+**Files modified:**
+
+- `apps/api/src/modules/sync/controllers/erp-mapping.controller.ts` — Populated with 7 endpoints
+- `apps/api/src/modules/sync/sync.module.ts` — Added ErpMappingService to providers and exports
+
+**Key decisions:**
+
+- LRU eviction: Simple Map iteration order (first key is oldest inserted)
+- Cache invalidation strategy: Per-key on update/delete, full clear on seed
+- Time-based expiry: Each cache entry has `expiresAt` timestamp checked on every access
+- Cache stats tracking: Separate `cacheHits` and `cacheMisses` counters for monitoring
+- Test isolation: `jest.restoreAllMocks()` in afterEach to prevent Date.now() spy leaking between tests
+- Controller response format: Consistent with existing API patterns (success/data/message)
+- Seed script: Provides examples for common French ERP systems (units, VAT codes, families)
+
+**Validation results:**
+
+- ✅ `pnpm turbo test --filter=@apps/api -- --testPathPattern=erp-mapping` — PASSED (16/16 tests)
+- ✅ `pnpm turbo build --filter=@apps/api` — PASSED
+- ✅ `pnpm turbo lint --filter=@apps/api` — PASSED (7 warnings: 6 turbo env vars expected, 1 pre-existing)
+
+**Status:** Task 6 PASSING — ready for Task 7

@@ -15,6 +15,7 @@ import { ApiKeyGuard } from '@common/guards/api-key.guard';
 
 // Services
 import { AgentRegistryService } from './services/agent-registry.service';
+import { ErpMappingService } from './services/erp-mapping.service';
 
 /**
  * SyncModule
@@ -59,15 +60,16 @@ import { AgentRegistryService } from './services/agent-registry.service';
     ApiKeyGuard,
     // Services
     AgentRegistryService,
-    // Additional services will be added in Tasks 6-15
+    ErpMappingService,
+    // Additional services will be added in Tasks 7-15
     // Processors will be added in Task 11
     // Schedulers will be added in Task 14
   ],
   exports: [
     // Key services exported for use by other modules
     AgentRegistryService,
+    ErpMappingService,
     // SyncJobService (Task 10)
-    // ErpMappingService (Task 6)
   ],
 })
 export class SyncModule {}
