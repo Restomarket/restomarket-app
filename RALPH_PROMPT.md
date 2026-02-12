@@ -117,16 +117,29 @@ Priority rules:
 
 ### Phase 4: Validate (CRITICAL — NEVER SKIP)
 
-Run validation commands using **turbo** (monorepo requirement):
+Run **ALL** validation commands using **turbo** (monorepo requirement). Every task MUST pass the full pipeline:
 
-1. **Build shared** (if schemas changed): `pnpm turbo build --filter=@repo/shared`
-2. **Build API**: `pnpm turbo build --filter=@apps/api` (MUST pass)
-3. **Lint**: `pnpm turbo lint --filter=@apps/api` (MUST pass)
-4. **Tests**: `pnpm turbo test --filter=@apps/api -- --testPathPattern=<relevant>` (if tests exist)
-5. **Type check** (if cross-package changes): `pnpm turbo type-check`
-6. **DB migration** (if schemas changed): `pnpm db:generate && pnpm db:migrate`
+```bash
+# 1. Auto-fix lint + formatting (ALWAYS)
+pnpm turbo lint --filter=@apps/api --fix
 
-**DO NOT proceed if ANY validation fails.** Fix issues first, then re-validate.
+# 2. Build shared (ALWAYS if packages/shared/ changed, otherwise skip)
+pnpm turbo build --filter=@repo/shared
+
+# 3. Build API (ALWAYS — catches TypeScript errors)
+pnpm turbo build --filter=@apps/api
+
+# 4. Run relevant tests (ALWAYS when tests exist for the task)
+pnpm turbo test --filter=@apps/api -- --testPathPattern=<relevant>
+
+# 5. Workspace-wide type check (ALWAYS — catches cross-package issues)
+pnpm turbo type-check
+
+# 6. DB migrations (ONLY if Drizzle schemas changed in packages/shared/)
+pnpm db:generate && pnpm db:migrate
+```
+
+**DO NOT proceed if ANY validation fails.** Fix issues first, then re-run the FULL pipeline.
 
 ### Phase 5: Record Progress
 

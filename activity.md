@@ -525,3 +525,64 @@ Module and structure:
 - ✅ `pnpm turbo lint --filter=@apps/api` — PASSED (6 warnings about turbo env vars, expected)
 
 **Status:** Task 7 PASSING — ready for Task 8
+
+## 2026-02-12 — Task 8: Agent Communication Service (COMPLETED)
+
+**What was done:**
+
+- Created `AgentCommunicationService` for HTTP communication with vendor ERP agents:
+  - `callAgent<T>(vendorId, apiType, endpoint, payload, correlationId?)` — Main method for calling agents
+  - Gets agent from `AgentRegistryService` and validates status (online/degraded, not offline)
+  - Wraps all HTTP calls through `CircuitBreakerService.execute()` for fault tolerance
+  - Uses `@nestjs/axios` HttpService with RxJS `firstValueFrom()` for promise conversion
+  - 30s timeout on all requests (matches circuit breaker config)
+  - Configurable AGENT_SECRET from ConfigService
+  - Optional correlation ID propagated via `X-Correlation-ID` header
+  - Comprehensive error logging with AxiosError detection
+- Agent call validation:
+  - Rejects if agent not found (BusinessException: AGENT_NOT_FOUND)
+  - Rejects if agent is offline (BusinessException: AGENT_OFFLINE)
+  - Allows calls to degraded agents (warning logged)
+  - Validates AGENT_SECRET is configured (BusinessException: AGENT_SECRET_NOT_CONFIGURED)
+- Registered HttpModule in SyncModule with 30s timeout and no redirects
+- Registered AgentCommunicationService in SyncModule providers and exports
+- Created comprehensive unit tests (13 test cases):
+  - Successful agent call with data return
+  - Correlation ID header inclusion/exclusion
+  - Agent not found rejection
+  - Offline agent rejection
+  - Degraded agent acceptance
+  - AGENT_SECRET not configured rejection
+  - Circuit breaker error propagation
+  - HTTP error propagation and logging (AxiosError)
+  - Non-Axios error logging
+  - Timeout verification (30s)
+  - URL construction from agent base URL + endpoint
+  - Debug logging on success
+
+**Files created:**
+
+- `apps/api/src/modules/sync/services/agent-communication.service.ts`
+- `apps/api/src/modules/sync/services/__tests__/agent-communication.service.spec.ts`
+
+**Files modified:**
+
+- `apps/api/src/modules/sync/sync.module.ts` — Added HttpModule import, AgentCommunicationService provider and export
+
+**Key decisions:**
+
+- Used RxJS `firstValueFrom()` to convert Observable to Promise for cleaner async/await syntax
+- BusinessException requires code + message (not just message) — used error codes: AGENT_NOT_FOUND, AGENT_OFFLINE, AGENT_SECRET_NOT_CONFIGURED
+- HTTP timeout set to 30s to match circuit breaker timeout config (consistency)
+- Correlation ID is optional parameter, only added to headers when provided
+- Degraded agents are allowed (warning logged) — only offline agents are rejected
+- All errors are logged with rich context before re-throwing (vendorId, apiType, endpoint, url, correlationId)
+- AxiosError detection provides additional context (statusCode, errorCode)
+
+**Validation results:**
+
+- ✅ `pnpm turbo test --filter=@apps/api -- --testPathPattern=agent-communication` — PASSED (13/13 tests)
+- ✅ `pnpm turbo build --filter=@apps/api` — PASSED
+- ✅ `pnpm turbo lint --filter=@apps/api` — PASSED (6 warnings about turbo env vars, expected)
+
+**Status:** Task 8 PASSING — ready for Task 9

@@ -535,7 +535,7 @@ pnpm turbo build --filter=@apps/api
 
 - **Priority:** P0
 - **Risk:** medium
-- **Status:** not started
+- **Status:** passing
 - **Depends on:** Task 5, Task 7
 - **Estimated effort:** 1.5 hours
 - **Spec reference:** REQ-6, REQ-7
@@ -580,8 +580,10 @@ HTTP client for calling vendor agents, wrapped in circuit breaker. Used by order
 **Validation Commands:**
 
 ```bash
-pnpm turbo test --filter=@apps/api -- --testPathPattern=agent-communication
+pnpm turbo lint --filter=@apps/api --fix
 pnpm turbo build --filter=@apps/api
+pnpm turbo test --filter=@apps/api -- --testPathPattern=agent-communication
+pnpm turbo type-check
 ```
 
 ---
@@ -704,8 +706,10 @@ pnpm turbo build --filter=@apps/api
 **Validation Commands:**
 
 ```bash
-pnpm turbo test --filter=@apps/api -- --testPathPattern=sync-ingest
+pnpm turbo lint --filter=@apps/api --fix
 pnpm turbo build --filter=@apps/api
+pnpm turbo test --filter=@apps/api -- --testPathPattern=sync-ingest
+pnpm turbo type-check
 ```
 
 ---
@@ -753,8 +757,10 @@ Manage sync job lifecycle in PostgreSQL + enqueue BullMQ jobs.
 **Validation Commands:**
 
 ```bash
-pnpm turbo test --filter=@apps/api -- --testPathPattern=sync-job
+pnpm turbo lint --filter=@apps/api --fix
 pnpm turbo build --filter=@apps/api
+pnpm turbo test --filter=@apps/api -- --testPathPattern=sync-job
+pnpm turbo type-check
 ```
 
 ---
@@ -830,8 +836,10 @@ BullMQ processor that sends orders to ERP agents, and controller that receives c
 **Validation Commands:**
 
 ```bash
-pnpm turbo test --filter=@apps/api -- --testPathPattern=order-sync|agent-callback
+pnpm turbo lint --filter=@apps/api --fix
 pnpm turbo build --filter=@apps/api
+pnpm turbo test --filter=@apps/api -- --testPathPattern=order-sync|agent-callback
+pnpm turbo type-check
 ```
 
 ---
@@ -886,8 +894,10 @@ Manage permanently failed jobs — add, list, retry, resolve with audit trail.
 **Validation Commands:**
 
 ```bash
-pnpm turbo test --filter=@apps/api -- --testPathPattern=dead-letter
+pnpm turbo lint --filter=@apps/api --fix
 pnpm turbo build --filter=@apps/api
+pnpm turbo test --filter=@apps/api -- --testPathPattern=dead-letter
+pnpm turbo type-check
 ```
 
 ---
@@ -942,8 +952,10 @@ Drift detection via checksum comparison, binary search resolution.
 **Validation Commands:**
 
 ```bash
-pnpm turbo test --filter=@apps/api -- --testPathPattern=reconciliation
+pnpm turbo lint --filter=@apps/api --fix
 pnpm turbo build --filter=@apps/api
+pnpm turbo test --filter=@apps/api -- --testPathPattern=reconciliation
+pnpm turbo type-check
 ```
 
 ---
@@ -1001,8 +1013,10 @@ Replace all cron jobs with `@nestjs/schedule` decorators.
 **Validation Commands:**
 
 ```bash
-pnpm turbo test --filter=@apps/api -- --testPathPattern=sync-scheduler|alert|sync-cleanup
+pnpm turbo lint --filter=@apps/api --fix
 pnpm turbo build --filter=@apps/api
+pnpm turbo test --filter=@apps/api -- --testPathPattern=sync-scheduler|alert|sync-cleanup
+pnpm turbo type-check
 ```
 
 ---
@@ -1065,8 +1079,10 @@ PostgreSQL aggregation queries for sync job metrics, reconciliation metrics, and
 **Validation Commands:**
 
 ```bash
-pnpm turbo test --filter=@apps/api -- --testPathPattern=sync-metrics
+pnpm turbo lint --filter=@apps/api --fix
 pnpm turbo build --filter=@apps/api
+pnpm turbo test --filter=@apps/api -- --testPathPattern=sync-metrics
+pnpm turbo type-check
 ```
 
 ---
@@ -1328,7 +1344,7 @@ pnpm turbo test:e2e --filter=@apps/api
 | 5   | Agent Registry Service            | Core Services | passing     |
 | 6   | ERP Code Mapping Service          | Core Services | passing     |
 | 7   | Circuit Breaker Service           | Core Services | passing     |
-| 8   | Agent Communication Service       | Core Services | not started |
+| 8   | Agent Communication Service       | Core Services | passing     |
 | 9   | Sync Ingest Service + Controller  | Direct Ingest | not started |
 | 10  | Sync Job Service                  | Outbound Sync | not started |
 | 11  | Order Sync Processor + Callback   | Outbound Sync | not started |

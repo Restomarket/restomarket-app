@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { BullModule } from '@nestjs/bullmq';
+import { HttpModule } from '@nestjs/axios';
 import { DatabaseModule } from '@database/database.module';
 
 // Controllers
@@ -17,6 +18,7 @@ import { ApiKeyGuard } from '@common/guards/api-key.guard';
 import { AgentRegistryService } from './services/agent-registry.service';
 import { ErpMappingService } from './services/erp-mapping.service';
 import { CircuitBreakerService } from './services/circuit-breaker.service';
+import { AgentCommunicationService } from './services/agent-communication.service';
 
 /**
  * SyncModule
@@ -42,6 +44,10 @@ import { CircuitBreakerService } from './services/circuit-breaker.service';
 @Module({
   imports: [
     DatabaseModule,
+    HttpModule.register({
+      timeout: 30_000, // 30s default timeout for agent communication
+      maxRedirects: 0, // No redirects for agent calls
+    }),
     BullModule.registerQueue(
       { name: 'order-sync' },
       { name: 'reconciliation' },
@@ -63,7 +69,8 @@ import { CircuitBreakerService } from './services/circuit-breaker.service';
     AgentRegistryService,
     ErpMappingService,
     CircuitBreakerService,
-    // Additional services will be added in Tasks 8-15
+    AgentCommunicationService,
+    // Additional services will be added in Tasks 9-15
     // Processors will be added in Task 11
     // Schedulers will be added in Task 14
   ],
@@ -72,6 +79,7 @@ import { CircuitBreakerService } from './services/circuit-breaker.service';
     AgentRegistryService,
     ErpMappingService,
     CircuitBreakerService,
+    AgentCommunicationService,
     // SyncJobService (Task 10)
   ],
 })
