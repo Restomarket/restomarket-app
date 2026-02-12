@@ -466,3 +466,62 @@ Module and structure:
 - ✅ `pnpm turbo lint --filter=@apps/api` — PASSED (7 warnings: 6 turbo env vars expected, 1 pre-existing)
 
 **Status:** Task 6 PASSING — ready for Task 7
+
+## 2026-02-12 — Task 7: Circuit Breaker Service (COMPLETED)
+
+**What was done:**
+
+- Created `CircuitBreakerService` using `opossum` for per-vendor, per-API-type circuit breaker protection:
+  - `getBreaker(vendorId, apiType)` — Creates or retrieves breaker with default config (30s timeout, 50% error threshold, 60s reset)
+  - `execute<T>(vendorId, apiType, fn)` — Executes function through circuit breaker with automatic failure tracking
+  - `reset(vendorId, apiType)` — Force resets circuit to closed state for manual intervention
+  - `getStatus()` — Returns status of all circuit breakers with state and statistics
+  - `getState(vendorId, apiType)` — Returns state of specific breaker (open/halfOpen/closed)
+- Breaker granularity: Per `vendorId:apiType` (e.g., `vendor123:items`, `vendor123:orders`)
+- Event listeners attached to all state transitions:
+  - `open` → logs warning with vendor and API type context
+  - `halfOpen` → logs info when circuit enters testing state
+  - `close` → logs info when circuit recovers
+  - `fallback` → logs warning when fallback triggered
+  - `timeout` → logs warning on request timeout
+- Circuit breaker configuration per spec:
+  - `timeout: 30_000` — 30s request timeout
+  - `errorThresholdPercentage: 50` — Open after 50% failures
+  - `resetTimeout: 60_000` — Try half-open after 1min
+  - `volumeThreshold: 5` — Min 5 calls before evaluating
+- Created interface definitions for `CircuitBreakerState`, `CircuitBreakerStats`, `CircuitBreakerStatus`, `CircuitBreakerConfig`
+- Registered `CircuitBreakerService` in `SyncModule` providers and exports
+- Created comprehensive unit tests (19 test cases):
+  - Breaker creation: new breaker, existing breaker, separate vendors, separate API types
+  - Execution: success, error propagation, success tracking, failure tracking
+  - State transitions: circuit opening, healthy circuit, state logging
+  - Reset: manual reset, non-existent breaker warning
+  - Status: empty status, all breakers, state and stats
+  - State retrieval: null for non-existent, closed for healthy, open for tripped
+
+**Files created:**
+
+- `apps/api/src/modules/sync/interfaces/circuit-breaker.interface.ts`
+- `apps/api/src/modules/sync/services/circuit-breaker.service.ts`
+- `apps/api/src/modules/sync/services/__tests__/circuit-breaker.service.spec.ts`
+
+**Files modified:**
+
+- `apps/api/src/modules/sync/sync.module.ts` — Added CircuitBreakerService to providers and exports
+
+**Key decisions:**
+
+- Used Map to store breakers keyed by `${vendorId}:${apiType}` for O(1) lookup
+- Event listeners log all state transitions via PinoLogger for observability
+- Service exposes both aggregate status (all breakers) and individual state queries
+- Manual reset capability allows admin intervention when circuits are stuck
+- TypeScript type assertion `as Promise<T>` needed due to opossum's return type
+- Statistics include comprehensive metrics: successes, failures, rejects, fires, timeouts, latency percentiles
+
+**Validation results:**
+
+- ✅ `pnpm turbo test --filter=@apps/api -- --testPathPattern=circuit-breaker` — PASSED (19/19 tests)
+- ✅ `pnpm turbo build --filter=@apps/api` — PASSED
+- ✅ `pnpm turbo lint --filter=@apps/api` — PASSED (6 warnings about turbo env vars, expected)
+
+**Status:** Task 7 PASSING — ready for Task 8

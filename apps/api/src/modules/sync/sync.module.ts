@@ -16,6 +16,7 @@ import { ApiKeyGuard } from '@common/guards/api-key.guard';
 // Services
 import { AgentRegistryService } from './services/agent-registry.service';
 import { ErpMappingService } from './services/erp-mapping.service';
+import { CircuitBreakerService } from './services/circuit-breaker.service';
 
 /**
  * SyncModule
@@ -61,7 +62,8 @@ import { ErpMappingService } from './services/erp-mapping.service';
     // Services
     AgentRegistryService,
     ErpMappingService,
-    // Additional services will be added in Tasks 7-15
+    CircuitBreakerService,
+    // Additional services will be added in Tasks 8-15
     // Processors will be added in Task 11
     // Schedulers will be added in Task 14
   ],
@@ -69,6 +71,7 @@ import { ErpMappingService } from './services/erp-mapping.service';
     // Key services exported for use by other modules
     AgentRegistryService,
     ErpMappingService,
+    CircuitBreakerService,
     // SyncJobService (Task 10)
   ],
 })

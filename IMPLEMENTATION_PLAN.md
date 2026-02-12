@@ -483,7 +483,7 @@ pnpm turbo build --filter=@apps/api
 
 - **Priority:** P0
 - **Risk:** low
-- **Status:** not started
+- **Status:** passing
 - **Depends on:** Task 4
 - **Estimated effort:** 1 hour
 - **Spec reference:** REQ-7
@@ -1327,7 +1327,7 @@ pnpm turbo test:e2e --filter=@apps/api
 | 4   | SyncModule Skeleton + Guards      | Scaffold      | passing     |
 | 5   | Agent Registry Service            | Core Services | passing     |
 | 6   | ERP Code Mapping Service          | Core Services | passing     |
-| 7   | Circuit Breaker Service           | Core Services | not started |
+| 7   | Circuit Breaker Service           | Core Services | passing     |
 | 8   | Agent Communication Service       | Core Services | not started |
 | 9   | Sync Ingest Service + Controller  | Direct Ingest | not started |
 | 10  | Sync Job Service                  | Outbound Sync | not started |
