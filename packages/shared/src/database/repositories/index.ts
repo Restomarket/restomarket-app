@@ -1,2 +1,7 @@
 export * from './base/index.js';
 export * from './user/index.js';
+export * from './sync-jobs/index.js';
+export * from './agent-registry/index.js';
+export * from './erp-code-mappings/index.js';
+export * from './dead-letter-queue/index.js';
+export * from './reconciliation-events/index.js';

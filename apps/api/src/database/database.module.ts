@@ -74,6 +74,14 @@ const schema = {
   reconciliationEventsRelations,
 };
 import type { DatabaseConnection as SharedDatabaseConnection } from '@repo/shared';
+import {
+  UserRepository,
+  SyncJobsRepository,
+  AgentRegistryRepository,
+  ErpCodeMappingsRepository,
+  DeadLetterQueueRepository,
+  ReconciliationEventsRepository,
+} from './adapters';
 
 export const DATABASE_CONNECTION = 'DATABASE_CONNECTION';
 export const POSTGRES_CLIENT = 'POSTGRES_CLIENT';
@@ -117,8 +125,24 @@ export type DatabaseConnection = SharedDatabaseConnection;
       },
       inject: [POSTGRES_CLIENT],
     },
+    // Repository adapters
+    UserRepository,
+    SyncJobsRepository,
+    AgentRegistryRepository,
+    ErpCodeMappingsRepository,
+    DeadLetterQueueRepository,
+    ReconciliationEventsRepository,
   ],
-  exports: [DATABASE_CONNECTION, POSTGRES_CLIENT],
+  exports: [
+    DATABASE_CONNECTION,
+    POSTGRES_CLIENT,
+    UserRepository,
+    SyncJobsRepository,
+    AgentRegistryRepository,
+    ErpCodeMappingsRepository,
+    DeadLetterQueueRepository,
+    ReconciliationEventsRepository,
+  ],
 })
 export class DatabaseModule implements OnModuleDestroy {
   constructor(@Inject(POSTGRES_CLIENT) private readonly client: Sql) {}

@@ -177,3 +177,74 @@ All 6 Ralph Wiggum loop documents audited against actual codebase and corrected:
 - ✅ `pnpm turbo lint --filter=@apps/api` — PASSED (6 warnings about turbo env vars, expected)
 
 **Status:** Task 2 PASSING — ready for Task 3
+
+## 2026-02-12 — Task 3: Sync Repositories (COMPLETED)
+
+**What was done:**
+
+- Created 5 base repository classes in `packages/shared/src/database/repositories/`:
+  1. `SyncJobsRepositoryBase` — Job lifecycle, metrics, cleanup (10 methods)
+  2. `AgentRegistryRepositoryBase` — Agent registration, heartbeat, health monitoring (9 methods)
+  3. `ErpCodeMappingsRepositoryBase` — ERP code resolution, CRUD, bulk seeding (9 methods)
+  4. `DeadLetterQueueRepositoryBase` — DLQ management, retry, resolution (8 methods)
+  5. `ReconciliationEventsRepositoryBase` — Event logging, metrics, cleanup (7 methods)
+- Created 5 NestJS adapter repositories in `apps/api/src/database/adapters/`:
+  1. `SyncJobsRepository`
+  2. `AgentRegistryRepository`
+  3. `ErpCodeMappingsRepository`
+  4. `DeadLetterQueueRepository`
+  5. `ReconciliationEventsRepository`
+- Created index files for each repository directory
+- Updated `packages/shared/src/database/repositories/index.ts` to export all new repos
+- Updated `packages/shared/src/types/database.types.ts` to re-export sync types (avoiding duplication)
+- Updated `apps/api/src/database/adapters/index.ts` to export all new adapters
+- Registered all 5 new repositories in `apps/api/src/database/database.module.ts` (providers + exports)
+
+**Files created:**
+
+Base repositories (packages/shared):
+
+- `packages/shared/src/database/repositories/sync-jobs/sync-jobs.repository.base.ts`
+- `packages/shared/src/database/repositories/sync-jobs/index.ts`
+- `packages/shared/src/database/repositories/agent-registry/agent-registry.repository.base.ts`
+- `packages/shared/src/database/repositories/agent-registry/index.ts`
+- `packages/shared/src/database/repositories/erp-code-mappings/erp-code-mappings.repository.base.ts`
+- `packages/shared/src/database/repositories/erp-code-mappings/index.ts`
+- `packages/shared/src/database/repositories/dead-letter-queue/dead-letter-queue.repository.base.ts`
+- `packages/shared/src/database/repositories/dead-letter-queue/index.ts`
+- `packages/shared/src/database/repositories/reconciliation-events/reconciliation-events.repository.base.ts`
+- `packages/shared/src/database/repositories/reconciliation-events/index.ts`
+
+NestJS adapters (apps/api):
+
+- `apps/api/src/database/adapters/nestjs-sync-jobs.repository.ts`
+- `apps/api/src/database/adapters/nestjs-agent-registry.repository.ts`
+- `apps/api/src/database/adapters/nestjs-erp-code-mappings.repository.ts`
+- `apps/api/src/database/adapters/nestjs-dead-letter-queue.repository.ts`
+- `apps/api/src/database/adapters/nestjs-reconciliation-events.repository.ts`
+
+**Files modified:**
+
+- `packages/shared/src/database/repositories/index.ts`
+- `packages/shared/src/types/database.types.ts`
+- `apps/api/src/database/adapters/index.ts`
+- `apps/api/src/database/database.module.ts`
+
+**Key decisions:**
+
+- Followed existing two-layer pattern: base repo (framework-agnostic) + NestJS adapter
+- All methods return `null` or empty arrays on error (base repos) — adapters can override to throw NestJS exceptions
+- Used Drizzle `onConflictDoUpdate` for upserts (agent registry, ERP mappings)
+- Metrics methods use PostgreSQL `filter` clauses for efficient aggregation
+- Pagination implemented consistently across all `findAll` methods
+- Re-exported sync types from schemas to avoid duplication
+- PinoLogger adapted to ILogger interface in all adapters
+
+**Validation results:**
+
+- ✅ `pnpm turbo build --filter=@repo/shared` — PASSED
+- ✅ `pnpm turbo build --filter=@apps/api` — PASSED
+- ✅ `pnpm turbo lint --filter=@apps/api` — PASSED (6 warnings about turbo env vars, expected)
+- ✅ `pnpm turbo type-check` — PASSED (all packages)
+
+**Status:** Task 3 PASSING — ready for Task 4

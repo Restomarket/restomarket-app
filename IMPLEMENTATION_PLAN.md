@@ -200,7 +200,7 @@ pnpm db:migrate
 
 - **Priority:** P0
 - **Risk:** low
-- **Status:** not started
+- **Status:** passing
 - **Depends on:** Task 2
 - **Estimated effort:** 1.5 hours
 - **Spec reference:** REQ-2
@@ -1323,7 +1323,7 @@ pnpm turbo test:e2e --filter=@apps/api
 | --- | --------------------------------- | ------------- | ----------- |
 | 1   | Dependencies + Redis + Config     | Foundation    | passing     |
 | 2   | Database Schemas (Drizzle)        | Foundation    | passing     |
-| 3   | Sync Repositories                 | Repositories  | not started |
+| 3   | Sync Repositories                 | Repositories  | passing     |
 | 4   | SyncModule Skeleton + Guards      | Scaffold      | not started |
 | 5   | Agent Registry Service            | Core Services | not started |
 | 6   | ERP Code Mapping Service          | Core Services | not started |
