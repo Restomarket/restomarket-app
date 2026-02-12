@@ -84,6 +84,7 @@ const schema = {
   stockRelations,
 };
 import type { DatabaseConnection as SharedDatabaseConnection } from '@repo/shared';
+import { DATABASE_CONNECTION, POSTGRES_CLIENT } from './database.constants';
 import {
   UserRepository,
   SyncJobsRepository,
@@ -93,9 +94,7 @@ import {
   ReconciliationEventsRepository,
 } from './adapters';
 
-export const DATABASE_CONNECTION = 'DATABASE_CONNECTION';
-export const POSTGRES_CLIENT = 'POSTGRES_CLIENT';
-
+export { DATABASE_CONNECTION, POSTGRES_CLIENT };
 export type DatabaseConnection = SharedDatabaseConnection;
 
 @Global()

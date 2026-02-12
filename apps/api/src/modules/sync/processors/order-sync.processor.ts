@@ -4,6 +4,7 @@ import { Job } from 'bullmq';
 import { PinoLogger } from 'nestjs-pino';
 import { SyncJobService } from '../services/sync-job.service';
 import { AgentCommunicationService } from '../services/agent-communication.service';
+import { DeadLetterQueueService } from '../services/dead-letter-queue.service';
 
 /**
  * Payload for order sync jobs
@@ -32,6 +33,7 @@ export class OrderSyncProcessor extends WorkerHost {
   constructor(
     private readonly syncJobService: SyncJobService,
     private readonly agentCommunication: AgentCommunicationService,
+    private readonly dlqService: DeadLetterQueueService,
     private readonly logger: PinoLogger,
   ) {
     super();
@@ -107,8 +109,6 @@ export class OrderSyncProcessor extends WorkerHost {
 
   /**
    * Handle job failure after all retries exhausted
-   *
-   * Note: This will be connected to DeadLetterQueueService in Task 12
    */
   @OnWorkerEvent('failed')
   async onFailed(job: Job<OrderSyncPayload>, error: Error): Promise<void> {
@@ -131,7 +131,16 @@ export class OrderSyncProcessor extends WorkerHost {
       // Mark as permanently failed
       await this.syncJobService.markFailed(syncJobId, error.message, job.attemptsMade);
 
-      // TODO: Task 12 will add DeadLetterQueueService.add() here
+      // Add to dead letter queue
+      await this.dlqService.add({
+        originalJobId: syncJobId,
+        vendorId,
+        operation: 'create_order',
+        payload: job.data as unknown as Record<string, unknown>,
+        failureReason: error.message,
+        failureStack: error.stack,
+        attemptCount: job.attemptsMade,
+      });
     } else {
       this.logger.warn({
         msg: 'Order sync job failed, will retry',

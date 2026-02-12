@@ -27,7 +27,7 @@ describe('AgentCallbackController', () => {
 
     // Mock guard to always allow access
     const mockGuard = {
-      canActivate: (context: ExecutionContext) => true,
+      canActivate: (_context: ExecutionContext) => true,
     };
 
     const module: TestingModule = await Test.createTestingModule({

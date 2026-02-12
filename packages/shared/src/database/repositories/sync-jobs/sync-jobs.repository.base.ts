@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, lte, sql, type SQL } from 'drizzle-orm';
+import { and, count, desc, eq, lte, sql, type SQL } from 'drizzle-orm';
 import { BaseRepository } from '../base/base.repository.js';
 import { syncJobs } from '../../schema/index.js';
 import type { SyncJob, NewSyncJob } from '../../../types/database.types.js';
@@ -263,7 +263,7 @@ export class SyncJobsRepositoryBase extends BaseRepository<typeof syncJobs> {
   /**
    * Delete expired jobs (for cleanup)
    */
-  async deleteExpired(beforeDate: Date, limit = 1000): Promise<number> {
+  async deleteExpired(beforeDate: Date): Promise<number> {
     try {
       const result = await this.db
         .delete(syncJobs)

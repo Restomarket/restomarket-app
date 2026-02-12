@@ -1,4 +1,4 @@
-import { and, count, desc, eq, isNull, lt, or, sql } from 'drizzle-orm';
+import { count, desc, eq, or, sql } from 'drizzle-orm';
 import { BaseRepository } from '../base/base.repository.js';
 import { agentRegistry } from '../../schema/index.js';
 import type { Agent, NewAgent } from '../../../types/database.types.js';

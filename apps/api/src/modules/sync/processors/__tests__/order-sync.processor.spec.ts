@@ -4,11 +4,13 @@ import { PinoLogger } from 'nestjs-pino';
 import { OrderSyncProcessor, OrderSyncPayload } from '../order-sync.processor';
 import { SyncJobService } from '../../services/sync-job.service';
 import { AgentCommunicationService } from '../../services/agent-communication.service';
+import { DeadLetterQueueService } from '../../services/dead-letter-queue.service';
 
 describe('OrderSyncProcessor', () => {
   let processor: OrderSyncProcessor;
   let syncJobService: jest.Mocked<SyncJobService>;
   let agentCommunication: jest.Mocked<AgentCommunicationService>;
+  let dlqService: jest.Mocked<DeadLetterQueueService>;
   let logger: jest.Mocked<PinoLogger>;
 
   const mockPayload: OrderSyncPayload = {
@@ -33,6 +35,10 @@ describe('OrderSyncProcessor', () => {
       callAgent: jest.fn().mockResolvedValue(undefined),
     };
 
+    const mockDlqService = {
+      add: jest.fn().mockResolvedValue('dlq-123'),
+    };
+
     const mockLogger = {
       setContext: jest.fn(),
       info: jest.fn(),
@@ -53,6 +59,10 @@ describe('OrderSyncProcessor', () => {
           useValue: mockAgentCommunication,
         },
         {
+          provide: DeadLetterQueueService,
+          useValue: mockDlqService,
+        },
+        {
           provide: PinoLogger,
           useValue: mockLogger,
         },
@@ -64,6 +74,7 @@ describe('OrderSyncProcessor', () => {
     agentCommunication = module.get(
       AgentCommunicationService,
     ) as jest.Mocked<AgentCommunicationService>;
+    dlqService = module.get(DeadLetterQueueService) as jest.Mocked<DeadLetterQueueService>;
     logger = module.get(PinoLogger) as jest.Mocked<PinoLogger>;
   });
 
@@ -186,8 +197,9 @@ describe('OrderSyncProcessor', () => {
   });
 
   describe('onFailed', () => {
-    it('should handle exhausted retries and mark as permanently failed', async () => {
+    it('should handle exhausted retries and add to DLQ', async () => {
       const error = new Error('Permanent failure');
+      error.stack = 'Error stack trace...';
       const mockJob = {
         data: mockPayload,
         attemptsMade: 5,
@@ -198,6 +210,17 @@ describe('OrderSyncProcessor', () => {
 
       // Should mark as failed
       expect(syncJobService.markFailed).toHaveBeenCalledWith('job-123', 'Permanent failure', 5);
+
+      // Should add to DLQ
+      expect(dlqService.add).toHaveBeenCalledWith({
+        originalJobId: 'job-123',
+        vendorId: 'vendor-abc',
+        operation: 'create_order',
+        payload: mockPayload,
+        failureReason: 'Permanent failure',
+        failureStack: 'Error stack trace...',
+        attemptCount: 5,
+      });
 
       // Should log error about exhausted retries
       expect(logger.error).toHaveBeenCalledWith(
@@ -222,6 +245,9 @@ describe('OrderSyncProcessor', () => {
       // Should NOT mark as failed (BullMQ will retry)
       expect(syncJobService.markFailed).not.toHaveBeenCalled();
 
+      // Should NOT add to DLQ (still retrying)
+      expect(dlqService.add).not.toHaveBeenCalled();
+
       // Should log warning about retry
       expect(logger.warn).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -245,6 +271,7 @@ describe('OrderSyncProcessor', () => {
 
       // Should treat as exhausted (5 >= default 5)
       expect(syncJobService.markFailed).toHaveBeenCalled();
+      expect(dlqService.add).toHaveBeenCalled();
       expect(logger.error).toHaveBeenCalledWith(
         expect.objectContaining({
           msg: 'Order sync job exhausted all retries',

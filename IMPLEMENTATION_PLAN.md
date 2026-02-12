@@ -2,8 +2,7 @@
 
 > **Spec:** `specs/sync-architecture.md`  
 > **Last Updated:** 2026-02-12  
-> **Total Tasks:** 22 across 8 phases  
-> **Estimated Effort:** ~28 hours
+> **Total Tasks:** 23 across 8 phases + 1 validation gate
 
 ---
 
@@ -30,7 +29,7 @@ Phase 8: Hardening        ─── Security, performance, CI/CD, deployment
 - **Risk:** low
 - **Status:** passing
 - **Depends on:** nothing
-- **Estimated effort:** 45 min
+- **Complexity:** 3
 - **Spec reference:** REQ-1, REQ-13
 
 **Description:**
@@ -103,7 +102,7 @@ docker compose config
 - **Risk:** medium (schema design is architectural)
 - **Status:** passing
 - **Depends on:** Task 1
-- **Estimated effort:** 1.5 hours
+- **Complexity:** 6
 - **Spec reference:** REQ-2
 
 **Description:**  
@@ -206,7 +205,7 @@ pnpm db:migrate
 - **Risk:** low
 - **Status:** passing
 - **Depends on:** Task 2
-- **Estimated effort:** 1.5 hours
+- **Complexity:** 4
 - **Spec reference:** REQ-2
 
 **Description:**
@@ -268,7 +267,7 @@ pnpm turbo type-check
 - **Risk:** low
 - **Status:** passing
 - **Depends on:** Task 3
-- **Estimated effort:** 1 hour
+- **Complexity:** 4
 - **Spec reference:** REQ-1, REQ-13
 
 **Description:**
@@ -341,7 +340,7 @@ pnpm turbo type-check
 - **Risk:** low
 - **Status:** passing
 - **Depends on:** Task 4
-- **Estimated effort:** 2 hours
+- **Complexity:** 5
 - **Spec reference:** REQ-3
 
 **Description:**  
@@ -429,7 +428,7 @@ pnpm turbo type-check
 - **Risk:** low
 - **Status:** passing
 - **Depends on:** Task 4
-- **Estimated effort:** 1.5 hours
+- **Complexity:** 5
 - **Spec reference:** REQ-4
 
 **Description:**  
@@ -497,7 +496,7 @@ pnpm turbo type-check
 - **Risk:** low
 - **Status:** passing
 - **Depends on:** Task 4
-- **Estimated effort:** 1 hour
+- **Complexity:** 4
 - **Spec reference:** REQ-7
 
 **Description:**  
@@ -551,7 +550,7 @@ pnpm turbo type-check
 - **Risk:** medium
 - **Status:** passing
 - **Depends on:** Task 5, Task 7
-- **Estimated effort:** 1.5 hours
+- **Complexity:** 5
 - **Spec reference:** REQ-6, REQ-7
 
 **Description:**  
@@ -610,11 +609,21 @@ pnpm turbo type-check
 - **Risk:** high (core architectural change)
 - **Status:** passing
 - **Depends on:** Task 6, Task 3
-- **Estimated effort:** 4 hours
+- **Complexity:** 8
 - **Spec reference:** REQ-5
 
 **Description:**  
 **This is the most important task.** Agents POST directly to NestJS → validate → deduplicate → map → upsert to PostgreSQL. One hop, direct to database.
+
+**Thinking:**  
+This task represents the core architectural win of the sync system. The direct pipeline eliminates middleware layers and reduces latency from ERP to database. The complexity lies in handling deduplication (content_hash), staleness detection (timestamp comparison), and mapping resolution (ERP codes → Resto codes) all in a single transactional flow. Batch processing must be efficient to handle full catalog syncs without overwhelming the database.
+
+**Planning:**
+
+1. Start with the single-item ingest flow to establish the validation → deduplicate → map → upsert pattern
+2. Add batch variants that chunk large payloads into manageable sizes
+3. Implement comprehensive error handling that provides per-item status feedback
+4. Test with realistic payloads to validate performance and error scenarios
 
 **Implementation Details:**
 
@@ -736,7 +745,7 @@ pnpm turbo type-check
 - **Risk:** high
 - **Status:** passing
 - **Depends on:** Task 3
-- **Estimated effort:** 1.5 hours
+- **Complexity:** 6
 - **Spec reference:** REQ-6
 
 **Description:**  
@@ -785,11 +794,22 @@ pnpm turbo type-check
 - **Risk:** high
 - **Status:** passing
 - **Depends on:** Task 8, Task 10
-- **Estimated effort:** 2.5 hours
+- **Complexity:** 7
 - **Spec reference:** REQ-6
 
 **Description:**  
 BullMQ processor that sends orders to ERP agents, and controller that receives callbacks.
+
+**Thinking:**  
+This task closes the outbound sync loop (NestJS → Agent → ERP). The complexity is in coordinating three components: the BullMQ processor (async job execution), the agent communication layer (HTTP with circuit breaker), and the callback controller (status updates). The retry logic must be resilient but not infinite, with failed jobs moving to DLQ after exhaustion. The callback mechanism allows agents to process asynchronously and report back when complete.
+
+**Planning:**
+
+1. Implement the BullMQ processor first with retry configuration
+2. Wire the agent communication service with circuit breaker protection
+3. Create the callback controller to handle success/failure responses
+4. Add the event listener to trigger sync jobs on order creation
+5. Test the full flow: order created → job enqueued → agent called → callback received → order updated
 
 **Implementation Details:**
 
@@ -858,13 +878,93 @@ pnpm turbo type-check
 
 ---
 
+### Task 11.5: Full Codebase Validation + Fix All Issues
+
+- **Priority:** P0 (BLOCKING — must pass before any new feature work)
+- **Risk:** medium
+- **Status:** passing
+- **Depends on:** Task 11
+- **Complexity:** 5
+
+**Description:**
+Run the full validation suite across the entire monorepo — lint, build, type-check, unit tests, and e2e tests. Fix every error, warning, and failure before continuing with Task 12+. This ensures the foundation (Tasks 1-11) is solid and nothing is silently broken.
+
+**Implementation Details:**
+
+1. **Lint + auto-fix** — fix all lint errors and warnings:
+
+   ```bash
+   pnpm turbo lint --filter=@apps/api --fix
+   pnpm turbo lint --filter=@repo/shared --fix
+   ```
+
+   - Fix any remaining lint errors that `--fix` cannot auto-resolve
+   - Ensure zero warnings
+
+2. **Build** — both shared and API must compile cleanly:
+
+   ```bash
+   pnpm turbo build --filter=@repo/shared
+   pnpm turbo build --filter=@apps/api
+   ```
+
+   - Fix all TypeScript compilation errors
+
+3. **Type check** — workspace-wide cross-package type safety:
+
+   ```bash
+   pnpm turbo type-check
+   ```
+
+   - Fix any cross-package type mismatches
+
+4. **Unit tests** — all existing tests must pass:
+
+   ```bash
+   pnpm turbo test --filter=@apps/api
+   ```
+
+   - Fix any failing tests
+   - Ensure all test suites for Tasks 1-11 pass (agent-registry, erp-mapping, circuit-breaker, agent-communication, sync-ingest, sync-job, order-sync)
+
+5. **E2E tests** — run if they exist:
+
+   ```bash
+   pnpm turbo test:e2e --filter=@apps/api
+   ```
+
+   - Fix any failing e2e tests
+
+**Acceptance criteria:**
+
+- `pnpm turbo lint --filter=@apps/api` exits 0
+- `pnpm turbo build --filter=@repo/shared` exits 0
+- `pnpm turbo build --filter=@apps/api` exits 0
+- `pnpm turbo type-check` exits 0
+- `pnpm turbo test --filter=@apps/api` exits 0 (all suites pass)
+- Zero lint warnings, zero type errors, zero test failures
+
+**Validation Commands:**
+
+```bash
+pnpm turbo lint --filter=@apps/api --fix
+pnpm turbo lint --filter=@repo/shared --fix
+pnpm turbo build --filter=@repo/shared
+pnpm turbo build --filter=@apps/api
+pnpm turbo type-check
+pnpm turbo test --filter=@apps/api
+pnpm turbo test:e2e --filter=@apps/api
+```
+
+---
+
 ### Task 12: Dead Letter Queue Service
 
 - **Priority:** P0
 - **Risk:** low
-- **Status:** not started
-- **Depends on:** Task 11
-- **Estimated effort:** 1.5 hours
+- **Status:** passing
+- **Depends on:** Task 11.5
+- **Complexity:** 4
 - **Spec reference:** REQ-8
 
 **Description:**  
@@ -924,11 +1024,22 @@ pnpm turbo type-check
 - **Risk:** medium
 - **Status:** not started
 - **Depends on:** Task 8
-- **Estimated effort:** 2.5 hours
+- **Complexity:** 7
 - **Spec reference:** REQ-9
 
 **Description:**  
 Drift detection via checksum comparison, binary search resolution.
+
+**Thinking:**  
+Reconciliation is critical for maintaining data integrity between ERP and PostgreSQL. The binary search approach minimizes the number of API calls needed to identify specific items that have drifted. The complexity lies in implementing the recursive narrowing algorithm efficiently and handling edge cases (empty ranges, all items drifted, network failures during search). ERP is always the source of truth for physical inventory.
+
+**Planning:**
+
+1. Implement checksum comparison at the vendor level first
+2. Add binary search logic with proper recursion termination (≤10 items)
+3. Implement conflict resolution with ERP-wins upsert strategy
+4. Add comprehensive logging to reconciliation_events for audit trail
+5. Test with mock agent responses to validate the binary search narrows correctly
 
 **Implementation Details:**
 
@@ -980,7 +1091,7 @@ pnpm turbo type-check
 - **Risk:** low
 - **Status:** not started
 - **Depends on:** Task 5, Task 12, Task 13
-- **Estimated effort:** 2 hours
+- **Complexity:** 5
 - **Spec reference:** REQ-10
 
 **Description:**  
@@ -1041,7 +1152,7 @@ pnpm turbo type-check
 - **Risk:** low
 - **Status:** not started
 - **Depends on:** Task 10
-- **Estimated effort:** 1.5 hours
+- **Complexity:** 4
 - **Spec reference:** REQ-11
 
 **Description:**  
@@ -1107,7 +1218,7 @@ pnpm turbo type-check
 - **Risk:** low
 - **Status:** not started
 - **Depends on:** Task 4
-- **Estimated effort:** 1 hour
+- **Complexity:** 3
 - **Spec reference:** REQ-11
 
 **Description:**  
@@ -1160,7 +1271,7 @@ pnpm turbo type-check
 - **Risk:** medium
 - **Status:** not started
 - **Depends on:** Task 1
-- **Estimated effort:** 45 min
+- **Complexity:** 3
 
 **Description:**  
 Ensure no secrets in code, complete `.env.example`, add gitignore rules.
@@ -1193,7 +1304,7 @@ bash scripts/check-secrets.sh
 - **Risk:** low
 - **Status:** not started
 - **Depends on:** Task 16
-- **Estimated effort:** 1 hour
+- **Complexity:** 4
 
 **Description:**  
 Tag Docker images with Git SHA, create rollback script.
@@ -1222,7 +1333,7 @@ docker images | grep restomarket-api
 - **Risk:** medium
 - **Status:** not started
 - **Depends on:** Task 18
-- **Estimated effort:** 2 hours
+- **Complexity:** 5
 
 **Description:**  
 CI/CD pipeline: lint → test → build → Docker → deploy.
@@ -1250,7 +1361,7 @@ cat .github/workflows/ci-cd.yml | python3 -c "import sys,yaml; yaml.safe_load(sy
 - **Risk:** medium
 - **Status:** not started
 - **Depends on:** Task 18
-- **Estimated effort:** 1.5 hours
+- **Complexity:** 6
 
 **Description:**  
 Blue-green deployment with health verification and automatic rollback.
@@ -1281,7 +1392,7 @@ bash scripts/deploy-blue-green.sh --dry-run
 - **Risk:** low
 - **Status:** not started
 - **Depends on:** Task 4
-- **Estimated effort:** 30 min
+- **Complexity:** 2
 
 **Description:**
 `CorrelationIdMiddleware` ALREADY EXISTS at `apps/api/src/common/middleware/correlation-id.middleware.ts` and is already applied globally to all routes via `AppModule.configure()`. This task verifies that sync services properly propagate the correlation ID through agent HTTP calls and BullMQ jobs.
@@ -1315,7 +1426,7 @@ pnpm turbo type-check
 - **Risk:** low
 - **Status:** not started
 - **Depends on:** Tasks 9, 11, 13
-- **Estimated effort:** 3 hours
+- **Complexity:** 6
 
 **Description:**  
 End-to-end tests for all sync flows.
@@ -1353,43 +1464,45 @@ pnpm turbo type-check
 
 ## Summary
 
-| Phase              | Tasks  | Effort   | Key Deliverable                                       |
-| ------------------ | ------ | -------- | ----------------------------------------------------- |
-| 1: Foundation      | 1-2    | 2.25h    | BullMQ, schedule, opossum deps, config, schemas       |
-| 2: Repositories    | 3      | 1.5h     | 5 typed Drizzle repositories                          |
-| 3: Module Scaffold | 4      | 1h       | SyncModule, guards, directory structure               |
-| 4: Core Services   | 5-8    | 6h       | Agent registry, mappings, circuit breaker, agent HTTP |
-| 5: Direct Ingest   | 9      | 4h       | **Agent → NestJS → PG (direct pipeline)**             |
-| 6: Outbound Sync   | 10-12  | 5.5h     | BullMQ order→ERP, callback, DLQ                       |
-| 7: Background      | 13-16  | 7h       | Reconciliation, scheduler, metrics, health            |
-| 8: Hardening       | 17-22  | 8.75h    | Secrets, CI/CD, deployment, verify correlation, E2E   |
-| **Total**          | **22** | **~28h** | **Production-grade NestJS ERP sync**                  |
+| Phase              | Tasks  | Key Deliverable                                       |
+| ------------------ | ------ | ----------------------------------------------------- |
+| 1: Foundation      | 1-2    | BullMQ, schedule, opossum deps, config, schemas       |
+| 2: Repositories    | 3      | 5 typed Drizzle repositories                          |
+| 3: Module Scaffold | 4      | SyncModule, guards, directory structure               |
+| 4: Core Services   | 5-8    | Agent registry, mappings, circuit breaker, agent HTTP |
+| 5: Direct Ingest   | 9      | **Agent → NestJS → PG (direct pipeline)**             |
+| Gate: Validation   | 11.5   | **Lint, build, type-check, tests — zero failures**    |
+| 6: Outbound Sync   | 10-12  | BullMQ order→ERP, callback, DLQ                       |
+| 7: Background      | 13-16  | Reconciliation, scheduler, metrics, health            |
+| 8: Hardening       | 17-22  | Secrets, CI/CD, deployment, verify correlation, E2E   |
+| **Total**          | **23** | **Production-grade NestJS ERP sync**                  |
 
 ---
 
 ## Quick Status Dashboard
 
-| #   | Task                              | Phase         | Status      |
-| --- | --------------------------------- | ------------- | ----------- |
-| 1   | Dependencies + Redis + Config     | Foundation    | passing     |
-| 2   | Database Schemas (Drizzle)        | Foundation    | passing     |
-| 3   | Sync Repositories                 | Repositories  | passing     |
-| 4   | SyncModule Skeleton + Guards      | Scaffold      | passing     |
-| 5   | Agent Registry Service            | Core Services | passing     |
-| 6   | ERP Code Mapping Service          | Core Services | passing     |
-| 7   | Circuit Breaker Service           | Core Services | passing     |
-| 8   | Agent Communication Service       | Core Services | passing     |
-| 9   | Sync Ingest Service + Controller  | Direct Ingest | passing     |
-| 10  | Sync Job Service                  | Outbound Sync | passing     |
-| 11  | Order Sync Processor + Callback   | Outbound Sync | passing     |
-| 12  | Dead Letter Queue Service         | Outbound Sync | not started |
-| 13  | Reconciliation Service            | Background    | not started |
-| 14  | Scheduler + Cleanup + Alerts      | Background    | not started |
-| 15  | Sync Metrics Service              | Background    | not started |
-| 16  | Enhanced Health Checks            | Background    | not started |
-| 17  | Secrets Management                | Hardening     | not started |
-| 18  | Docker Image Tagging + Rollback   | Hardening     | not started |
-| 19  | GitHub Actions CI/CD              | Hardening     | not started |
-| 20  | Zero-Downtime Deployment          | Hardening     | not started |
-| 21  | Verify Correlation ID Propagation | Hardening     | not started |
-| 22  | Integration Tests                 | Hardening     | not started |
+| #    | Task                              | Phase         | Status      |
+| ---- | --------------------------------- | ------------- | ----------- |
+| 1    | Dependencies + Redis + Config     | Foundation    | passing     |
+| 2    | Database Schemas (Drizzle)        | Foundation    | passing     |
+| 3    | Sync Repositories                 | Repositories  | passing     |
+| 4    | SyncModule Skeleton + Guards      | Scaffold      | passing     |
+| 5    | Agent Registry Service            | Core Services | passing     |
+| 6    | ERP Code Mapping Service          | Core Services | passing     |
+| 7    | Circuit Breaker Service           | Core Services | passing     |
+| 8    | Agent Communication Service       | Core Services | passing     |
+| 9    | Sync Ingest Service + Controller  | Direct Ingest | passing     |
+| 10   | Sync Job Service                  | Outbound Sync | passing     |
+| 11   | Order Sync Processor + Callback   | Outbound Sync | passing     |
+| 11.5 | **Full Validation + Fix Issues**  | **Gate**      | passing     |
+| 12   | Dead Letter Queue Service         | Outbound Sync | not started |
+| 13   | Reconciliation Service            | Background    | not started |
+| 14   | Scheduler + Cleanup + Alerts      | Background    | not started |
+| 15   | Sync Metrics Service              | Background    | not started |
+| 16   | Enhanced Health Checks            | Background    | not started |
+| 17   | Secrets Management                | Hardening     | not started |
+| 18   | Docker Image Tagging + Rollback   | Hardening     | not started |
+| 19   | GitHub Actions CI/CD              | Hardening     | not started |
+| 20   | Zero-Downtime Deployment          | Hardening     | not started |
+| 21   | Verify Correlation ID Propagation | Hardening     | not started |
+| 22   | Integration Tests                 | Hardening     | not started |

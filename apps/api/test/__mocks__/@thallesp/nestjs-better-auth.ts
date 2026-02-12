@@ -44,7 +44,7 @@ export interface UserSession {
 // Mock AuthGuard
 export class AuthGuard implements CanActivate {
   canActivate(context: ExecutionContext): boolean {
-    const request = context.switchToHttp().getRequest();
+    const _request = context.switchToHttp().getRequest();
     const allowAnonymous = Reflect.getMetadata('allowAnonymous', context.getHandler());
 
     if (allowAnonymous) {

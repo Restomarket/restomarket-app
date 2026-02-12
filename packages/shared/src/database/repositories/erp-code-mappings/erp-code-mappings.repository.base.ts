@@ -1,4 +1,4 @@
-import { and, count, desc, eq, sql } from 'drizzle-orm';
+import { and, count, desc, eq, sql, type SQL } from 'drizzle-orm';
 import { BaseRepository } from '../base/base.repository.js';
 import { erpCodeMappings } from '../../schema/index.js';
 import type { ErpCodeMapping, NewErpCodeMapping } from '../../../types/database.types.js';
@@ -184,7 +184,7 @@ export class ErpCodeMappingsRepositoryBase extends BaseRepository<typeof erpCode
     limit = 50,
   ): Promise<{ data: ErpCodeMapping[]; total: number }> {
     try {
-      const conditions: any[] = [];
+      const conditions: SQL<unknown>[] = [];
 
       if (vendorId) {
         conditions.push(eq(erpCodeMappings.vendorId, vendorId));

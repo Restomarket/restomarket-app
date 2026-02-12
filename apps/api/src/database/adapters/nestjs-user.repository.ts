@@ -8,7 +8,7 @@ import {
   type DatabaseConnection,
   type ILogger,
 } from '@repo/shared';
-import { DATABASE_CONNECTION } from '../database.module';
+import { DATABASE_CONNECTION } from '../database.constants';
 import { DatabaseException } from '@common/exceptions/database.exception';
 import { BusinessException } from '@common/exceptions/business.exception';
 
