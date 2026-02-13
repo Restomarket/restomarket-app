@@ -2,31 +2,35 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PinoLogger } from 'nestjs-pino';
 import { SyncIngestService } from '../sync-ingest.service';
 import { ErpMappingService } from '../erp-mapping.service';
-import { DATABASE_CONNECTION } from '../../../../database/database.module';
+import { ItemsRepository, WarehousesRepository, StockRepository } from '@database/adapters';
 
 describe('SyncIngestService', () => {
   let service: SyncIngestService;
   let erpMappingService: jest.Mocked<ErpMappingService>;
-  let db: any;
+  let itemsRepository: jest.Mocked<ItemsRepository>;
+  let warehousesRepository: jest.Mocked<WarehousesRepository>;
+  let stockRepository: jest.Mocked<StockRepository>;
 
   beforeEach(async () => {
-    // Mock database connection
-    db = {
-      select: jest.fn().mockReturnThis(),
-      from: jest.fn().mockReturnThis(),
-      where: jest.fn().mockReturnThis(),
-      limit: jest.fn().mockResolvedValue([]),
-      insert: jest.fn().mockReturnThis(),
-      values: jest.fn().mockReturnThis(),
-      onConflictDoUpdate: jest.fn().mockResolvedValue(undefined),
+    const mockItemsRepository = {
+      findByVendorAndSku: jest.fn().mockResolvedValue(null),
+      upsertBatch: jest.fn().mockResolvedValue([]),
     };
 
-    // Mock ERP mapping service
+    const mockWarehousesRepository = {
+      findByVendorAndErpId: jest.fn().mockResolvedValue(null),
+      upsertBatch: jest.fn().mockResolvedValue([]),
+    };
+
+    const mockStockRepository = {
+      findByVendorWarehouseItem: jest.fn().mockResolvedValue(null),
+      upsertBatch: jest.fn().mockResolvedValue([]),
+    };
+
     const mockErpMappingService = {
       resolve: jest.fn(),
     };
 
-    // Mock logger
     const mockLogger = {
       setContext: jest.fn(),
       debug: jest.fn(),
@@ -39,8 +43,16 @@ describe('SyncIngestService', () => {
       providers: [
         SyncIngestService,
         {
-          provide: DATABASE_CONNECTION,
-          useValue: db,
+          provide: ItemsRepository,
+          useValue: mockItemsRepository,
+        },
+        {
+          provide: WarehousesRepository,
+          useValue: mockWarehousesRepository,
+        },
+        {
+          provide: StockRepository,
+          useValue: mockStockRepository,
         },
         {
           provide: ErpMappingService,
@@ -55,6 +67,9 @@ describe('SyncIngestService', () => {
 
     service = module.get<SyncIngestService>(SyncIngestService);
     erpMappingService = module.get(ErpMappingService);
+    itemsRepository = module.get(ItemsRepository);
+    warehousesRepository = module.get(WarehousesRepository);
+    stockRepository = module.get(StockRepository);
   });
 
   it('should be defined', () => {
@@ -98,16 +113,13 @@ describe('SyncIngestService', () => {
       const vendorId = 'vendor123';
       const contentHash = 'hash123';
 
-      // Mock existing item with same content hash
-      db.limit.mockResolvedValueOnce([
-        {
-          id: 'item-id-1',
-          vendorId,
-          sku: 'SKU001',
-          contentHash,
-          lastSyncedAt: new Date(),
-        },
-      ]);
+      itemsRepository.findByVendorAndSku.mockResolvedValueOnce({
+        id: 'item-id-1',
+        vendorId,
+        sku: 'SKU001',
+        contentHash,
+        lastSyncedAt: new Date(),
+      } as any);
 
       const items = [
         {
@@ -132,10 +144,7 @@ describe('SyncIngestService', () => {
     it('should fail items with unmapped unit codes', async () => {
       const vendorId = 'vendor123';
 
-      // Mock: no existing item
-      db.limit.mockResolvedValueOnce([]);
-
-      // Mock: unit mapping not found
+      itemsRepository.findByVendorAndSku.mockResolvedValueOnce(null);
       erpMappingService.resolve.mockResolvedValueOnce(null);
 
       const items = [
@@ -156,12 +165,47 @@ describe('SyncIngestService', () => {
       expect(result.results[0]?.status).toBe('failed');
       expect(result.results[0]?.reason).toContain('unmapped_unit');
     });
+
+    it('should process valid items and call upsertBatch', async () => {
+      const vendorId = 'vendor123';
+
+      itemsRepository.findByVendorAndSku.mockResolvedValueOnce(null);
+      erpMappingService.resolve
+        .mockResolvedValueOnce({ restoCode: 'KG', restoLabel: 'Kilogram' })
+        .mockResolvedValueOnce({ restoCode: 'TVA20', restoLabel: '20' });
+
+      const items = [
+        {
+          sku: 'SKU001',
+          name: 'Test Item',
+          erpUnitCode: 'KG',
+          erpVatCode: 'VAT20',
+          contentHash: 'hash123',
+          lastSyncedAt: new Date().toISOString(),
+        },
+      ];
+
+      const result = await service.handleItemChanges(vendorId, items, false);
+
+      expect(result.processed).toBe(1);
+      expect(result.failed).toBe(0);
+      expect(itemsRepository.upsertBatch).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            vendorId,
+            sku: 'SKU001',
+            unitCode: 'KG',
+            vatCode: 'TVA20',
+          }),
+        ]),
+      );
+    });
   });
 
   describe('handleStockChanges', () => {
     it('should reject payloads exceeding incremental limit', async () => {
       const vendorId = 'vendor123';
-      const stock = Array(501).fill({
+      const stockPayloads = Array(501).fill({
         itemSku: 'SKU001',
         erpWarehouseId: 'WH01',
         quantity: 100,
@@ -171,24 +215,125 @@ describe('SyncIngestService', () => {
         lastSyncedAt: new Date().toISOString(),
       });
 
-      await expect(service.handleStockChanges(vendorId, stock, false)).rejects.toThrow(
+      await expect(service.handleStockChanges(vendorId, stockPayloads, false)).rejects.toThrow(
         'Maximum 500 stock records per incremental sync request',
       );
+    });
+
+    it('should fail stock when item not found', async () => {
+      const vendorId = 'vendor123';
+
+      itemsRepository.findByVendorAndSku.mockResolvedValueOnce(null);
+
+      const stockPayloads = [
+        {
+          itemSku: 'SKU001',
+          erpWarehouseId: 'WH01',
+          quantity: 100,
+          reservedQuantity: 10,
+          availableQuantity: 90,
+          contentHash: 'hash123',
+          lastSyncedAt: new Date().toISOString(),
+        },
+      ];
+
+      const result = await service.handleStockChanges(vendorId, stockPayloads, false);
+
+      expect(result.failed).toBe(1);
+      expect(result.results[0]?.reason).toContain('item_not_found');
+    });
+
+    it('should fail stock when warehouse not found', async () => {
+      const vendorId = 'vendor123';
+
+      itemsRepository.findByVendorAndSku.mockResolvedValueOnce({ id: 'item-id-1' } as any);
+      warehousesRepository.findByVendorAndErpId.mockResolvedValueOnce(null);
+
+      const stockPayloads = [
+        {
+          itemSku: 'SKU001',
+          erpWarehouseId: 'WH_UNKNOWN',
+          quantity: 100,
+          reservedQuantity: 10,
+          availableQuantity: 90,
+          contentHash: 'hash123',
+          lastSyncedAt: new Date().toISOString(),
+        },
+      ];
+
+      const result = await service.handleStockChanges(vendorId, stockPayloads, false);
+
+      expect(result.failed).toBe(1);
+      expect(result.results[0]?.reason).toContain('warehouse_not_found');
     });
   });
 
   describe('handleWarehouseChanges', () => {
     it('should reject payloads exceeding incremental limit', async () => {
       const vendorId = 'vendor123';
-      const warehouses = Array(501).fill({
+      const warehousePayloads = Array(501).fill({
         erpWarehouseId: 'WH01',
         name: 'Warehouse 1',
         contentHash: 'hash123',
         lastSyncedAt: new Date().toISOString(),
       });
 
-      await expect(service.handleWarehouseChanges(vendorId, warehouses, false)).rejects.toThrow(
-        'Maximum 500 warehouses per incremental sync request',
+      await expect(
+        service.handleWarehouseChanges(vendorId, warehousePayloads, false),
+      ).rejects.toThrow('Maximum 500 warehouses per incremental sync request');
+    });
+
+    it('should skip warehouses with matching content hash', async () => {
+      const vendorId = 'vendor123';
+      const contentHash = 'hash123';
+
+      warehousesRepository.findByVendorAndErpId.mockResolvedValueOnce({
+        id: 'wh-id-1',
+        vendorId,
+        erpWarehouseId: 'WH01',
+        contentHash,
+        lastSyncedAt: new Date(),
+      } as any);
+
+      const warehousePayloads = [
+        {
+          erpWarehouseId: 'WH01',
+          name: 'Warehouse 1',
+          contentHash,
+          lastSyncedAt: new Date().toISOString(),
+        },
+      ];
+
+      const result = await service.handleWarehouseChanges(vendorId, warehousePayloads, false);
+
+      expect(result.skipped).toBe(1);
+      expect(result.results[0]?.reason).toBe('no_changes');
+    });
+
+    it('should process valid warehouses and call upsertBatch', async () => {
+      const vendorId = 'vendor123';
+
+      warehousesRepository.findByVendorAndErpId.mockResolvedValueOnce(null);
+
+      const warehousePayloads = [
+        {
+          erpWarehouseId: 'WH01',
+          name: 'Warehouse 1',
+          contentHash: 'hash123',
+          lastSyncedAt: new Date().toISOString(),
+        },
+      ];
+
+      const result = await service.handleWarehouseChanges(vendorId, warehousePayloads, false);
+
+      expect(result.processed).toBe(1);
+      expect(warehousesRepository.upsertBatch).toHaveBeenCalledWith(
+        expect.arrayContaining([
+          expect.objectContaining({
+            vendorId,
+            erpWarehouseId: 'WH01',
+          }),
+        ]),
       );
     });
   });

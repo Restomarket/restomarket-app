@@ -1,10 +1,9 @@
-import { Injectable, Inject } from '@nestjs/common';
+import { Injectable } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
-import { eq, and, sql } from 'drizzle-orm';
-import { items, warehouses, stock } from '@repo/shared/database/schema';
-import { DATABASE_CONNECTION, type DatabaseConnection } from '../../../database/database.module';
+import { ItemsRepository, WarehousesRepository, StockRepository } from '@database/adapters';
 import { ErpMappingService } from './erp-mapping.service';
 import { ItemSyncPayloadDto, StockSyncPayloadDto, WarehouseSyncPayloadDto } from '../dto';
+import type { NewItem, NewWarehouse, NewStock } from '@repo/shared';
 
 export interface SyncResultItem {
   identifier: string; // SKU, erpWarehouseId, or combination
@@ -22,7 +21,9 @@ export interface SyncResponse {
 @Injectable()
 export class SyncIngestService {
   constructor(
-    @Inject(DATABASE_CONNECTION) private readonly db: DatabaseConnection,
+    private readonly itemsRepository: ItemsRepository,
+    private readonly warehousesRepository: WarehousesRepository,
+    private readonly stockRepository: StockRepository,
     private readonly erpMappingService: ErpMappingService,
     private readonly logger: PinoLogger,
   ) {
@@ -42,7 +43,7 @@ export class SyncIngestService {
     }
 
     const results: SyncResultItem[] = [];
-    const validatedBatch: Array<typeof items.$inferInsert> = [];
+    const validatedBatch: NewItem[] = [];
     let processedCount = 0;
     let skippedCount = 0;
     let failedCount = 0;
@@ -62,13 +63,10 @@ export class SyncIngestService {
       for (const itemPayload of chunk) {
         try {
           // 1. Check if item exists and compare content hash
-          const existingItems = await this.db
-            .select()
-            .from(items)
-            .where(and(eq(items.vendorId, vendorId), eq(items.sku, itemPayload.sku)))
-            .limit(1);
-
-          const existingItem = existingItems[0];
+          const existingItem = await this.itemsRepository.findByVendorAndSku(
+            vendorId,
+            itemPayload.sku,
+          );
 
           if (existingItem) {
             // Content hash deduplication
@@ -185,35 +183,14 @@ export class SyncIngestService {
 
       // 4. Batch upsert validated items
       if (validatedBatch.length > 0) {
+        const batchToUpsert = [...validatedBatch];
+        validatedBatch.length = 0; // Clear for next chunk
         try {
-          await this.db
-            .insert(items)
-            .values(validatedBatch)
-            .onConflictDoUpdate({
-              target: [items.vendorId, items.sku],
-              set: {
-                name: sql`excluded.name`,
-                description: sql`excluded.description`,
-                unitCode: sql`excluded.unit_code`,
-                unitLabel: sql`excluded.unit_label`,
-                vatCode: sql`excluded.vat_code`,
-                vatRate: sql`excluded.vat_rate`,
-                familyCode: sql`excluded.family_code`,
-                familyLabel: sql`excluded.family_label`,
-                subfamilyCode: sql`excluded.subfamily_code`,
-                subfamilyLabel: sql`excluded.subfamily_label`,
-                unitPrice: sql`excluded.unit_price`,
-                currency: sql`excluded.currency`,
-                isActive: sql`excluded.is_active`,
-                contentHash: sql`excluded.content_hash`,
-                lastSyncedAt: sql`excluded.last_synced_at`,
-                updatedAt: sql`NOW()`,
-              },
-            });
+          await this.itemsRepository.upsertBatch(batchToUpsert);
 
           this.logger.info({
             vendorId,
-            upsertedCount: validatedBatch.length,
+            upsertedCount: batchToUpsert.length,
             msg: 'Items upserted successfully',
           });
         } catch (error) {
@@ -224,8 +201,6 @@ export class SyncIngestService {
           });
           throw error;
         }
-
-        validatedBatch.length = 0; // Clear for next chunk
       }
     }
 
@@ -250,7 +225,7 @@ export class SyncIngestService {
     }
 
     const results: SyncResultItem[] = [];
-    const validatedBatch: Array<typeof stock.$inferInsert> = [];
+    const validatedBatch: NewStock[] = [];
     let processedCount = 0;
     let skippedCount = 0;
     let failedCount = 0;
@@ -270,13 +245,12 @@ export class SyncIngestService {
       for (const stockPayload of chunk) {
         try {
           // 1. Resolve item ID from SKU
-          const itemRecords = await this.db
-            .select({ id: items.id })
-            .from(items)
-            .where(and(eq(items.vendorId, vendorId), eq(items.sku, stockPayload.itemSku)))
-            .limit(1);
+          const item = await this.itemsRepository.findByVendorAndSku(
+            vendorId,
+            stockPayload.itemSku,
+          );
 
-          if (itemRecords.length === 0) {
+          if (!item) {
             failedCount++;
             results.push({
               identifier: `${stockPayload.itemSku}@${stockPayload.erpWarehouseId}`,
@@ -286,21 +260,15 @@ export class SyncIngestService {
             continue;
           }
 
-          const itemId = itemRecords[0]!.id;
+          const itemId = item.id;
 
           // 2. Resolve warehouse ID from ERP warehouse ID
-          const warehouseRecords = await this.db
-            .select({ id: warehouses.id })
-            .from(warehouses)
-            .where(
-              and(
-                eq(warehouses.vendorId, vendorId),
-                eq(warehouses.erpWarehouseId, stockPayload.erpWarehouseId),
-              ),
-            )
-            .limit(1);
+          const warehouse = await this.warehousesRepository.findByVendorAndErpId(
+            vendorId,
+            stockPayload.erpWarehouseId,
+          );
 
-          if (warehouseRecords.length === 0) {
+          if (!warehouse) {
             failedCount++;
             results.push({
               identifier: `${stockPayload.itemSku}@${stockPayload.erpWarehouseId}`,
@@ -310,22 +278,14 @@ export class SyncIngestService {
             continue;
           }
 
-          const warehouseId = warehouseRecords[0]!.id;
+          const warehouseId = warehouse.id;
 
           // 3. Check existing stock and compare content hash
-          const existingStockRecords = await this.db
-            .select()
-            .from(stock)
-            .where(
-              and(
-                eq(stock.vendorId, vendorId),
-                eq(stock.warehouseId, warehouseId),
-                eq(stock.itemId, itemId),
-              ),
-            )
-            .limit(1);
-
-          const existingStock = existingStockRecords[0];
+          const existingStock = await this.stockRepository.findByVendorWarehouseItem(
+            vendorId,
+            warehouseId,
+            itemId,
+          );
 
           if (existingStock) {
             // Content hash deduplication
@@ -390,25 +350,14 @@ export class SyncIngestService {
 
       // 5. Batch upsert validated stock
       if (validatedBatch.length > 0) {
+        const batchToUpsert = [...validatedBatch];
+        validatedBatch.length = 0; // Clear for next chunk
         try {
-          await this.db
-            .insert(stock)
-            .values(validatedBatch)
-            .onConflictDoUpdate({
-              target: [stock.vendorId, stock.warehouseId, stock.itemId],
-              set: {
-                quantity: sql`excluded.quantity`,
-                reservedQuantity: sql`excluded.reserved_quantity`,
-                availableQuantity: sql`excluded.available_quantity`,
-                contentHash: sql`excluded.content_hash`,
-                lastSyncedAt: sql`excluded.last_synced_at`,
-                updatedAt: sql`NOW()`,
-              },
-            });
+          await this.stockRepository.upsertBatch(batchToUpsert);
 
           this.logger.info({
             vendorId,
-            upsertedCount: validatedBatch.length,
+            upsertedCount: batchToUpsert.length,
             msg: 'Stock records upserted successfully',
           });
         } catch (error) {
@@ -419,8 +368,6 @@ export class SyncIngestService {
           });
           throw error;
         }
-
-        validatedBatch.length = 0; // Clear for next chunk
       }
     }
 
@@ -445,7 +392,7 @@ export class SyncIngestService {
     }
 
     const results: SyncResultItem[] = [];
-    const validatedBatch: Array<typeof warehouses.$inferInsert> = [];
+    const validatedBatch: NewWarehouse[] = [];
     let processedCount = 0;
     let skippedCount = 0;
     let failedCount = 0;
@@ -465,18 +412,10 @@ export class SyncIngestService {
       for (const warehousePayload of chunk) {
         try {
           // 1. Check if warehouse exists and compare content hash
-          const existingWarehouses = await this.db
-            .select()
-            .from(warehouses)
-            .where(
-              and(
-                eq(warehouses.vendorId, vendorId),
-                eq(warehouses.erpWarehouseId, warehousePayload.erpWarehouseId),
-              ),
-            )
-            .limit(1);
-
-          const existingWarehouse = existingWarehouses[0];
+          const existingWarehouse = await this.warehousesRepository.findByVendorAndErpId(
+            vendorId,
+            warehousePayload.erpWarehouseId,
+          );
 
           if (existingWarehouse) {
             // Content hash deduplication
@@ -543,29 +482,14 @@ export class SyncIngestService {
 
       // 3. Batch upsert validated warehouses
       if (validatedBatch.length > 0) {
+        const batchToUpsert = [...validatedBatch];
+        validatedBatch.length = 0; // Clear for next chunk
         try {
-          await this.db
-            .insert(warehouses)
-            .values(validatedBatch)
-            .onConflictDoUpdate({
-              target: [warehouses.vendorId, warehouses.erpWarehouseId],
-              set: {
-                name: sql`excluded.name`,
-                code: sql`excluded.code`,
-                address: sql`excluded.address`,
-                city: sql`excluded.city`,
-                postalCode: sql`excluded.postal_code`,
-                country: sql`excluded.country`,
-                isActive: sql`excluded.is_active`,
-                contentHash: sql`excluded.content_hash`,
-                lastSyncedAt: sql`excluded.last_synced_at`,
-                updatedAt: sql`NOW()`,
-              },
-            });
+          await this.warehousesRepository.upsertBatch(batchToUpsert);
 
           this.logger.info({
             vendorId,
-            upsertedCount: validatedBatch.length,
+            upsertedCount: batchToUpsert.length,
             msg: 'Warehouses upserted successfully',
           });
         } catch (error) {
@@ -576,8 +500,6 @@ export class SyncIngestService {
           });
           throw error;
         }
-
-        validatedBatch.length = 0; // Clear for next chunk
       }
     }
 
