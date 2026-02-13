@@ -1,6 +1,7 @@
 import {
   IsString,
   IsNotEmpty,
+  IsOptional,
   IsNumber,
   IsDateString,
   MaxLength,
@@ -10,7 +11,8 @@ import {
   ArrayMaxSize,
 } from 'class-validator';
 import { Type } from 'class-transformer';
-import { ApiProperty } from '@nestjs/swagger';
+import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { ValidateStockConsistency } from '../validators/stock-consistency.validator.js';
 
 export class StockSyncPayloadDto {
   @ApiProperty({ description: 'Item SKU' })
@@ -25,20 +27,73 @@ export class StockSyncPayloadDto {
   @MaxLength(100)
   erpWarehouseId!: string;
 
-  @ApiProperty({ description: 'Total quantity in stock' })
+  @ApiProperty({ description: 'Physical stock on hand (RealStock from ERP)' })
   @IsNumber()
   @Min(0)
-  quantity!: number;
+  realStock!: number;
 
-  @ApiProperty({ description: 'Reserved quantity (e.g., for pending orders)' })
+  @ApiProperty({
+    description: 'Available stock for sale (VirtualStock = realStock - reservedQuantity)',
+  })
+  @IsNumber()
+  @Min(0)
+  @ValidateStockConsistency()
+  virtualStock!: number;
+
+  @ApiProperty({ description: 'Reserved quantity (allocated for existing orders)' })
   @IsNumber()
   @Min(0)
   reservedQuantity!: number;
 
-  @ApiProperty({ description: 'Available quantity (quantity - reservedQuantity)' })
+  @ApiPropertyOptional({ description: 'Ordered quantity (committed but not yet fulfilled)' })
   @IsNumber()
+  @IsOptional()
   @Min(0)
-  availableQuantity!: number;
+  orderedQuantity?: number;
+
+  @ApiPropertyOptional({
+    description: 'Qty on open supplier purchase orders (EBP: CommandesFournisseurs)',
+  })
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  incomingQuantity?: number;
+
+  @ApiPropertyOptional({ description: 'Weighted average unit cost (PUMP)' })
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  pump?: number;
+
+  @ApiPropertyOptional({ description: 'Total stock value (realStock × pump)' })
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  stockValue?: number;
+
+  @ApiPropertyOptional({ description: 'Minimum stock level (reorder point)' })
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  minStock?: number;
+
+  @ApiPropertyOptional({ description: 'Maximum stock level' })
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  maxStock?: number;
+
+  @ApiPropertyOptional({ description: 'Reorder threshold' })
+  @IsNumber()
+  @IsOptional()
+  @Min(0)
+  stockToOrderThreshold?: number;
+
+  @ApiPropertyOptional({ description: 'Sync source identifier (e.g., "EBP", "Manual Adjustment")' })
+  @IsString()
+  @IsOptional()
+  @MaxLength(50)
+  lastSyncedFrom?: string;
 
   @ApiProperty({ description: 'Content hash for deduplication (SHA-256)' })
   @IsString()

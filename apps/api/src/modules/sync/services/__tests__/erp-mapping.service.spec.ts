@@ -2,7 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { PinoLogger } from 'nestjs-pino';
 import { ErpMappingService } from '../erp-mapping.service';
 import { ErpCodeMappingsRepository } from '../../../../database/adapters';
-import type { ErpCodeMapping } from '@repo/shared/types/database.types';
+import { ErpCodeMapping } from '@repo/shared/types/database.types';
 
 describe('ErpMappingService', () => {
   let service: ErpMappingService;
@@ -16,6 +16,10 @@ describe('ErpMappingService', () => {
     erpCode: 'KG',
     restoCode: 'kilogram',
     restoLabel: 'Kilogramme',
+    unitId: null,
+    vatRateId: null,
+    familyId: null,
+    subfamilyId: null,
     isActive: true,
     createdAt: new Date(),
     updatedAt: new Date(),

@@ -8,6 +8,10 @@ import {
   ValidateNested,
   ArrayMaxSize,
   IsBoolean,
+  IsNumber,
+  IsInt,
+  Min,
+  Max,
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
@@ -25,11 +29,11 @@ export class WarehouseSyncPayloadDto {
   @MaxLength(255)
   name!: string;
 
-  @ApiPropertyOptional({ description: 'Warehouse code' })
+  @ApiProperty({ description: 'Warehouse code (business identifier, must be unique per vendor)' })
   @IsString()
-  @IsOptional()
+  @IsNotEmpty()
   @MaxLength(50)
-  code?: string;
+  code!: string;
 
   @ApiPropertyOptional({ description: 'Warehouse address' })
   @IsString()
@@ -54,10 +58,63 @@ export class WarehouseSyncPayloadDto {
   @MaxLength(2)
   country?: string;
 
+  @ApiPropertyOptional({ description: 'State or province (for US/Canada)' })
+  @IsString()
+  @IsOptional()
+  @MaxLength(100)
+  state?: string;
+
+  @ApiPropertyOptional({ description: 'GPS latitude (EBP: Address_Latitude)' })
+  @IsNumber()
+  @IsOptional()
+  @Min(-90)
+  @Max(90)
+  latitude?: number;
+
+  @ApiPropertyOptional({ description: 'GPS longitude (EBP: Address_Longitude)' })
+  @IsNumber()
+  @IsOptional()
+  @Min(-180)
+  @Max(180)
+  longitude?: number;
+
   @ApiPropertyOptional({ description: 'Whether the warehouse is active', default: true })
   @IsBoolean()
   @IsOptional()
   isActive?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Whether this is the main warehouse (EBP: Main)',
+    default: false,
+  })
+  @IsBoolean()
+  @IsOptional()
+  isMain?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Warehouse type: 0=Storage, 1=Transit (EBP: Storehouse.Type)',
+    default: 0,
+  })
+  @IsInt()
+  @IsOptional()
+  @Min(0)
+  @Max(1)
+  type?: number;
+
+  @ApiPropertyOptional({
+    description: 'Whether bin/aisle multi-location tracking is enabled (EBP: MultiLocationEnabled)',
+    default: false,
+  })
+  @IsBoolean()
+  @IsOptional()
+  multiLocationEnabled?: boolean;
+
+  @ApiPropertyOptional({
+    description: 'Date of last physical inventory count (EBP: LastInventoryDate)',
+  })
+  @IsDateString()
+  @IsOptional()
+  lastInventoryDate?: string;
 
   @ApiProperty({ description: 'Content hash for deduplication (SHA-256)' })
   @IsString()

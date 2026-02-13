@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from 'drizzle-orm';
+import { desc, eq, sql } from 'drizzle-orm';
 import { BaseRepository } from '../base/base.repository.js';
 import { orders } from '../../schema/index.js';
 import type { Order, NewOrder } from '../../schema/index.js';
@@ -7,11 +7,39 @@ import type { Order, NewOrder } from '../../schema/index.js';
  * Orders Repository Base
  *
  * Framework-agnostic repository for order management.
+ * Auto-populates legacy fields (`status`, `totalAmount`) for backward compatibility.
  */
 export class OrdersRepositoryBase extends BaseRepository<typeof orders> {
+  /**
+   * Derive legacy status from validationState + deliveryState
+   *
+   * Mapping:
+   * - Draft (0) + any delivery → PENDING_RESERVATION
+   * - Validated (1) + Not delivered (0) → RESERVED
+   * - Processing (2) + any → PROCESSING
+   * - Completed (3) + Fully delivered (2) → COMPLETED
+   * - Otherwise → PENDING
+   */
+  private deriveLegacyStatus(validationState: number, deliveryState: number): string {
+    if (validationState === 0) return 'PENDING_RESERVATION';
+    if (validationState === 1 && deliveryState === 0) return 'RESERVED';
+    if (validationState === 2) return 'PROCESSING';
+    if (validationState === 3 && deliveryState === 2) return 'COMPLETED';
+    if (validationState === 1 && deliveryState === 1) return 'PARTIALLY_DELIVERED';
+    if (validationState === 1 && deliveryState === 2) return 'DELIVERED';
+    return 'PENDING';
+  }
+
   async create(data: NewOrder): Promise<Order | null> {
     try {
-      const [order] = await this.db.insert(orders).values(data).returning();
+      // Auto-populate legacy fields
+      const enrichedData = {
+        ...data,
+        status: this.deriveLegacyStatus(data.validationState ?? 0, data.deliveryState ?? 0),
+        totalAmount: data.amountVatIncluded ?? '0',
+      };
+
+      const [order] = await this.db.insert(orders).values(enrichedData).returning();
       if (!order) {
         this.logger.error('Failed to create order - no row returned', { vendorId: data.vendorId });
         return null;
@@ -42,6 +70,7 @@ export class OrdersRepositoryBase extends BaseRepository<typeof orders> {
     try {
       const updateData: Record<string, unknown> = {
         erpReference,
+        erpStatus: 'CONFIRMED',
         erpSyncedAt: this.getUpdatedTimestamp(),
         updatedAt: this.getUpdatedTimestamp(),
       };
@@ -92,16 +121,64 @@ export class OrdersRepositoryBase extends BaseRepository<typeof orders> {
     }
   }
 
-  async updateValidationState(orderId: string, validationState: string): Promise<Order | null> {
+  async updateValidationState(orderId: string, validationState: number): Promise<Order | null> {
     try {
+      // Fetch current order to get deliveryState for legacy status derivation
+      const current = await this.findById(orderId);
+      const deliveryState = current?.deliveryState ?? 0;
+
       const [order] = await this.db
         .update(orders)
-        .set({ validationState, updatedAt: this.getUpdatedTimestamp() })
-        .where(and(eq(orders.id, orderId)))
+        .set({
+          validationState,
+          status: this.deriveLegacyStatus(validationState, deliveryState),
+          updatedAt: this.getUpdatedTimestamp(),
+        })
+        .where(eq(orders.id, orderId))
         .returning();
       return order ?? null;
     } catch (error) {
       this.handleError('UPDATE_VALIDATION_STATE', error, { orderId, validationState });
+      return null;
+    }
+  }
+
+  async updateDeliveryState(orderId: string, deliveryState: number): Promise<Order | null> {
+    try {
+      // Fetch current order to get validationState for legacy status derivation
+      const current = await this.findById(orderId);
+      const validationState = current?.validationState ?? 0;
+
+      const [order] = await this.db
+        .update(orders)
+        .set({
+          deliveryState,
+          status: this.deriveLegacyStatus(validationState, deliveryState),
+          updatedAt: this.getUpdatedTimestamp(),
+        })
+        .where(eq(orders.id, orderId))
+        .returning();
+      return order ?? null;
+    } catch (error) {
+      this.handleError('UPDATE_DELIVERY_STATE', error, { orderId, deliveryState });
+      return null;
+    }
+  }
+
+  async markErpSyncFailed(orderId: string, errorMessage: string): Promise<Order | null> {
+    try {
+      const [order] = await this.db
+        .update(orders)
+        .set({
+          erpStatus: 'SYNC_FAILED',
+          erpSyncError: errorMessage,
+          updatedAt: this.getUpdatedTimestamp(),
+        })
+        .where(eq(orders.id, orderId))
+        .returning();
+      return order ?? null;
+    } catch (error) {
+      this.handleError('MARK_ERP_SYNC_FAILED', error, { orderId });
       return null;
     }
   }

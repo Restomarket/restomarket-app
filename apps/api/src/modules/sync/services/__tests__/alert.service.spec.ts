@@ -1,5 +1,3 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { ConfigService } from '@nestjs/config';
 import { PinoLogger } from 'nestjs-pino';
 import { HttpService } from '@nestjs/axios';
 import { of, throwError } from 'rxjs';

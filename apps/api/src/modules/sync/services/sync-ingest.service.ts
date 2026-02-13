@@ -30,6 +30,24 @@ export class SyncIngestService {
     this.logger.setContext(SyncIngestService.name);
   }
 
+  /**
+   * Generate URL-friendly slug from item name and SKU
+   * Handles accented characters (French), special chars, and ensures uniqueness via SKU suffix
+   */
+  private generateSlug(name: string, sku: string): string {
+    const base = name
+      .toLowerCase()
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '') // Remove accents
+      .replace(/[^a-z0-9\s-]/g, '') // Remove special chars
+      .replace(/\s+/g, '-') // Spaces to hyphens
+      .replace(/-+/g, '-') // Collapse hyphens
+      .replace(/^-|-$/g, ''); // Trim hyphens
+
+    const skuSuffix = sku.toLowerCase().replace(/[^a-z0-9]/g, '-');
+    return `${base}-${skuSuffix}`.substring(0, 300);
+  }
+
   async handleItemChanges(
     vendorId: string,
     itemPayloads: ItemSyncPayloadDto[],
@@ -139,22 +157,70 @@ export class SyncIngestService {
             : null;
 
           // 3. Build upsert record
+          const slug = itemPayload.slug ?? this.generateSlug(itemPayload.name, itemPayload.sku);
+
           validatedBatch.push({
             vendorId,
             sku: itemPayload.sku,
             name: itemPayload.name,
             description: itemPayload.description,
+            erpId: itemPayload.erpId ?? '',
+            slug,
+            barcode: itemPayload.barcode,
+
+            // Mapped classifications
             unitCode: unitMapping.restoCode,
             unitLabel: unitMapping.restoLabel,
             vatCode: vatMapping.restoCode,
-            vatRate: vatMapping.restoLabel, // Assuming restoLabel contains the rate for VAT
+            vatRate: vatMapping.restoLabel, // restoLabel contains the rate for VAT
             familyCode: familyMapping?.restoCode ?? null,
             familyLabel: familyMapping?.restoLabel ?? null,
             subfamilyCode: subfamilyMapping?.restoCode ?? null,
             subfamilyLabel: subfamilyMapping?.restoLabel ?? null,
-            unitPrice: itemPayload.unitPrice ? itemPayload.unitPrice.toString() : null,
+
+            // Pricing
+            unitPrice: itemPayload.unitPrice?.toString() ?? null,
+            priceExclVat: itemPayload.priceExclVat?.toString() ?? '0',
+            priceInclVat: itemPayload.priceInclVat?.toString() ?? '0',
+            vatAmount: itemPayload.vatAmount?.toString() ?? '0',
+            catalogPrice: itemPayload.catalogPrice?.toString() ?? null,
+            purchasePrice: itemPayload.purchasePrice?.toString() ?? null,
+            minimumOrderQuantity: itemPayload.minimumOrderQuantity?.toString() ?? '1',
+            lastSyncedFrom: 'EBP',
             currency: itemPayload.currency ?? 'EUR',
+
+            // Stock management flags
+            manageStock: itemPayload.manageStock ?? true,
+            allowNegativeStock: itemPayload.allowNegativeStock ?? false,
+            stockBookingAllowed: itemPayload.stockBookingAllowed ?? true,
+            automaticStockBooking: itemPayload.automaticStockBooking ?? true,
+            trackingMode: itemPayload.trackingMode ?? 0,
+            pickMovementDisallowedOnTotallyBookedItem:
+              itemPayload.pickMovementDisallowedOnTotallyBookedItem ?? false,
+
+            // Physical attributes
+            weight: itemPayload.weight?.toString() ?? '0',
+            weightUnit: itemPayload.weightUnit ?? 'kg',
+            height: itemPayload.height?.toString() ?? '0',
+            width: itemPayload.width?.toString() ?? '0',
+            length: itemPayload.length?.toString() ?? '0',
+            dimensionUnit: itemPayload.dimensionUnit ?? 'cm',
+            itemsPerPackage: itemPayload.itemsPerPackage,
+
+            // E-commerce metadata
+            metaTitle: itemPayload.metaTitle,
+            metaDescription: itemPayload.metaDescription,
+            metaKeywords: itemPayload.metaKeywords,
+            brand: itemPayload.brand,
+            daysToShip: itemPayload.daysToShip,
+            shipPriceTtc: itemPayload.shipPriceTtc?.toString(),
+            originCountryCode: itemPayload.originCountryCode,
+
+            // Status
             isActive: itemPayload.isActive ?? true,
+            publishOnWeb: itemPayload.publishOnWeb ?? true,
+
+            // Sync metadata
             contentHash: itemPayload.contentHash,
             lastSyncedAt: new Date(itemPayload.lastSyncedAt),
             updatedAt: new Date(),
@@ -237,6 +303,17 @@ export class SyncIngestService {
       msg: 'Processing stock sync request',
     });
 
+    // Track aggregated stock per item for updating items table
+    const itemStockAggregates = new Map<
+      string,
+      {
+        itemId: string;
+        totalRealStock: number;
+        totalVirtualStock: number;
+        totalReservedQuantity: number;
+      }
+    >();
+
     // Process stock with chunking for batch mode
     const chunkSize = isBatch ? 50 : stockPayloads.length;
     for (let i = 0; i < stockPayloads.length; i += chunkSize) {
@@ -318,13 +395,36 @@ export class SyncIngestService {
             vendorId,
             warehouseId,
             itemId,
-            quantity: stockPayload.quantity.toString(),
+            realStock: stockPayload.realStock.toString(),
+            virtualStock: stockPayload.virtualStock.toString(),
             reservedQuantity: stockPayload.reservedQuantity.toString(),
-            availableQuantity: stockPayload.availableQuantity.toString(),
+            orderedQuantity: stockPayload.orderedQuantity?.toString() ?? '0',
+            incomingQuantity: stockPayload.incomingQuantity?.toString() ?? '0',
+            pump: stockPayload.pump?.toString() ?? '0',
+            stockValue: stockPayload.stockValue?.toString() ?? '0',
+            minStock: stockPayload.minStock?.toString() ?? '0',
+            maxStock: stockPayload.maxStock?.toString() ?? undefined,
+            stockToOrderThreshold: stockPayload.stockToOrderThreshold?.toString() ?? '0',
+            lastSyncedFrom: stockPayload.lastSyncedFrom ?? 'EBP',
             contentHash: stockPayload.contentHash,
             lastSyncedAt: new Date(stockPayload.lastSyncedAt),
             updatedAt: new Date(),
           });
+
+          // 5. Aggregate stock totals for this item
+          const existingAggregate = itemStockAggregates.get(itemId);
+          if (existingAggregate) {
+            existingAggregate.totalRealStock += stockPayload.realStock;
+            existingAggregate.totalVirtualStock += stockPayload.virtualStock;
+            existingAggregate.totalReservedQuantity += stockPayload.reservedQuantity;
+          } else {
+            itemStockAggregates.set(itemId, {
+              itemId,
+              totalRealStock: stockPayload.realStock,
+              totalVirtualStock: stockPayload.virtualStock,
+              totalReservedQuantity: stockPayload.reservedQuantity,
+            });
+          }
 
           processedCount++;
           results.push({
@@ -348,7 +448,7 @@ export class SyncIngestService {
         }
       }
 
-      // 5. Batch upsert validated stock
+      // 6. Batch upsert validated stock
       if (validatedBatch.length > 0) {
         const batchToUpsert = [...validatedBatch];
         validatedBatch.length = 0; // Clear for next chunk
@@ -368,6 +468,36 @@ export class SyncIngestService {
           });
           throw error;
         }
+      }
+    }
+
+    // 7. Update aggregated stock totals in items table
+    // This mirrors EBP's Item.RealStock/VirtualStock/BookedQuantity which are pre-aggregated
+    if (itemStockAggregates.size > 0) {
+      this.logger.debug({
+        vendorId,
+        itemCount: itemStockAggregates.size,
+        msg: 'Updating aggregated stock totals in items table',
+      });
+
+      try {
+        await this.itemsRepository.updateAggregatedStock(
+          vendorId,
+          Array.from(itemStockAggregates.values()),
+        );
+
+        this.logger.info({
+          vendorId,
+          itemCount: itemStockAggregates.size,
+          msg: 'Aggregated stock totals updated successfully',
+        });
+      } catch (error) {
+        this.logger.error({
+          vendorId,
+          error: error instanceof Error ? error.message : 'Unknown error',
+          msg: 'Failed to update aggregated stock totals',
+        });
+        // Don't throw - stock records were already upserted successfully
       }
     }
 
@@ -453,7 +583,16 @@ export class SyncIngestService {
             city: warehousePayload.city,
             postalCode: warehousePayload.postalCode,
             country: warehousePayload.country ?? 'FR',
+            state: warehousePayload.state ?? null,
+            latitude: warehousePayload.latitude?.toString() ?? null,
+            longitude: warehousePayload.longitude?.toString() ?? null,
             isActive: warehousePayload.isActive ?? true,
+            isMain: warehousePayload.isMain ?? false,
+            type: warehousePayload.type ?? 0,
+            multiLocationEnabled: warehousePayload.multiLocationEnabled ?? false,
+            lastInventoryDate: warehousePayload.lastInventoryDate
+              ? new Date(warehousePayload.lastInventoryDate)
+              : null,
             contentHash: warehousePayload.contentHash,
             lastSyncedAt: new Date(warehousePayload.lastSyncedAt),
             updatedAt: new Date(),

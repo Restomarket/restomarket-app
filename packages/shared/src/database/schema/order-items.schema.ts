@@ -34,19 +34,19 @@ export const orderItems = pgTable(
     itemId: uuid('item_id').references(() => items.id),
     description: varchar('description', { length: 500 }),
 
-    // Quantity tracking
-    quantity: numeric('quantity', { precision: 10, scale: 2 }).notNull(),
-    orderedQuantity: numeric('ordered_quantity', { precision: 10, scale: 2 }),
-    deliveredQuantity: numeric('delivered_quantity', { precision: 10, scale: 2 }).default('0'),
+    // Quantity tracking (scale: 3 for food/weight items, e.g. 1.234 kg)
+    quantity: numeric('quantity', { precision: 10, scale: 3 }).notNull(),
+    orderedQuantity: numeric('ordered_quantity', { precision: 10, scale: 3 }),
+    deliveredQuantity: numeric('delivered_quantity', { precision: 10, scale: 3 }).default('0'),
     remainingQuantityToDeliver: numeric('remaining_quantity_to_deliver', {
       precision: 10,
-      scale: 2,
+      scale: 3,
     }),
-    returnedQuantity: numeric('returned_quantity', { precision: 10, scale: 2 }).default('0'),
-    invoicedQuantity: numeric('invoiced_quantity', { precision: 10, scale: 2 }).default('0'),
+    returnedQuantity: numeric('returned_quantity', { precision: 10, scale: 3 }).default('0'),
+    invoicedQuantity: numeric('invoiced_quantity', { precision: 10, scale: 3 }).default('0'),
     remainingQuantityToInvoice: numeric('remaining_quantity_to_invoice', {
       precision: 10,
-      scale: 2,
+      scale: 3,
     }),
 
     // Unit & warehouse
@@ -54,25 +54,37 @@ export const orderItems = pgTable(
     warehouseId: uuid('warehouse_id').references(() => warehouses.id),
     manageStock: boolean('manage_stock').default(true),
 
-    // Pricing
-    purchasePrice: numeric('purchase_price', { precision: 10, scale: 2 }),
-    costPrice: numeric('cost_price', { precision: 10, scale: 2 }),
-    unitPrice: numeric('unit_price', { precision: 10, scale: 2 }),
-    netPriceVatExcluded: numeric('net_price_vat_excluded', { precision: 10, scale: 2 }),
-    netPriceVatIncluded: numeric('net_price_vat_included', { precision: 10, scale: 2 }),
-    netAmountVatExcluded: numeric('net_amount_vat_excluded', { precision: 12, scale: 2 }),
-    netAmountVatIncluded: numeric('net_amount_vat_included', { precision: 12, scale: 2 }),
+    // Pricing (EBP-aligned)
+    purchasePrice: numeric('purchase_price', { precision: 10, scale: 4 }).default('0'), // Wholesale price
+    costPrice: numeric('cost_price', { precision: 10, scale: 4 }).default('0'), // Cost with overhead
+    unitPrice: numeric('unit_price', { precision: 10, scale: 2 }).notNull(), // Selling price (legacy)
+    netPriceVatExcluded: numeric('net_price_vat_excluded', { precision: 10, scale: 2 }).notNull(), // Unit price excluding VAT
+    netPriceVatIncluded: numeric('net_price_vat_included', { precision: 10, scale: 2 }), // Unit price including VAT
+
+    // Line Amounts
+    netAmountVatExcluded: numeric('net_amount_vat_excluded', { precision: 12, scale: 2 })
+      .default('0')
+      .notNull(), // Line total before discount
+    netAmountVatIncluded: numeric('net_amount_vat_included', { precision: 12, scale: 2 }).default(
+      '0',
+    ), // Line total including VAT
+    netAmountVatExcludedWithDiscount: numeric('net_amount_vat_excluded_with_discount', {
+      precision: 12,
+      scale: 2,
+    })
+      .default('0')
+      .notNull(), // P1: Line total after discount
 
     // Discounts & VAT
     discountRate: numeric('discount_rate', { precision: 5, scale: 2 }).default('0'),
-    discountAmount: numeric('discount_amount', { precision: 10, scale: 2 }).default('0'),
-    vatRate: numeric('vat_rate', { precision: 5, scale: 2 }),
-    vatAmount: numeric('vat_amount', { precision: 10, scale: 2 }),
+    discountAmount: numeric('discount_amount', { precision: 12, scale: 2 }).default('0'),
+    vatRate: numeric('vat_rate', { precision: 5, scale: 2 }).default('0'),
+    vatAmount: numeric('vat_amount', { precision: 12, scale: 2 }).default('0'),
     erpVatId: varchar('erp_vat_id', { length: 100 }),
 
     // Delivery
     deliveryDate: timestamp('delivery_date', { withTimezone: true, mode: 'date' }),
-    deliveryState: varchar('delivery_state', { length: 50 }).default('pending'),
+    deliveryState: integer('delivery_state').default(0).notNull(),
 
     // Reservation (inline — no separate table)
     reservationStatus: varchar('reservation_status', { length: 50 }).default('none'),
@@ -86,7 +98,23 @@ export const orderItems = pgTable(
     // ERP sync
     erpLineId: varchar('erp_line_id', { length: 100 }),
     erpSyncedAt: timestamp('erp_synced_at', { withTimezone: true, mode: 'date' }),
-    stockMovementId: varchar('stock_movement_id', { length: 100 }),
+    stockMovementId: integer('stock_movement_id'), // EBP StockMovement.Id (Int32)
+
+    /**
+     * EBP SaleDocumentLine.ProductId — the item's ERP GUID (NOT the SKU).
+     * Denormalized from items.erpId at order-creation time so ERP payloads can
+     * be built without a JOIN on the critical sync path.
+     * Maps to EBP: SaleDocumentLine.ProductId (Guid)
+     */
+    erpItemId: varchar('erp_item_id', { length: 100 }),
+
+    /**
+     * EBP SaleDocumentLine.StorehouseId — the warehouse ERP GUID.
+     * Denormalized from warehouses.erpWarehouseId at order-creation time
+     * for the same reason as erpItemId.
+     * Maps to EBP: SaleDocumentLine.StorehouseId (Guid)
+     */
+    erpWarehouseId: varchar('erp_warehouse_id', { length: 100 }),
 
     // Notes
     notes: text('notes'),

@@ -40,12 +40,12 @@ export class StockRepositoryBase extends BaseRepository<typeof stock> {
     quantity: string,
   ): Promise<Stock | null> {
     try {
-      const availableQuantity = sql`${quantity}::numeric - COALESCE(reserved_quantity, 0)`;
+      const virtualStock = sql`${quantity}::numeric - COALESCE(reserved_quantity, 0)`;
       const [entry] = await this.db
         .update(stock)
         .set({
-          quantity: quantity,
-          availableQuantity: availableQuantity,
+          realStock: quantity,
+          virtualStock: virtualStock,
           updatedAt: this.getUpdatedTimestamp(),
         })
         .where(
@@ -71,16 +71,19 @@ export class StockRepositoryBase extends BaseRepository<typeof stock> {
         .onConflictDoUpdate({
           target: [stock.vendorId, stock.warehouseId, stock.itemId],
           set: {
-            quantity: sql`excluded.quantity`,
+            realStock: sql`excluded.real_stock`,
+            virtualStock: sql`excluded.virtual_stock`,
             reservedQuantity: sql`excluded.reserved_quantity`,
-            availableQuantity: sql`excluded.available_quantity`,
             orderedQuantity: sql`excluded.ordered_quantity`,
+            incomingQuantity: sql`excluded.incoming_quantity`,
             pump: sql`excluded.pump`,
             stockValue: sql`excluded.stock_value`,
             minStock: sql`excluded.min_stock`,
             maxStock: sql`excluded.max_stock`,
+            stockToOrderThreshold: sql`excluded.stock_to_order_threshold`,
             contentHash: sql`excluded.content_hash`,
             lastSyncedAt: sql`excluded.last_synced_at`,
+            lastSyncedFrom: sql`excluded.last_synced_from`,
             updatedAt: this.getUpdatedTimestamp(),
           },
         })

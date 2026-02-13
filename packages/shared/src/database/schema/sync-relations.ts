@@ -2,7 +2,6 @@ import { relations } from 'drizzle-orm';
 import { syncJobs } from './sync-jobs.schema.js';
 import { deadLetterQueue } from './dead-letter-queue.schema.js';
 import { agentRegistry } from './agent-registry.schema.js';
-import { erpCodeMappings } from './erp-code-mappings.schema.js';
 import { reconciliationEvents } from './reconciliation-events.schema.js';
 import { orders } from './orders.schema.js';
 
@@ -37,8 +36,7 @@ export const deadLetterQueueRelations = relations(deadLetterQueue, ({ one }) => 
 // Agent Registry Relations (no relations currently)
 export const agentRegistryRelations = relations(agentRegistry, () => ({}));
 
-// ERP Code Mappings Relations (no relations currently)
-export const erpCodeMappingsRelations = relations(erpCodeMappings, () => ({}));
+// ERP Code Mappings Relations → moved to reference-relations.ts
 
 // Reconciliation Events Relations (no relations currently)
 export const reconciliationEventsRelations = relations(reconciliationEvents, () => ({}));

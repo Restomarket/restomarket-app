@@ -9,7 +9,6 @@ describe('SyncIngestService', () => {
   let erpMappingService: jest.Mocked<ErpMappingService>;
   let itemsRepository: jest.Mocked<ItemsRepository>;
   let warehousesRepository: jest.Mocked<WarehousesRepository>;
-  let stockRepository: jest.Mocked<StockRepository>;
 
   beforeEach(async () => {
     const mockItemsRepository = {
@@ -69,7 +68,6 @@ describe('SyncIngestService', () => {
     erpMappingService = module.get(ErpMappingService);
     itemsRepository = module.get(ItemsRepository);
     warehousesRepository = module.get(WarehousesRepository);
-    stockRepository = module.get(StockRepository);
   });
 
   it('should be defined', () => {
@@ -229,9 +227,9 @@ describe('SyncIngestService', () => {
         {
           itemSku: 'SKU001',
           erpWarehouseId: 'WH01',
-          quantity: 100,
+          realStock: 100,
+          virtualStock: 90,
           reservedQuantity: 10,
-          availableQuantity: 90,
           contentHash: 'hash123',
           lastSyncedAt: new Date().toISOString(),
         },
@@ -253,9 +251,9 @@ describe('SyncIngestService', () => {
         {
           itemSku: 'SKU001',
           erpWarehouseId: 'WH_UNKNOWN',
-          quantity: 100,
+          realStock: 100,
+          virtualStock: 90,
           reservedQuantity: 10,
-          availableQuantity: 90,
           contentHash: 'hash123',
           lastSyncedAt: new Date().toISOString(),
         },
@@ -274,6 +272,7 @@ describe('SyncIngestService', () => {
       const warehousePayloads = Array(501).fill({
         erpWarehouseId: 'WH01',
         name: 'Warehouse 1',
+        code: 'WH-01',
         contentHash: 'hash123',
         lastSyncedAt: new Date().toISOString(),
       });
@@ -299,6 +298,7 @@ describe('SyncIngestService', () => {
         {
           erpWarehouseId: 'WH01',
           name: 'Warehouse 1',
+          code: 'WH-01',
           contentHash,
           lastSyncedAt: new Date().toISOString(),
         },
@@ -319,6 +319,7 @@ describe('SyncIngestService', () => {
         {
           erpWarehouseId: 'WH01',
           name: 'Warehouse 1',
+          code: 'WH-01',
           contentHash: 'hash123',
           lastSyncedAt: new Date().toISOString(),
         },

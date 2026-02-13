@@ -244,12 +244,26 @@ export class ReconciliationService {
             currency?: string;
           };
 
+          // Generate slug from item name + SKU
+          const slug =
+            itemData.name
+              .toLowerCase()
+              .normalize('NFD')
+              .replace(/[\u0300-\u036f]/g, '')
+              .replace(/[^a-z0-9\s-]/g, '')
+              .replace(/\s+/g, '-')
+              .replace(/-+/g, '-')
+              .replace(/^-|-$/g, '') +
+            '-' +
+            itemData.sku.toLowerCase().replace(/[^a-z0-9]/g, '-');
+
           await this.db
             .insert(items)
             .values({
               vendorId,
               sku: itemData.sku,
               name: itemData.name,
+              slug: slug.substring(0, 300),
               description: itemData.description || null,
               unitCode: itemData.unitCode,
               unitLabel: itemData.unitLabel,
