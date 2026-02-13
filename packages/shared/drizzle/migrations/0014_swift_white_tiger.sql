@@ -12,12 +12,18 @@ ALTER TABLE "stock" ALTER COLUMN "max_stock" SET DATA TYPE numeric(10, 3);--> st
 ALTER TABLE "orders" ALTER COLUMN "order_number" SET NOT NULL;--> statement-breakpoint
 ALTER TABLE "orders" ALTER COLUMN "document_date" SET DEFAULT now();--> statement-breakpoint
 ALTER TABLE "orders" ALTER COLUMN "document_date" SET NOT NULL;--> statement-breakpoint
-ALTER TABLE "orders" ALTER COLUMN "document_type" SET DATA TYPE integer;--> statement-breakpoint
+ALTER TABLE "orders" ALTER COLUMN "document_type" SET DATA TYPE integer USING (
+  CASE document_type WHEN 'quote' THEN 0 WHEN 'order' THEN 1 WHEN 'delivery' THEN 2 WHEN 'invoice' THEN 3 ELSE 1 END
+);--> statement-breakpoint
 ALTER TABLE "orders" ALTER COLUMN "document_type" SET DEFAULT 1;--> statement-breakpoint
 ALTER TABLE "orders" ALTER COLUMN "document_type" SET NOT NULL;--> statement-breakpoint
-ALTER TABLE "orders" ALTER COLUMN "validation_state" SET DATA TYPE integer;--> statement-breakpoint
+ALTER TABLE "orders" ALTER COLUMN "validation_state" SET DATA TYPE integer USING (
+  CASE validation_state WHEN 'draft' THEN 0 WHEN 'pending' THEN 0 WHEN 'validated' THEN 1 WHEN 'processing' THEN 2 WHEN 'completed' THEN 3 ELSE 0 END
+);--> statement-breakpoint
 ALTER TABLE "orders" ALTER COLUMN "validation_state" SET NOT NULL;--> statement-breakpoint
-ALTER TABLE "orders" ALTER COLUMN "delivery_state" SET DATA TYPE integer;--> statement-breakpoint
+ALTER TABLE "orders" ALTER COLUMN "delivery_state" SET DATA TYPE integer USING (
+  CASE delivery_state WHEN 'pending' THEN 0 WHEN 'not_delivered' THEN 0 WHEN 'partial' THEN 1 WHEN 'partially_delivered' THEN 1 WHEN 'delivered' THEN 2 WHEN 'fully_delivered' THEN 2 ELSE 0 END
+);--> statement-breakpoint
 ALTER TABLE "orders" ALTER COLUMN "delivery_state" SET NOT NULL;--> statement-breakpoint
 ALTER TABLE "orders" ALTER COLUMN "amount_vat_excluded" SET DEFAULT '0';--> statement-breakpoint
 ALTER TABLE "orders" ALTER COLUMN "amount_vat_excluded" SET NOT NULL;--> statement-breakpoint
@@ -40,7 +46,7 @@ ALTER TABLE "order_items" ALTER COLUMN "discount_amount" SET DEFAULT '0';--> sta
 ALTER TABLE "order_items" ALTER COLUMN "vat_rate" SET DEFAULT '0';--> statement-breakpoint
 ALTER TABLE "order_items" ALTER COLUMN "vat_amount" SET DATA TYPE numeric(12, 2);--> statement-breakpoint
 ALTER TABLE "order_items" ALTER COLUMN "vat_amount" SET DEFAULT '0';--> statement-breakpoint
-ALTER TABLE "order_items" ALTER COLUMN "stock_movement_id" SET DATA TYPE integer;--> statement-breakpoint
+ALTER TABLE "order_items" ALTER COLUMN "stock_movement_id" SET DATA TYPE integer USING NULLIF("stock_movement_id", '')::integer;--> statement-breakpoint
 ALTER TABLE "items" ADD COLUMN "slug" varchar(300) NOT NULL;--> statement-breakpoint
 ALTER TABLE "items" ADD COLUMN "publish_on_web" boolean DEFAULT true NOT NULL;--> statement-breakpoint
 ALTER TABLE "items" ADD COLUMN "stock_booking_allowed" boolean DEFAULT true NOT NULL;--> statement-breakpoint
