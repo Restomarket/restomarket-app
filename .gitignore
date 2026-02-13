@@ -57,6 +57,9 @@ Thumbs.db
 .cache/
 .temp/
 
+# Generated seed files (contain production data, not to be committed)
+mappings-seed.json
+
 # Terraform
 **/.terraform/*
 **/.terraform.lock.hcl
