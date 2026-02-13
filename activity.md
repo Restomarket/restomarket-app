@@ -1400,3 +1400,33 @@ Unit tests:
 - ✅ Lint — PASSED (3 pre-existing warnings, 0 errors)
 
 **Status:** Task 2.2 PASSING — ready for Task 2.3
+
+## 2026-02-13 — Task 2.7: Refactor SyncIngestService to Use Repositories (COMPLETED)
+
+**What was done:**
+
+Task 2.7 was already implemented in the previous commit (`58af5ce`). Verified and updated IMPLEMENTATION_PLAN.md to reflect passing status.
+
+**Verification:** `SyncIngestService` fully uses repository pattern:
+
+- `itemsRepository.findByVendorAndSku()` for item deduplication
+- `itemsRepository.upsertBatch()` for item batch upserts
+- `warehousesRepository.findByVendorAndErpId()` for warehouse lookups and deduplication
+- `warehousesRepository.upsertBatch()` for warehouse batch upserts
+- `stockRepository.findByVendorWarehouseItem()` for stock deduplication
+- `stockRepository.upsertBatch()` for stock batch upserts
+- All raw Drizzle `this.db.select().from()...` calls removed from `SyncIngestService`
+
+**Files previously modified (commit 58af5ce):**
+
+- `apps/api/src/modules/sync/services/sync-ingest.service.ts`
+- `apps/api/src/modules/sync/services/__tests__/sync-ingest.service.spec.ts`
+- `apps/api/src/modules/sync/sync.module.ts`
+
+**Validation results:**
+
+- ✅ `pnpm turbo build --filter=@apps/api` — PASSED (3.975s)
+- ✅ `pnpm turbo test --filter=@apps/api` — PASSED (20 test suites, 240 tests)
+- ✅ All validation checks pass
+
+**Status:** Task 2.7 PASSING — ALL 31/31 TASKS COMPLETE
