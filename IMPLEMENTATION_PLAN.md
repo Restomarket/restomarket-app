@@ -27,9 +27,9 @@
 - **Task 11:** passing — AgentCallbackController now updates `orders.erp_reference` on sync completion
 - **Task 2.7:** not started (tech debt — refactor SyncIngestService to use repositories)
 - **Task 6.1:** not started (ERP mapping seed from Convex)
-- **Task 22:** not started (integration/E2E tests)
+- **Task 22:** passing — `test/sync.e2e-spec.ts` covers all 10 scenarios; requires `.env.test` to run
 
-**Actual completion:** 28/31 tasks (90%)
+**Actual completion:** 29/31 tasks (94%)
 
 ---
 
@@ -1323,7 +1323,7 @@ Verify that sync services properly propagate correlation ID through agent HTTP c
 
 - **Priority:** P1
 - **Risk:** low
-- **Status:** not started
+- **Status:** passing
 - **Depends on:** Tasks 9, 11, 13
 - **Complexity:** 6
 
@@ -1395,7 +1395,7 @@ pnpm turbo type-check
 | 19   | GitHub Actions CI/CD               | Hardening     | P1       | passing         | ci-cd.yml + cleanup-images.yml         |
 | 20   | Zero-Downtime Deployment           | Hardening     | P1       | passing         | `infrastructure/scripts/deploy.sh`     |
 | 21   | Verify Correlation ID Propagation  | Hardening     | P1       | passing         | Verified in agent-comm + sync-job      |
-| 22   | Integration Tests                  | Hardening     | P1       | not started     |                                        |
+| 22   | Integration Tests                  | Hardening     | P1       | passing         | sync.e2e-spec.ts: 10 scenarios         |
 
 ---
 
