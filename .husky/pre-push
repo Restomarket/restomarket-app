@@ -1,1 +1,1 @@
-pnpm test && pnpm build
+pnpm turbo run lint type-check test test:e2e build

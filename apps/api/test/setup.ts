@@ -1,4 +1,4 @@
-import { readFileSync } from 'fs';
+import { readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
 
 /**
@@ -11,27 +11,30 @@ import { resolve } from 'path';
  * but that happens too late for the test setup that needs env vars immediately.
  */
 const envFile = resolve(__dirname, '../.env.test');
-try {
-  const envContent = readFileSync(envFile, 'utf-8');
-  envContent.split('\n').forEach(line => {
-    const trimmedLine = line.trim();
-    // Skip empty lines and comments
-    if (!trimmedLine || trimmedLine.startsWith('#')) {
-      return;
-    }
-    const [key, ...valueParts] = trimmedLine.split('=');
-    if (key) {
-      let value = valueParts.join('=').trim();
-      // Remove surrounding quotes if present
-      if (
-        (value.startsWith('"') && value.endsWith('"')) ||
-        (value.startsWith("'") && value.endsWith("'"))
-      ) {
-        value = value.slice(1, -1);
+
+if (existsSync(envFile)) {
+  try {
+    const envContent = readFileSync(envFile, 'utf-8');
+    envContent.split('\n').forEach(line => {
+      const trimmedLine = line.trim();
+      // Skip empty lines and comments
+      if (!trimmedLine || trimmedLine.startsWith('#')) {
+        return;
       }
-      process.env[key.trim()] = value;
-    }
-  });
-} catch (error) {
-  console.error('Failed to load .env.test file:', error);
+      const [key, ...valueParts] = trimmedLine.split('=');
+      if (key) {
+        let value = valueParts.join('=').trim();
+        // Remove surrounding quotes if present
+        if (
+          (value.startsWith('"') && value.endsWith('"')) ||
+          (value.startsWith("'") && value.endsWith("'"))
+        ) {
+          value = value.slice(1, -1);
+        }
+        process.env[key.trim()] = value;
+      }
+    });
+  } catch (error) {
+    console.error('Failed to parse .env.test file:', error);
+  }
 }
