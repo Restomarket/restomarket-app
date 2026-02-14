@@ -213,7 +213,7 @@ export type DatabaseConnection = SharedDatabaseConnection;
     VatRatesRepository,
   ],
 })
-export class DatabaseModule {
+export class DatabaseModule implements OnModuleDestroy {
   constructor(
     @Inject(POSTGRES_CLIENT) private readonly client: Sql,
     @Inject(DATABASE_CONNECTION) private readonly db: DatabaseConnection,

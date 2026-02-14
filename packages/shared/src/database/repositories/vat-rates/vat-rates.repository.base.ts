@@ -1,7 +1,7 @@
 import { eq } from 'drizzle-orm';
 import { BaseRepository } from '../base/base.repository.js';
 import { vatRates } from '../../schema/index.js';
-import type { VatRate, NewVatRate } from '../../schema/index.js';
+import type { VatRate } from '../../schema/index.js';
 
 export class VatRatesRepositoryBase extends BaseRepository<typeof vatRates> {
   async findByVendorAndCode(vendorId: string, code: string): Promise<VatRate | null> {
