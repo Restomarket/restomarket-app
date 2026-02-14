@@ -4,6 +4,7 @@ import * as bcrypt from 'bcrypt';
 import { getQueueToken } from '@nestjs/bullmq';
 import { E2ETestSetup } from './helpers';
 import { agentRegistry, items, syncJobs, erpCodeMappings } from '@repo/shared/database/schema';
+import { OrderSyncProcessor } from '../src/modules/sync/processors/order-sync.processor';
 
 /**
  * Sync API E2E Tests
@@ -126,10 +127,17 @@ describe('Sync API (e2e)', () => {
     close: jest.fn().mockResolvedValue(undefined),
   };
 
+  // Mock the processor so @nestjs/bullmq does not create a BullMQ Worker
+  // (Worker creation requires a Redis connection; tests should not need Redis)
+  const mockOrderSyncProcessor = {
+    process: jest.fn().mockResolvedValue(undefined),
+  };
+
   beforeAll(async () => {
     testSetup = await new E2ETestSetup()
       .withAppModule()
       .overrideProvider(getQueueToken('order-sync'), mockOrderSyncQueue)
+      .overrideProvider(OrderSyncProcessor, mockOrderSyncProcessor)
       .setupApp();
   });
 
