@@ -12,7 +12,7 @@ import {
 } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { ValidateStockConsistency } from '../validators/stock-consistency.validator.js';
+import { ValidateStockConsistency } from '../validators/stock-consistency.validator';
 
 export class StockSyncPayloadDto {
   @ApiProperty({ description: 'Item SKU' })
