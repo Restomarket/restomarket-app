@@ -95,11 +95,31 @@ ALTER TABLE "items" ADD COLUMN IF NOT EXISTS "erp_updated_at" timestamp with tim
 ALTER TABLE "stock" ADD COLUMN IF NOT EXISTS "erp_updated_at" timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "order_items" ADD COLUMN IF NOT EXISTS "erp_item_id" varchar(100);--> statement-breakpoint
 ALTER TABLE "order_items" ADD COLUMN IF NOT EXISTS "erp_warehouse_id" varchar(100);--> statement-breakpoint
-ALTER TABLE "customer_erp_profiles" ADD CONSTRAINT "customer_erp_profiles_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "customer_erp_profiles" ADD CONSTRAINT "customer_erp_profiles_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "customer_erp_profiles" ADD CONSTRAINT "customer_erp_profiles_default_price_list_id_price_lists_id_fk" FOREIGN KEY ("default_price_list_id") REFERENCES "public"."price_lists"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "customer_erp_profiles" ADD CONSTRAINT "customer_erp_profiles_default_warehouse_id_warehouses_id_fk" FOREIGN KEY ("default_warehouse_id") REFERENCES "public"."warehouses"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "subfamilies" ADD CONSTRAINT "subfamilies_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'customer_erp_profiles_organization_id_organization_id_fk') THEN
+        ALTER TABLE "customer_erp_profiles" ADD CONSTRAINT "customer_erp_profiles_organization_id_organization_id_fk" FOREIGN KEY ("organization_id") REFERENCES "public"."organization"("id") ON DELETE cascade ON UPDATE no action;
+    END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'customer_erp_profiles_user_id_user_id_fk') THEN
+        ALTER TABLE "customer_erp_profiles" ADD CONSTRAINT "customer_erp_profiles_user_id_user_id_fk" FOREIGN KEY ("user_id") REFERENCES "public"."user"("id") ON DELETE cascade ON UPDATE no action;
+    END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'customer_erp_profiles_default_price_list_id_price_lists_id_fk') THEN
+        ALTER TABLE "customer_erp_profiles" ADD CONSTRAINT "customer_erp_profiles_default_price_list_id_price_lists_id_fk" FOREIGN KEY ("default_price_list_id") REFERENCES "public"."price_lists"("id") ON DELETE set null ON UPDATE no action;
+    END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'customer_erp_profiles_default_warehouse_id_warehouses_id_fk') THEN
+        ALTER TABLE "customer_erp_profiles" ADD CONSTRAINT "customer_erp_profiles_default_warehouse_id_warehouses_id_fk" FOREIGN KEY ("default_warehouse_id") REFERENCES "public"."warehouses"("id") ON DELETE set null ON UPDATE no action;
+    END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'subfamilies_family_id_families_id_fk') THEN
+        ALTER TABLE "subfamilies" ADD CONSTRAINT "subfamilies_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE cascade ON UPDATE no action;
+    END IF;
+END $$;--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "customer_erp_profiles_vendor_id_idx" ON "customer_erp_profiles" USING btree ("vendor_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "customer_erp_profiles_organization_id_idx" ON "customer_erp_profiles" USING btree ("organization_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "customer_erp_profiles_user_id_idx" ON "customer_erp_profiles" USING btree ("user_id");--> statement-breakpoint
@@ -118,14 +138,46 @@ CREATE INDEX IF NOT EXISTS "subfamilies_vendor_id_idx" ON "subfamilies" USING bt
 CREATE INDEX IF NOT EXISTS "subfamilies_family_id_idx" ON "subfamilies" USING btree ("family_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "subfamilies_code_idx" ON "subfamilies" USING btree ("code");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "subfamilies_is_active_idx" ON "subfamilies" USING btree ("is_active");--> statement-breakpoint
-ALTER TABLE "erp_code_mappings" ADD CONSTRAINT "erp_code_mappings_unit_id_units_id_fk" FOREIGN KEY ("unit_id") REFERENCES "public"."units"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "erp_code_mappings" ADD CONSTRAINT "erp_code_mappings_vat_rate_id_vat_rates_id_fk" FOREIGN KEY ("vat_rate_id") REFERENCES "public"."vat_rates"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "erp_code_mappings" ADD CONSTRAINT "erp_code_mappings_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "erp_code_mappings" ADD CONSTRAINT "erp_code_mappings_subfamily_id_subfamilies_id_fk" FOREIGN KEY ("subfamily_id") REFERENCES "public"."subfamilies"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "items" ADD CONSTRAINT "items_unit_id_units_id_fk" FOREIGN KEY ("unit_id") REFERENCES "public"."units"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "items" ADD CONSTRAINT "items_vat_rate_id_vat_rates_id_fk" FOREIGN KEY ("vat_rate_id") REFERENCES "public"."vat_rates"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "items" ADD CONSTRAINT "items_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "items" ADD CONSTRAINT "items_subfamily_id_subfamilies_id_fk" FOREIGN KEY ("subfamily_id") REFERENCES "public"."subfamilies"("id") ON DELETE set null ON UPDATE no action;--> statement-breakpoint
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'erp_code_mappings_unit_id_units_id_fk') THEN
+        ALTER TABLE "erp_code_mappings" ADD CONSTRAINT "erp_code_mappings_unit_id_units_id_fk" FOREIGN KEY ("unit_id") REFERENCES "public"."units"("id") ON DELETE set null ON UPDATE no action;
+    END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'erp_code_mappings_vat_rate_id_vat_rates_id_fk') THEN
+        ALTER TABLE "erp_code_mappings" ADD CONSTRAINT "erp_code_mappings_vat_rate_id_vat_rates_id_fk" FOREIGN KEY ("vat_rate_id") REFERENCES "public"."vat_rates"("id") ON DELETE set null ON UPDATE no action;
+    END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'erp_code_mappings_family_id_families_id_fk') THEN
+        ALTER TABLE "erp_code_mappings" ADD CONSTRAINT "erp_code_mappings_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE set null ON UPDATE no action;
+    END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'erp_code_mappings_subfamily_id_subfamilies_id_fk') THEN
+        ALTER TABLE "erp_code_mappings" ADD CONSTRAINT "erp_code_mappings_subfamily_id_subfamilies_id_fk" FOREIGN KEY ("subfamily_id") REFERENCES "public"."subfamilies"("id") ON DELETE set null ON UPDATE no action;
+    END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'items_unit_id_units_id_fk') THEN
+        ALTER TABLE "items" ADD CONSTRAINT "items_unit_id_units_id_fk" FOREIGN KEY ("unit_id") REFERENCES "public"."units"("id") ON DELETE set null ON UPDATE no action;
+    END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'items_vat_rate_id_vat_rates_id_fk') THEN
+        ALTER TABLE "items" ADD CONSTRAINT "items_vat_rate_id_vat_rates_id_fk" FOREIGN KEY ("vat_rate_id") REFERENCES "public"."vat_rates"("id") ON DELETE set null ON UPDATE no action;
+    END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'items_family_id_families_id_fk') THEN
+        ALTER TABLE "items" ADD CONSTRAINT "items_family_id_families_id_fk" FOREIGN KEY ("family_id") REFERENCES "public"."families"("id") ON DELETE set null ON UPDATE no action;
+    END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'items_subfamily_id_subfamilies_id_fk') THEN
+        ALTER TABLE "items" ADD CONSTRAINT "items_subfamily_id_subfamilies_id_fk" FOREIGN KEY ("subfamily_id") REFERENCES "public"."subfamilies"("id") ON DELETE set null ON UPDATE no action;
+    END IF;
+END $$;--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "erp_code_mappings_unit_id_idx" ON "erp_code_mappings" USING btree ("unit_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "erp_code_mappings_vat_rate_id_idx" ON "erp_code_mappings" USING btree ("vat_rate_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "erp_code_mappings_family_id_idx" ON "erp_code_mappings" USING btree ("family_id");--> statement-breakpoint

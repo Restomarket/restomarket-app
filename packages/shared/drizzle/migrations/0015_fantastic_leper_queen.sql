@@ -56,9 +56,13 @@ CREATE TABLE IF NOT EXISTS "price_lists" (
 UPDATE "order_items" SET "net_amount_vat_excluded_with_discount" = '0' WHERE "net_amount_vat_excluded_with_discount" IS NULL;--> statement-breakpoint
 ALTER TABLE "order_items" ALTER COLUMN "net_amount_vat_excluded_with_discount" SET NOT NULL;--> statement-breakpoint
 ALTER TABLE "order_items" ALTER COLUMN "delivery_state" DROP DEFAULT;--> statement-breakpoint
-ALTER TABLE "order_items" ALTER COLUMN "delivery_state" SET DATA TYPE integer USING (
-  CASE delivery_state WHEN 'partial' THEN 1 WHEN 'delivered' THEN 2 ELSE 0 END
-);--> statement-breakpoint
+DO $$ BEGIN
+    IF (SELECT data_type FROM information_schema.columns WHERE table_name='order_items' AND column_name='delivery_state') = 'character varying' THEN
+        ALTER TABLE "order_items" ALTER COLUMN "delivery_state" SET DATA TYPE integer USING (
+          CASE delivery_state WHEN 'partial' THEN 1 WHEN 'delivered' THEN 2 ELSE 0 END
+        );
+    END IF;
+END $$;--> statement-breakpoint
 ALTER TABLE "order_items" ALTER COLUMN "delivery_state" SET NOT NULL;--> statement-breakpoint
 ALTER TABLE "items" ADD COLUMN IF NOT EXISTS "catalog_price" numeric(10, 2);--> statement-breakpoint
 ALTER TABLE "items" ADD COLUMN IF NOT EXISTS "purchase_price" numeric(10, 4);--> statement-breakpoint
@@ -69,10 +73,26 @@ ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "cancelled_at" timestamp with time
 ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "cancelled_by" varchar(100);--> statement-breakpoint
 ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "cancellation_reason" text;--> statement-breakpoint
 ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "expected_ship_date" timestamp with time zone;--> statement-breakpoint
-ALTER TABLE "stock_movements" ADD CONSTRAINT "stock_movements_item_id_items_id_fk" FOREIGN KEY ("item_id") REFERENCES "public"."items"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "stock_movements" ADD CONSTRAINT "stock_movements_warehouse_id_warehouses_id_fk" FOREIGN KEY ("warehouse_id") REFERENCES "public"."warehouses"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "price_list_items" ADD CONSTRAINT "price_list_items_price_list_id_price_lists_id_fk" FOREIGN KEY ("price_list_id") REFERENCES "public"."price_lists"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "price_list_items" ADD CONSTRAINT "price_list_items_item_id_items_id_fk" FOREIGN KEY ("item_id") REFERENCES "public"."items"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'stock_movements_item_id_items_id_fk') THEN
+        ALTER TABLE "stock_movements" ADD CONSTRAINT "stock_movements_item_id_items_id_fk" FOREIGN KEY ("item_id") REFERENCES "public"."items"("id") ON DELETE no action ON UPDATE no action;
+    END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'stock_movements_warehouse_id_warehouses_id_fk') THEN
+        ALTER TABLE "stock_movements" ADD CONSTRAINT "stock_movements_warehouse_id_warehouses_id_fk" FOREIGN KEY ("warehouse_id") REFERENCES "public"."warehouses"("id") ON DELETE no action ON UPDATE no action;
+    END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'price_list_items_price_list_id_price_lists_id_fk') THEN
+        ALTER TABLE "price_list_items" ADD CONSTRAINT "price_list_items_price_list_id_price_lists_id_fk" FOREIGN KEY ("price_list_id") REFERENCES "public"."price_lists"("id") ON DELETE cascade ON UPDATE no action;
+    END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'price_list_items_item_id_items_id_fk') THEN
+        ALTER TABLE "price_list_items" ADD CONSTRAINT "price_list_items_item_id_items_id_fk" FOREIGN KEY ("item_id") REFERENCES "public"."items"("id") ON DELETE no action ON UPDATE no action;
+    END IF;
+END $$;--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "stock_movements_vendor_id_idx" ON "stock_movements" USING btree ("vendor_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "stock_movements_item_id_idx" ON "stock_movements" USING btree ("item_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "stock_movements_warehouse_id_idx" ON "stock_movements" USING btree ("warehouse_id");--> statement-breakpoint
@@ -86,5 +106,13 @@ CREATE INDEX IF NOT EXISTS "price_list_items_sku_idx" ON "price_list_items" USIN
 CREATE INDEX IF NOT EXISTS "price_list_items_is_active_idx" ON "price_list_items" USING btree ("is_active");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "price_lists_vendor_id_idx" ON "price_lists" USING btree ("vendor_id");--> statement-breakpoint
 CREATE INDEX IF NOT EXISTS "price_lists_is_active_idx" ON "price_lists" USING btree ("is_active");--> statement-breakpoint
-ALTER TABLE "stock" ADD CONSTRAINT "stock_warehouse_id_warehouses_id_fk" FOREIGN KEY ("warehouse_id") REFERENCES "public"."warehouses"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-ALTER TABLE "stock" ADD CONSTRAINT "stock_item_id_items_id_fk" FOREIGN KEY ("item_id") REFERENCES "public"."items"("id") ON DELETE no action ON UPDATE no action;
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'stock_warehouse_id_warehouses_id_fk') THEN
+        ALTER TABLE "stock" ADD CONSTRAINT "stock_warehouse_id_warehouses_id_fk" FOREIGN KEY ("warehouse_id") REFERENCES "public"."warehouses"("id") ON DELETE no action ON UPDATE no action;
+    END IF;
+END $$;--> statement-breakpoint
+DO $$ BEGIN
+    IF NOT EXISTS (SELECT 1 FROM pg_constraint WHERE conname = 'stock_item_id_items_id_fk') THEN
+        ALTER TABLE "stock" ADD CONSTRAINT "stock_item_id_items_id_fk" FOREIGN KEY ("item_id") REFERENCES "public"."items"("id") ON DELETE no action ON UPDATE no action;
+    END IF;
+END $$;
