@@ -63,6 +63,7 @@ DO $$ BEGIN
         );
     END IF;
 END $$;--> statement-breakpoint
+ALTER TABLE "order_items" ALTER COLUMN "delivery_state" SET DEFAULT 0;--> statement-breakpoint
 ALTER TABLE "order_items" ALTER COLUMN "delivery_state" SET NOT NULL;--> statement-breakpoint
 ALTER TABLE "items" ADD COLUMN IF NOT EXISTS "catalog_price" numeric(10, 2);--> statement-breakpoint
 ALTER TABLE "items" ADD COLUMN IF NOT EXISTS "purchase_price" numeric(10, 4);--> statement-breakpoint

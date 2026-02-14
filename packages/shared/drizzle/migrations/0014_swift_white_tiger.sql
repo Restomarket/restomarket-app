@@ -38,6 +38,7 @@ DO $$ BEGIN
         );
     END IF;
 END $$;--> statement-breakpoint
+ALTER TABLE "orders" ALTER COLUMN "validation_state" SET DEFAULT 0;--> statement-breakpoint
 ALTER TABLE "orders" ALTER COLUMN "validation_state" SET NOT NULL;--> statement-breakpoint
 ALTER TABLE "orders" ALTER COLUMN "delivery_state" DROP DEFAULT;--> statement-breakpoint
 DO $$ BEGIN
@@ -47,6 +48,7 @@ DO $$ BEGIN
         );
     END IF;
 END $$;--> statement-breakpoint
+ALTER TABLE "orders" ALTER COLUMN "delivery_state" SET DEFAULT 0;--> statement-breakpoint
 ALTER TABLE "orders" ALTER COLUMN "delivery_state" SET NOT NULL;--> statement-breakpoint
 ALTER TABLE "orders" ALTER COLUMN "amount_vat_excluded" SET DEFAULT '0';--> statement-breakpoint
 ALTER TABLE "orders" ALTER COLUMN "amount_vat_excluded" SET NOT NULL;--> statement-breakpoint
