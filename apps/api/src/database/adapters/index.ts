@@ -9,3 +9,4 @@ export * from './nestjs-warehouses.repository';
 export * from './nestjs-stock.repository';
 export * from './nestjs-orders.repository';
 export * from './nestjs-order-items.repository';
+export * from './nestjs-vat-rates.repository';

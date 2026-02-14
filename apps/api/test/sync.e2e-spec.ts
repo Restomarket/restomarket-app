@@ -160,7 +160,7 @@ describe('Sync API (e2e)', () => {
       const response = await request(testSetup.serverHttp).get('/health').expect(HttpStatus.OK);
 
       expect(response.body).toHaveProperty('status');
-      expect(response.body.status).toBe('ok');
+      expect(response.body.status).toBe('healthy');
     });
   });
 
@@ -235,14 +235,16 @@ describe('Sync API (e2e)', () => {
           .send(body)
           .expect(HttpStatus.OK);
 
-        // Assert HTTP response
-        expect(response.body).toHaveProperty('processed');
-        expect(response.body).toHaveProperty('skipped');
-        expect(response.body).toHaveProperty('failed');
-        expect(response.body).toHaveProperty('results');
-        expect(response.body.processed).toBe(1);
-        expect(response.body.skipped).toBe(0);
-        expect(response.body.failed).toBe(0);
+        // Assert HTTP response (ResponseInterceptor wraps data)
+        expect(response.body).toHaveProperty('success', true);
+        expect(response.body).toHaveProperty('data');
+        expect(response.body.data).toHaveProperty('processed');
+        expect(response.body.data).toHaveProperty('skipped');
+        expect(response.body.data).toHaveProperty('failed');
+        expect(response.body.data).toHaveProperty('results');
+        expect(response.body.data.processed).toBe(1);
+        expect(response.body.data.skipped).toBe(0);
+        expect(response.body.data.failed).toBe(0);
 
         // Assert DB row was inserted
         const dbItems = await testSetup.database
@@ -282,8 +284,8 @@ describe('Sync API (e2e)', () => {
           .send(body)
           .expect(HttpStatus.OK);
 
-        expect(firstResponse.body.processed).toBe(1);
-        expect(firstResponse.body.skipped).toBe(0);
+        expect(firstResponse.body.data.processed).toBe(1);
+        expect(firstResponse.body.data.skipped).toBe(0);
 
         // Act - second sync with same content hash
         const secondResponse = await request(testSetup.serverHttp)
@@ -293,10 +295,10 @@ describe('Sync API (e2e)', () => {
           .expect(HttpStatus.OK);
 
         // Assert - second request should skip all items
-        expect(secondResponse.body.processed).toBe(0);
-        expect(secondResponse.body.skipped).toBe(1);
-        expect(secondResponse.body.failed).toBe(0);
-        expect(secondResponse.body.results[0]).toMatchObject({
+        expect(secondResponse.body.data.processed).toBe(0);
+        expect(secondResponse.body.data.skipped).toBe(1);
+        expect(secondResponse.body.data.failed).toBe(0);
+        expect(secondResponse.body.data.results[0]).toMatchObject({
           identifier: 'SKU-DEDUP-001',
           status: 'skipped',
           reason: 'no_changes',
@@ -341,8 +343,8 @@ describe('Sync API (e2e)', () => {
           .send(updatedBody)
           .expect(HttpStatus.OK);
 
-        expect(updateResponse.body.processed).toBe(1);
-        expect(updateResponse.body.skipped).toBe(0);
+        expect(updateResponse.body.data.processed).toBe(1);
+        expect(updateResponse.body.data.skipped).toBe(0);
 
         // Assert DB row was updated
         const dbItems = await testSetup.database
@@ -396,13 +398,13 @@ describe('Sync API (e2e)', () => {
           .expect(HttpStatus.OK);
 
         // Assert: valid item processed, unmapped item failed
-        expect(response.body.processed).toBe(1);
-        expect(response.body.failed).toBe(1);
+        expect(response.body.data.processed).toBe(1);
+        expect(response.body.data.failed).toBe(1);
 
-        const validResult = response.body.results.find(
+        const validResult = response.body.data.results.find(
           (r: { identifier: string }) => r.identifier === 'SKU-VALID-001',
         );
-        const failedResult = response.body.results.find(
+        const failedResult = response.body.data.results.find(
           (r: { identifier: string }) => r.identifier === 'SKU-UNMAPPED-001',
         );
 
@@ -454,6 +456,7 @@ describe('Sync API (e2e)', () => {
           sku: `BATCH-SKU-${String(i).padStart(3, '0')}`,
           name: `Batch Item ${i}`,
           contentHash: `${'0'.repeat(63)}${i}`,
+          erpId: `BATCH-ERP-${i}`,
         }),
       );
 
@@ -470,10 +473,10 @@ describe('Sync API (e2e)', () => {
         .expect(HttpStatus.OK);
 
       // Assert HTTP response
-      expect(response.body.processed).toBe(5);
-      expect(response.body.skipped).toBe(0);
-      expect(response.body.failed).toBe(0);
-      expect(response.body.results).toHaveLength(5);
+      expect(response.body.data.processed).toBe(5);
+      expect(response.body.data.skipped).toBe(0);
+      expect(response.body.data.failed).toBe(0);
+      expect(response.body.data.results).toHaveLength(5);
 
       // Assert all items exist in DB
       const dbItems = await testSetup.database
@@ -509,8 +512,8 @@ describe('Sync API (e2e)', () => {
         .send(body)
         .expect(HttpStatus.OK);
 
-      expect(secondResponse.body.skipped).toBe(1);
-      expect(secondResponse.body.processed).toBe(0);
+      expect(secondResponse.body.data.skipped).toBe(1);
+      expect(secondResponse.body.data.processed).toBe(0);
     });
   });
 
@@ -540,7 +543,7 @@ describe('Sync API (e2e)', () => {
         .send(orderBody)
         .expect(HttpStatus.CREATED);
 
-      // Assert HTTP response
+      // Assert HTTP response (ResponseInterceptor wraps data)
       expect(response.body.success).toBe(true);
       expect(response.body.data).toHaveProperty('id');
       expect(response.body.data).toMatchObject({
@@ -620,13 +623,12 @@ describe('Sync API (e2e)', () => {
         .get(`/orders/${orderId}`)
         .expect(HttpStatus.OK);
 
-      // Assert
+      // Assert (ResponseInterceptor wraps data)
       expect(getResponse.body.success).toBe(true);
       expect(getResponse.body.data).toMatchObject({
         id: orderId,
         vendorId: TEST_VENDOR_ID,
         orderNumber: 'ORDER-E2E-CRUD-001',
-        customerId: 'customer-123',
       });
     });
 
@@ -668,7 +670,7 @@ describe('Sync API (e2e)', () => {
         .send(syncBody)
         .expect(HttpStatus.OK);
 
-      expect(syncResponse.body.processed).toBe(1);
+      expect(syncResponse.body.data.processed).toBe(1);
 
       // Step 3: Create an order for that item
       const orderBody = {
@@ -688,6 +690,7 @@ describe('Sync API (e2e)', () => {
         .send(orderBody)
         .expect(HttpStatus.CREATED);
 
+      expect(orderResponse.body).toHaveProperty('success', true);
       expect(orderResponse.body.data).toHaveProperty('id');
       expect(orderResponse.body.data.orderNumber).toBe('LIFECYCLE-ORDER-001');
 

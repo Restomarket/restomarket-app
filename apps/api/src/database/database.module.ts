@@ -139,6 +139,7 @@ import {
   StockRepository,
   OrdersRepository,
   OrderItemsRepository,
+  VatRatesRepository,
 } from './adapters';
 
 export { DATABASE_CONNECTION, POSTGRES_CLIENT };
@@ -193,6 +194,7 @@ export type DatabaseConnection = SharedDatabaseConnection;
     StockRepository,
     OrdersRepository,
     OrderItemsRepository,
+    VatRatesRepository,
   ],
   exports: [
     DATABASE_CONNECTION,
@@ -208,10 +210,14 @@ export type DatabaseConnection = SharedDatabaseConnection;
     StockRepository,
     OrdersRepository,
     OrderItemsRepository,
+    VatRatesRepository,
   ],
 })
-export class DatabaseModule implements OnModuleDestroy {
-  constructor(@Inject(POSTGRES_CLIENT) private readonly client: Sql) {}
+export class DatabaseModule {
+  constructor(
+    @Inject(POSTGRES_CLIENT) private readonly client: Sql,
+    @Inject(DATABASE_CONNECTION) private readonly db: DatabaseConnection,
+  ) {}
 
   async onModuleDestroy() {
     await this.client.end({ timeout: 5 });

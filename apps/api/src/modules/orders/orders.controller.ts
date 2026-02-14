@@ -34,7 +34,7 @@ export class OrdersController {
     if (!order) {
       throw new NotFoundException('Failed to create order');
     }
-    return { success: true, data: order };
+    return order;
   }
 
   @Get(':id')
@@ -47,7 +47,7 @@ export class OrdersController {
     if (!order) {
       throw new NotFoundException(`Order ${id} not found`);
     }
-    return { success: true, data: order };
+    return order;
   }
 
   @Get()
@@ -64,7 +64,6 @@ export class OrdersController {
     const safeLimit = Math.min(Number(limit), 100);
     const result = await this.ordersService.findByVendor(vendorId, Number(page), safeLimit);
     return {
-      success: true,
       data: result.data,
       meta: { total: result.total, page: Number(page), limit: safeLimit },
     };

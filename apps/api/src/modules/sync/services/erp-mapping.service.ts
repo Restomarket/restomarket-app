@@ -1,6 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import { PinoLogger } from 'nestjs-pino';
-import { ErpCodeMappingsRepository } from '../../../database/adapters';
+import { ErpCodeMappingsRepository, VatRatesRepository } from '../../../database/adapters';
 import type { MappingResult, CacheEntry, MappingType } from '../interfaces/erp-mapping.interface';
 import type {
   CreateErpMappingDto,
@@ -31,6 +31,7 @@ export class ErpMappingService {
 
   constructor(
     private readonly mappingsRepository: ErpCodeMappingsRepository,
+    private readonly vatRatesRepository: VatRatesRepository,
     private readonly logger: PinoLogger,
   ) {
     this.logger.setContext(ErpMappingService.name);
@@ -71,10 +72,21 @@ export class ErpMappingService {
       return null;
     }
 
+    let rate: string | undefined;
+
+    // Resolve additional data based on type
+    if (type === 'vat' && mapping.vatRateId) {
+      const vatRate = await this.vatRatesRepository.findById(mapping.vatRateId);
+      if (vatRate) {
+        rate = vatRate.rate;
+      }
+    }
+
     // Cache result
     const result: MappingResult = {
       restoCode: mapping.restoCode,
       restoLabel: mapping.restoLabel,
+      rate,
     };
 
     this.setCacheEntry(cacheKey, result);

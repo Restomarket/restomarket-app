@@ -13,6 +13,12 @@ export interface MappingResult {
 
   /** Display label for UI */
   restoLabel: string;
+
+  /**
+   * Resolved numeric rate (for VAT)
+   * String representation of decimal (e.g. "20.00")
+   */
+  rate?: string;
 }
 
 /**

@@ -141,7 +141,7 @@ export class ItemsRepositoryBase extends BaseRepository<typeof items> {
       return result;
     } catch (error) {
       this.handleError('UPSERT_BATCH', error, { count: records.length });
-      return [];
+      throw error;
     }
   }
 

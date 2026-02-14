@@ -9,6 +9,7 @@ import {
   IsArray,
   ValidateNested,
   ArrayMaxSize,
+  ArrayMinSize,
   IsBoolean,
 } from 'class-validator';
 import { Type } from 'class-transformer';
@@ -278,6 +279,7 @@ export class ItemSyncIngestDto {
 
   @ApiProperty({ description: 'Array of items to sync', type: [ItemSyncPayloadDto] })
   @IsArray()
+  @ArrayMinSize(1, { message: 'At least 1 item is required' })
   @ValidateNested({ each: true })
   @Type(() => ItemSyncPayloadDto)
   @ArrayMaxSize(500, { message: 'Maximum 500 items per incremental sync request' })
@@ -293,6 +295,7 @@ export class ItemSyncBatchIngestDto {
 
   @ApiProperty({ description: 'Array of items to sync (batch mode)', type: [ItemSyncPayloadDto] })
   @IsArray()
+  @ArrayMinSize(1, { message: 'At least 1 item is required' })
   @ValidateNested({ each: true })
   @Type(() => ItemSyncPayloadDto)
   @ArrayMaxSize(5000, { message: 'Maximum 5000 items per batch sync request' })

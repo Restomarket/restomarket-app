@@ -172,7 +172,7 @@ export class SyncIngestService {
             unitCode: unitMapping.restoCode,
             unitLabel: unitMapping.restoLabel,
             vatCode: vatMapping.restoCode,
-            vatRate: vatMapping.restoLabel, // restoLabel contains the rate for VAT
+            vatRate: vatMapping.rate ?? '0', // restoLabel contains the rate for VAT
             familyCode: familyMapping?.restoCode ?? null,
             familyLabel: familyMapping?.restoLabel ?? null,
             subfamilyCode: subfamilyMapping?.restoCode ?? null,
