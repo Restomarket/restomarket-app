@@ -1,12 +1,13 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { PinoLogger } from 'nestjs-pino';
 import { ErpMappingService } from '../erp-mapping.service';
-import { ErpCodeMappingsRepository } from '../../../../database/adapters';
+import { ErpCodeMappingsRepository, VatRatesRepository } from '../../../../database/adapters';
 import { ErpCodeMapping } from '@repo/shared/types/database.types';
 
 describe('ErpMappingService', () => {
   let service: ErpMappingService;
   let repository: jest.Mocked<ErpCodeMappingsRepository>;
+  let vatRatesRepository: jest.Mocked<VatRatesRepository>;
   let logger: jest.Mocked<PinoLogger>;
 
   const mockMapping: ErpCodeMapping = {
@@ -36,6 +37,11 @@ describe('ErpMappingService', () => {
       bulkInsert: jest.fn(),
     };
 
+    const mockVatRatesRepository = {
+      findById: jest.fn(),
+      findByVendorAndCode: jest.fn(),
+    };
+
     const mockLogger = {
       setContext: jest.fn(),
       info: jest.fn(),
@@ -48,12 +54,14 @@ describe('ErpMappingService', () => {
       providers: [
         ErpMappingService,
         { provide: ErpCodeMappingsRepository, useValue: mockRepository },
+        { provide: VatRatesRepository, useValue: mockVatRatesRepository },
         { provide: PinoLogger, useValue: mockLogger },
       ],
     }).compile();
 
     service = module.get<ErpMappingService>(ErpMappingService);
     repository = module.get(ErpCodeMappingsRepository);
+    vatRatesRepository = module.get(VatRatesRepository);
     logger = module.get(PinoLogger);
   });
 
@@ -128,6 +136,36 @@ describe('ErpMappingService', () => {
       await service.resolve('vendor-123', 'unit', 'KG');
 
       expect(repository.findByVendorTypeCode).toHaveBeenCalledTimes(2);
+    });
+
+    it('should resolve VAT rate from VatRatesRepository', async () => {
+      const vatMapping = {
+        ...mockMapping,
+        mappingType: 'vat',
+        vatRateId: 'vat-rate-uuid',
+      };
+      const mockVatRate = {
+        id: 'vat-rate-uuid',
+        vendorId: 'vendor-123',
+        code: 'TVA20',
+        label: 'TVA 20%',
+        rate: '20.00',
+        isActive: true,
+        createdAt: new Date(),
+        updatedAt: new Date(),
+      };
+
+      repository.findByVendorTypeCode.mockResolvedValue(vatMapping);
+      vatRatesRepository.findById.mockResolvedValue(mockVatRate);
+
+      const result = await service.resolve('vendor-123', 'vat', 'TVA20');
+
+      expect(result).toEqual({
+        restoCode: 'kilogram',
+        restoLabel: 'Kilogramme',
+        rate: '20.00',
+      });
+      expect(vatRatesRepository.findById).toHaveBeenCalledWith('vat-rate-uuid');
     });
   });
 
