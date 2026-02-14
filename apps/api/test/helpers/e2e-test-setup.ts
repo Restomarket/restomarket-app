@@ -126,15 +126,12 @@ export class E2ETestSetup {
     // Create test module
     const moduleBuilder = await this.createTestModule();
 
-    // CRITICAL: Override database providers to use test connection
-    // This ensures the app and tests share the same database connection
-    // Create a proxy for the connection that prevents the DatabaseModule from closing it
+    // Override database providers to use test connection (share DB between app and cleanup)
     const connectionProxy = new Proxy(this.connection!, {
       get: (target, prop) => {
-        // Prevent DatabaseModule.onModuleDestroy from closing our test connection
         if (prop === 'end') {
           return async () => {
-            // No-op - we'll close it ourselves in teardown()
+            // No-op - we close the connection in teardown()
           };
         }
         return target[prop as keyof typeof target];

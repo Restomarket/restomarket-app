@@ -23,16 +23,26 @@ export const { GET, POST } = toNextJsHandler(auth);
 /**
  * Handle CORS preflight requests (OPTIONS)
  *
- * This is required for cross-origin requests to the auth API.
+ * This is required for cross-origin requests to the auth API,
+ * including mobile apps (Flutter, React Native, etc.).
  * Returns appropriate CORS headers to allow the actual request to proceed.
  */
 export async function OPTIONS() {
+  // Allow multiple origins for web and mobile
+  const allowedOrigins = [
+    process.env.NEXT_PUBLIC_APP_URL,
+    process.env.NEXT_PUBLIC_API_URL,
+    process.env.MOBILE_APP_URL, // For mobile webviews (capacitor://localhost, etc.)
+  ]
+    .filter(Boolean)
+    .join(', ');
+
   return new NextResponse(null, {
     status: 200,
     headers: {
-      'Access-Control-Allow-Origin': process.env.NEXT_PUBLIC_APP_URL || '*',
-      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With, Cookie',
+      'Access-Control-Allow-Origin': allowedOrigins || '*',
+      'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, PATCH, OPTIONS',
+      'Access-Control-Allow-Headers': 'Content-Type, Authorization, X-Requested-With',
       'Access-Control-Allow-Credentials': 'true',
       'Access-Control-Max-Age': '86400', // 24 hours
     },

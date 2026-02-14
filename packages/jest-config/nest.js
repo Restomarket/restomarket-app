@@ -22,6 +22,7 @@ const config = {
       'ts-jest',
       {
         tsconfig: 'tsconfig.json',
+        useESM: false,
       },
     ],
   },
