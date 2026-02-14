@@ -55,6 +55,7 @@ CREATE TABLE "price_lists" (
 --> statement-breakpoint
 UPDATE "order_items" SET "net_amount_vat_excluded_with_discount" = '0' WHERE "net_amount_vat_excluded_with_discount" IS NULL;--> statement-breakpoint
 ALTER TABLE "order_items" ALTER COLUMN "net_amount_vat_excluded_with_discount" SET NOT NULL;--> statement-breakpoint
+ALTER TABLE "order_items" ALTER COLUMN "delivery_state" DROP DEFAULT;--> statement-breakpoint
 ALTER TABLE "order_items" ALTER COLUMN "delivery_state" SET DATA TYPE integer USING (
   CASE delivery_state WHEN 'partial' THEN 1 WHEN 'delivered' THEN 2 ELSE 0 END
 );--> statement-breakpoint
