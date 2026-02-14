@@ -1,4 +1,4 @@
-CREATE TABLE "stock_movements" (
+CREATE TABLE IF NOT EXISTS "stock_movements" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"vendor_id" varchar(100) NOT NULL,
 	"item_id" uuid NOT NULL,
@@ -18,7 +18,7 @@ CREATE TABLE "stock_movements" (
 	"created_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "price_list_items" (
+CREATE TABLE IF NOT EXISTS "price_list_items" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"price_list_id" uuid NOT NULL,
 	"item_id" uuid,
@@ -37,7 +37,7 @@ CREATE TABLE "price_list_items" (
 	CONSTRAINT "price_list_items_list_sku_qty_unique" UNIQUE("price_list_id","sku","min_quantity")
 );
 --> statement-breakpoint
-CREATE TABLE "price_lists" (
+CREATE TABLE IF NOT EXISTS "price_lists" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"vendor_id" varchar(100) NOT NULL,
 	"erp_price_list_id" varchar(100) NOT NULL,
@@ -60,31 +60,31 @@ ALTER TABLE "order_items" ALTER COLUMN "delivery_state" SET DATA TYPE integer US
   CASE delivery_state WHEN 'partial' THEN 1 WHEN 'delivered' THEN 2 ELSE 0 END
 );--> statement-breakpoint
 ALTER TABLE "order_items" ALTER COLUMN "delivery_state" SET NOT NULL;--> statement-breakpoint
-ALTER TABLE "items" ADD COLUMN "catalog_price" numeric(10, 2);--> statement-breakpoint
-ALTER TABLE "items" ADD COLUMN "purchase_price" numeric(10, 4);--> statement-breakpoint
-ALTER TABLE "items" ADD COLUMN "minimum_order_quantity" numeric(10, 3) DEFAULT '1';--> statement-breakpoint
-ALTER TABLE "items" ADD COLUMN "last_synced_from" varchar(50);--> statement-breakpoint
-ALTER TABLE "stock" ADD COLUMN "incoming_quantity" numeric(10, 3) DEFAULT '0' NOT NULL;--> statement-breakpoint
-ALTER TABLE "orders" ADD COLUMN "cancelled_at" timestamp with time zone;--> statement-breakpoint
-ALTER TABLE "orders" ADD COLUMN "cancelled_by" varchar(100);--> statement-breakpoint
-ALTER TABLE "orders" ADD COLUMN "cancellation_reason" text;--> statement-breakpoint
-ALTER TABLE "orders" ADD COLUMN "expected_ship_date" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "items" ADD COLUMN IF NOT EXISTS "catalog_price" numeric(10, 2);--> statement-breakpoint
+ALTER TABLE "items" ADD COLUMN IF NOT EXISTS "purchase_price" numeric(10, 4);--> statement-breakpoint
+ALTER TABLE "items" ADD COLUMN IF NOT EXISTS "minimum_order_quantity" numeric(10, 3) DEFAULT '1';--> statement-breakpoint
+ALTER TABLE "items" ADD COLUMN IF NOT EXISTS "last_synced_from" varchar(50);--> statement-breakpoint
+ALTER TABLE "stock" ADD COLUMN IF NOT EXISTS "incoming_quantity" numeric(10, 3) DEFAULT '0' NOT NULL;--> statement-breakpoint
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "cancelled_at" timestamp with time zone;--> statement-breakpoint
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "cancelled_by" varchar(100);--> statement-breakpoint
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "cancellation_reason" text;--> statement-breakpoint
+ALTER TABLE "orders" ADD COLUMN IF NOT EXISTS "expected_ship_date" timestamp with time zone;--> statement-breakpoint
 ALTER TABLE "stock_movements" ADD CONSTRAINT "stock_movements_item_id_items_id_fk" FOREIGN KEY ("item_id") REFERENCES "public"."items"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "stock_movements" ADD CONSTRAINT "stock_movements_warehouse_id_warehouses_id_fk" FOREIGN KEY ("warehouse_id") REFERENCES "public"."warehouses"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "price_list_items" ADD CONSTRAINT "price_list_items_price_list_id_price_lists_id_fk" FOREIGN KEY ("price_list_id") REFERENCES "public"."price_lists"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "price_list_items" ADD CONSTRAINT "price_list_items_item_id_items_id_fk" FOREIGN KEY ("item_id") REFERENCES "public"."items"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "stock_movements_vendor_id_idx" ON "stock_movements" USING btree ("vendor_id");--> statement-breakpoint
-CREATE INDEX "stock_movements_item_id_idx" ON "stock_movements" USING btree ("item_id");--> statement-breakpoint
-CREATE INDEX "stock_movements_warehouse_id_idx" ON "stock_movements" USING btree ("warehouse_id");--> statement-breakpoint
-CREATE INDEX "stock_movements_movement_type_idx" ON "stock_movements" USING btree ("movement_type");--> statement-breakpoint
-CREATE INDEX "stock_movements_erp_movement_id_idx" ON "stock_movements" USING btree ("erp_movement_id");--> statement-breakpoint
-CREATE INDEX "stock_movements_reference_id_idx" ON "stock_movements" USING btree ("reference_id");--> statement-breakpoint
-CREATE INDEX "stock_movements_created_at_idx" ON "stock_movements" USING btree ("created_at");--> statement-breakpoint
-CREATE INDEX "price_list_items_price_list_id_idx" ON "price_list_items" USING btree ("price_list_id");--> statement-breakpoint
-CREATE INDEX "price_list_items_item_id_idx" ON "price_list_items" USING btree ("item_id");--> statement-breakpoint
-CREATE INDEX "price_list_items_sku_idx" ON "price_list_items" USING btree ("sku");--> statement-breakpoint
-CREATE INDEX "price_list_items_is_active_idx" ON "price_list_items" USING btree ("is_active");--> statement-breakpoint
-CREATE INDEX "price_lists_vendor_id_idx" ON "price_lists" USING btree ("vendor_id");--> statement-breakpoint
-CREATE INDEX "price_lists_is_active_idx" ON "price_lists" USING btree ("is_active");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "stock_movements_vendor_id_idx" ON "stock_movements" USING btree ("vendor_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "stock_movements_item_id_idx" ON "stock_movements" USING btree ("item_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "stock_movements_warehouse_id_idx" ON "stock_movements" USING btree ("warehouse_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "stock_movements_movement_type_idx" ON "stock_movements" USING btree ("movement_type");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "stock_movements_erp_movement_id_idx" ON "stock_movements" USING btree ("erp_movement_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "stock_movements_reference_id_idx" ON "stock_movements" USING btree ("reference_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "stock_movements_created_at_idx" ON "stock_movements" USING btree ("created_at");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "price_list_items_price_list_id_idx" ON "price_list_items" USING btree ("price_list_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "price_list_items_item_id_idx" ON "price_list_items" USING btree ("item_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "price_list_items_sku_idx" ON "price_list_items" USING btree ("sku");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "price_list_items_is_active_idx" ON "price_list_items" USING btree ("is_active");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "price_lists_vendor_id_idx" ON "price_lists" USING btree ("vendor_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "price_lists_is_active_idx" ON "price_lists" USING btree ("is_active");--> statement-breakpoint
 ALTER TABLE "stock" ADD CONSTRAINT "stock_warehouse_id_warehouses_id_fk" FOREIGN KEY ("warehouse_id") REFERENCES "public"."warehouses"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "stock" ADD CONSTRAINT "stock_item_id_items_id_fk" FOREIGN KEY ("item_id") REFERENCES "public"."items"("id") ON DELETE no action ON UPDATE no action;

@@ -1,4 +1,4 @@
-CREATE TABLE "orders" (
+CREATE TABLE IF NOT EXISTS "orders" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"order_number" varchar(100),
 	"document_date" timestamp with time zone,
@@ -46,7 +46,7 @@ CREATE TABLE "orders" (
 	"updated_at" timestamp with time zone DEFAULT now() NOT NULL
 );
 --> statement-breakpoint
-CREATE TABLE "order_items" (
+CREATE TABLE IF NOT EXISTS "order_items" (
 	"id" uuid PRIMARY KEY DEFAULT gen_random_uuid() NOT NULL,
 	"order_id" uuid NOT NULL,
 	"line_order" integer DEFAULT 0 NOT NULL,
@@ -94,16 +94,16 @@ ALTER TABLE "orders" ADD CONSTRAINT "orders_warehouse_id_warehouses_id_fk" FOREI
 ALTER TABLE "order_items" ADD CONSTRAINT "order_items_order_id_orders_id_fk" FOREIGN KEY ("order_id") REFERENCES "public"."orders"("id") ON DELETE cascade ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "order_items" ADD CONSTRAINT "order_items_item_id_items_id_fk" FOREIGN KEY ("item_id") REFERENCES "public"."items"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
 ALTER TABLE "order_items" ADD CONSTRAINT "order_items_warehouse_id_warehouses_id_fk" FOREIGN KEY ("warehouse_id") REFERENCES "public"."warehouses"("id") ON DELETE no action ON UPDATE no action;--> statement-breakpoint
-CREATE INDEX "orders_vendor_id_idx" ON "orders" USING btree ("vendor_id");--> statement-breakpoint
-CREATE INDEX "orders_customer_id_idx" ON "orders" USING btree ("customer_id");--> statement-breakpoint
-CREATE INDEX "orders_validation_state_idx" ON "orders" USING btree ("validation_state");--> statement-breakpoint
-CREATE INDEX "orders_delivery_state_idx" ON "orders" USING btree ("delivery_state");--> statement-breakpoint
-CREATE INDEX "orders_erp_document_id_idx" ON "orders" USING btree ("erp_document_id");--> statement-breakpoint
-CREATE INDEX "orders_document_date_idx" ON "orders" USING btree ("document_date");--> statement-breakpoint
-CREATE INDEX "orders_payment_status_idx" ON "orders" USING btree ("payment_status");--> statement-breakpoint
-CREATE INDEX "orders_order_number_idx" ON "orders" USING btree ("order_number");--> statement-breakpoint
-CREATE INDEX "order_items_order_id_idx" ON "order_items" USING btree ("order_id");--> statement-breakpoint
-CREATE INDEX "order_items_item_id_idx" ON "order_items" USING btree ("item_id");--> statement-breakpoint
-CREATE INDEX "order_items_delivery_state_idx" ON "order_items" USING btree ("delivery_state");--> statement-breakpoint
-CREATE INDEX "order_items_reservation_status_idx" ON "order_items" USING btree ("reservation_status");--> statement-breakpoint
-CREATE INDEX "order_items_reservation_expires_idx" ON "order_items" USING btree ("reservation_expires_at");
+CREATE INDEX IF NOT EXISTS "orders_vendor_id_idx" ON "orders" USING btree ("vendor_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "orders_customer_id_idx" ON "orders" USING btree ("customer_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "orders_validation_state_idx" ON "orders" USING btree ("validation_state");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "orders_delivery_state_idx" ON "orders" USING btree ("delivery_state");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "orders_erp_document_id_idx" ON "orders" USING btree ("erp_document_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "orders_document_date_idx" ON "orders" USING btree ("document_date");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "orders_payment_status_idx" ON "orders" USING btree ("payment_status");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "orders_order_number_idx" ON "orders" USING btree ("order_number");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "order_items_order_id_idx" ON "order_items" USING btree ("order_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "order_items_item_id_idx" ON "order_items" USING btree ("item_id");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "order_items_delivery_state_idx" ON "order_items" USING btree ("delivery_state");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "order_items_reservation_status_idx" ON "order_items" USING btree ("reservation_status");--> statement-breakpoint
+CREATE INDEX IF NOT EXISTS "order_items_reservation_expires_idx" ON "order_items" USING btree ("reservation_expires_at");
